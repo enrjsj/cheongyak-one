@@ -37,6 +37,7 @@ class RebApiGatewayTest {
                   "PBLANC_NO": "2026000001",
                   "HOUSE_NM": "테스트 아파트",
                   "SUBSCRPT_AREA_CODE": "100",
+                  "SUBSCRPT_AREA_CODE_NM": "서울",
                   "HSSPLY_ADRES": "서울특별시 테스트구",
                   "RCRIT_PBLANC_DE": "2026-08-10",
                   "RCEPT_BGNDE": "2026-08-14",
@@ -52,6 +53,7 @@ class RebApiGatewayTest {
         assertThat(snapshot.sourceNoticeId()).isEqualTo("2026000001");
         assertThat(snapshot.housingCategory()).isEqualTo(HousingCategory.APARTMENT);
         assertThat(snapshot.status()).isEqualTo(NoticeStatus.OPEN);
+        assertThat(snapshot.regionCode()).isEqualTo("서울");
         assertThat(snapshot.totalUnits()).isEqualTo(120);
         assertThat(snapshot.contentHash()).hasSize(64);
     }

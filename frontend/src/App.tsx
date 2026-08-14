@@ -1,12 +1,21 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  fetchAllNotices,
+  fetchNotice,
+  HousingCategory,
+  NoticeSummary,
+  NoticeStatus,
+} from "./api";
 
 type StatusKey = "all" | "today" | "open" | "upcoming";
-type Application = {
-  id: number;
+type StateTone = "mint" | "coral" | "blue" | "purple" | "gray";
+type PresentationStatus = Exclude<StatusKey, "all"> | "announcement" | "closed";
+type IconName = "search" | "pin" | "home" | "calendar" | "bookmark" | "arrow" | "check" | "bell" | "grid" | "close" | "filter";
+
+type Application = NoticeSummary & {
   state: string;
-  stateTone: "mint" | "coral" | "blue" | "purple";
-  statusKey: Exclude<StatusKey, "all"> | "announcement";
-  title: string;
+  stateTone: StateTone;
+  statusKey: PresentationStatus;
   location: string;
   region: string;
   type: string;
@@ -19,50 +28,15 @@ type Application = {
   deposit: string;
 };
 
-const applications: Application[] = [
-  {
-    id: 1, state: "접수중", stateTone: "mint", statusKey: "open",
-    title: "서초 리버파크", location: "서울 서초구", region: "서울",
-    type: "민영 · 일반공급", category: "일반공급", period: "8. 13. — 8. 16.", dday: "D-2",
-    price: "분양가 12.8억부터", scale: "총 324세대 · 일반 86세대", fit: "서울 2년 이상 우선", deposit: "청약통장 24개월 이상",
-  },
-  {
-    id: 2, state: "오늘 마감", stateTone: "coral", statusKey: "today",
-    title: "고양 창릉 A4블록", location: "경기 고양시", region: "경기",
-    type: "공공 · 신혼희망타운", category: "신혼부부", period: "8. 12. — 8. 14.", dday: "D-DAY",
-    price: "추정 분양가 5.4억", scale: "총 603세대 · 일반 412세대", fit: "신혼부부 · 예비신혼부부", deposit: "입주자저축 6회 이상",
-  },
-  {
-    id: 3, state: "오픈 예정", stateTone: "blue", statusKey: "upcoming",
-    title: "인천 검단 센트럴", location: "인천 서구", region: "인천",
-    type: "민영 · 특별공급", category: "생애최초", period: "8. 20. — 8. 22.", dday: "D-6",
-    price: "분양가 6.1억부터", scale: "총 721세대 · 일반 204세대", fit: "수도권 거주자 신청 가능", deposit: "청약통장 12개월 이상",
-  },
-  {
-    id: 4, state: "발표 예정", stateTone: "purple", statusKey: "announcement",
-    title: "마곡 엠밸리 17단지", location: "서울 강서구", region: "서울",
-    type: "공공 · 일반공급", category: "일반공급", period: "당첨 발표 8. 27.", dday: "D-13",
-    price: "추정 분양가 7.9억", scale: "총 308세대 · 일반 122세대", fit: "서울 거주자 우선", deposit: "납입 인정금액 순",
-  },
-  {
-    id: 5, state: "접수중", stateTone: "mint", statusKey: "open",
-    title: "광명 뉴타운 포레나", location: "경기 광명시", region: "경기",
-    type: "민영 · 특별공급", category: "생애최초", period: "8. 14. — 8. 18.", dday: "D-4",
-    price: "분양가 8.3억부터", scale: "총 585세대 · 일반 176세대", fit: "생애최초 34세대", deposit: "지역별 예치금 충족",
-  },
-  {
-    id: 6, state: "오픈 예정", stateTone: "blue", statusKey: "upcoming",
-    title: "부산 에코델타 6블록", location: "부산 강서구", region: "부산",
-    type: "공공 · 신혼부부", category: "신혼부부", period: "8. 25. — 8. 28.", dday: "D-11",
-    price: "추정 분양가 4.7억", scale: "총 952세대 · 일반 613세대", fit: "부산·울산·경남 거주", deposit: "입주자저축 6회 이상",
-  },
-];
+const CATEGORY_LABELS: Record<HousingCategory, string> = {
+  APARTMENT: "아파트",
+  PUBLIC_RENTAL: "공공임대",
+  OFFICETEL: "오피스텔",
+};
 
-const statuses: { key: StatusKey; label: string; count: number; tone: string; icon: IconName }[] = [
-  { key: "all", label: "전체 청약", count: 6, tone: "navy", icon: "grid" },
-  { key: "today", label: "오늘 마감", count: 1, tone: "coral", icon: "bell" },
-  { key: "open", label: "접수중", count: 2, tone: "mint", icon: "check" },
-  { key: "upcoming", label: "오픈 예정", count: 2, tone: "blue", icon: "calendar" },
+const REGION_ORDER = [
+  "서울", "경기", "인천", "부산", "대구", "광주", "대전", "울산", "세종",
+  "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
 ];
 
 const questions = [
@@ -70,8 +44,6 @@ const questions = [
   { title: "결혼했거나 결혼 예정인가요?", detail: "혼인 7년 이내 또는 예비신혼부부인지 확인해요.", options: ["네, 해당돼요", "아니요"] },
   { title: "생애 처음 주택을 구입하나요?", detail: "본인과 배우자 모두 과거 주택 소유 이력이 없어야 해요.", options: ["네, 처음이에요", "아니요"] },
 ];
-
-type IconName = "search" | "pin" | "home" | "calendar" | "bookmark" | "arrow" | "check" | "bell" | "grid" | "close" | "filter";
 
 const Icon = ({ name }: { name: IconName }) => {
   const paths = {
@@ -90,27 +62,167 @@ const Icon = ({ name }: { name: IconName }) => {
   return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 };
 
+function koreaToday(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
+function dateValue(iso?: string): number | undefined {
+  if (!iso) return undefined;
+  const [year, month, day] = iso.split("-").map(Number);
+  return Date.UTC(year, month - 1, day);
+}
+
+function daysBetween(from: string, to?: string): number | undefined {
+  const fromValue = dateValue(from);
+  const toValue = dateValue(to);
+  if (fromValue === undefined || toValue === undefined) return undefined;
+  return Math.round((toValue - fromValue) / 86_400_000);
+}
+
+function formatShortDate(iso?: string): string {
+  if (!iso) return "일정 미정";
+  const [, month, day] = iso.split("-").map(Number);
+  return `${month}. ${day}.`;
+}
+
+function formatPeriod(start?: string, end?: string, winner?: string): string {
+  if (start && end) return `${formatShortDate(start)} — ${formatShortDate(end)}`;
+  if (start) return `${formatShortDate(start)} 접수 시작`;
+  if (winner) return `당첨 발표 ${formatShortDate(winner)}`;
+  return "세부 일정은 공고문 확인";
+}
+
+function weekday(iso?: string): string {
+  const value = dateValue(iso);
+  return value === undefined ? "" : ["일", "월", "화", "수", "목", "금", "토"][new Date(value).getUTCDay()];
+}
+
+function regionLabel(regionCode?: string, address?: string): string {
+  const text = `${regionCode ?? ""} ${address ?? ""}`;
+  const aliases: Array<[string, string[]]> = [
+    ["서울", ["서울"]], ["경기", ["경기"]], ["인천", ["인천"]], ["부산", ["부산"]],
+    ["대구", ["대구"]], ["광주", ["광주"]], ["대전", ["대전"]], ["울산", ["울산"]],
+    ["세종", ["세종"]], ["강원", ["강원"]], ["충북", ["충청북도", "충북"]],
+    ["충남", ["충청남도", "충남"]], ["전북", ["전북특별자치도", "전라북도", "전북"]],
+    ["전남", ["전라남도", "전남"]], ["경북", ["경상북도", "경북"]],
+    ["경남", ["경상남도", "경남"]], ["제주", ["제주"]],
+  ];
+  return aliases.find(([, names]) => names.some((name) => text.includes(name)))?.[0] ?? regionCode ?? "지역 미정";
+}
+
+function formatWon(value?: number): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (value >= 100_000_000) {
+    const eok = value / 100_000_000;
+    return `${Number.isInteger(eok) ? eok : eok.toFixed(1)}억`;
+  }
+  return `${Math.round(value / 10_000).toLocaleString("ko-KR")}만원`;
+}
+
+function statusPresentation(status: NoticeStatus, applyEndDate?: string): {
+  state: string;
+  stateTone: StateTone;
+  statusKey: PresentationStatus;
+} {
+  if (applyEndDate === koreaToday()) return { state: "오늘 마감", stateTone: "coral", statusKey: "today" };
+  if (status === "OPEN") return { state: "접수중", stateTone: "mint", statusKey: "open" };
+  if (status === "UPCOMING") return { state: "오픈 예정", stateTone: "blue", statusKey: "upcoming" };
+  if (status === "ANNOUNCED") return { state: "당첨 발표", stateTone: "purple", statusKey: "announcement" };
+  return { state: "접수 마감", stateTone: "gray", statusKey: "closed" };
+}
+
+function toApplication(notice: NoticeSummary): Application {
+  const today = koreaToday();
+  const status = statusPresentation(notice.status, notice.applyEndDate);
+  const targetDate = notice.status === "UPCOMING" ? notice.applyStartDate
+    : notice.status === "ANNOUNCED" ? notice.winnerAnnounceDate
+      : notice.applyEndDate;
+  const remaining = daysBetween(today, targetDate);
+  const minPrice = formatWon(notice.minPrice);
+  const maxPrice = formatWon(notice.maxPrice);
+  const price = minPrice && maxPrice
+    ? `분양가 ${minPrice} — ${maxPrice}`
+    : minPrice ? `분양가 ${minPrice}부터` : "분양가는 공고문 확인";
+  const category = CATEGORY_LABELS[notice.housingCategory];
+
+  return {
+    ...notice,
+    ...status,
+    location: notice.address || "공급 위치는 공고문 확인",
+    region: regionLabel(notice.regionCode, notice.address),
+    type: `${category} · 청약홈`,
+    category,
+    period: formatPeriod(notice.applyStartDate, notice.applyEndDate, notice.winnerAnnounceDate),
+    dday: remaining === undefined ? "일정 확인" : remaining === 0 ? "D-DAY" : remaining > 0 ? `D-${remaining}` : "마감",
+    price,
+    scale: notice.totalUnits ? `총 ${notice.totalUnits.toLocaleString("ko-KR")}세대 공급` : "공급 규모는 공고문 확인",
+    fit: "한국부동산원 청약홈 공식 공고",
+    deposit: "신청 자격과 예치금은 원문 공고에서 확인",
+  };
+}
+
+function eventFor(item: Application): { date: string; label: string; tone: string } | undefined {
+  const today = koreaToday();
+  if (item.applyStartDate && item.applyStartDate >= today) return { date: item.applyStartDate, label: "청약 접수 시작", tone: "blue-dot" };
+  if (item.applyEndDate && item.applyEndDate >= today) return { date: item.applyEndDate, label: "청약 접수 마감", tone: "coral-dot" };
+  if (item.winnerAnnounceDate && item.winnerAnnounceDate >= today) return { date: item.winnerAnnounceDate, label: "당첨자 발표", tone: "purple-dot" };
+  return undefined;
+}
+
 export default function Home() {
+  const [notices, setNotices] = useState<NoticeSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [loadVersion, setLoadVersion] = useState(0);
   const [query, setQuery] = useState("");
   const [activeStatus, setActiveStatus] = useState<StatusKey>("all");
   const [region, setRegion] = useState("전체");
   const [category, setCategory] = useState("전체");
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [savedOnly, setSavedOnly] = useState(false);
-  const [showAll, setShowAll] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(6);
   const [filterOpen, setFilterOpen] = useState(false);
   const [selected, setSelected] = useState<Application | null>(null);
+  const [selectedDetail, setSelectedDetail] = useState<NoticeSummary | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [qualOpen, setQualOpen] = useState(false);
   const [qualStep, setQualStep] = useState(0);
   const [answers, setAnswers] = useState<string[]>([]);
   const [toast, setToast] = useState("");
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setLoadError("");
+    fetchAllNotices(controller.signal)
+      .then(setNotices)
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setLoadError(error instanceof Error ? error.message : "청약 정보를 불러오지 못했습니다.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [loadVersion]);
+
+  useEffect(() => {
+    try {
       const saved = window.localStorage.getItem("cheongyak-one-saved");
-      if (saved) setSavedIds(new Set(JSON.parse(saved) as number[]));
-    }, 0);
-    return () => window.clearTimeout(timer);
+      if (saved) {
+        const parsed = JSON.parse(saved) as unknown;
+        if (Array.isArray(parsed)) setSavedIds(new Set(parsed.filter((id): id is number => typeof id === "number")));
+      }
+    } catch {
+      window.localStorage.removeItem("cheongyak-one-saved");
+    }
   }, []);
 
   useEffect(() => {
@@ -131,21 +243,66 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  const applications = useMemo(() => notices.map(toApplication), [notices]);
+  const availableRegions = useMemo(() => {
+    const values = new Set(applications.map((item) => item.region).filter((value) => value !== "지역 미정"));
+    return [...values].sort((a, b) => {
+      const left = REGION_ORDER.indexOf(a);
+      const right = REGION_ORDER.indexOf(b);
+      return (left < 0 ? 99 : left) - (right < 0 ? 99 : right) || a.localeCompare(b, "ko");
+    });
+  }, [applications]);
+  const availableCategories = useMemo(() => {
+    const values = new Set(applications.map((item) => item.category));
+    return ["아파트", "오피스텔", "공공임대"].filter((value) => values.has(value));
+  }, [applications]);
+
   const filtered = useMemo(() => applications.filter((item) => {
     const keyword = query.trim().toLowerCase();
-    const matchesQuery = !keyword || [item.title, item.location, item.type, item.category].some((value) => value.toLowerCase().includes(keyword));
+    const matchesQuery = !keyword || [item.title, item.location, item.type].some((value) => value.toLowerCase().includes(keyword));
     const matchesStatus = activeStatus === "all" || item.statusKey === activeStatus;
     const matchesRegion = region === "전체" || item.region === region;
     const matchesCategory = category === "전체" || item.category === category;
     const matchesSaved = !savedOnly || savedIds.has(item.id);
     return matchesQuery && matchesStatus && matchesRegion && matchesCategory && matchesSaved;
-  }), [query, activeStatus, region, category, savedOnly, savedIds]);
+  }), [applications, query, activeStatus, region, category, savedOnly, savedIds]);
 
-  const visible = showAll ? filtered : filtered.slice(0, 3);
+  const visible = filtered.slice(0, visibleCount);
   const activeFilterCount = Number(region !== "전체") + Number(category !== "전체");
+  const todayCount = applications.filter((item) => item.statusKey === "today").length;
+  const openCount = applications.filter((item) => item.statusKey === "open").length;
+  const upcomingCount = applications.filter((item) => item.statusKey === "upcoming").length;
+  const statuses: { key: StatusKey; label: string; count: number; tone: string; icon: IconName }[] = [
+    { key: "all", label: "전체 청약", count: applications.length, tone: "navy", icon: "grid" },
+    { key: "today", label: "오늘 마감", count: todayCount, tone: "coral", icon: "bell" },
+    { key: "open", label: "접수중", count: openCount, tone: "mint", icon: "check" },
+    { key: "upcoming", label: "오픈 예정", count: upcomingCount, tone: "blue", icon: "calendar" },
+  ];
+  const schedule = useMemo(() => applications
+    .map((item) => ({ item, event: eventFor(item) }))
+    .filter((entry): entry is { item: Application; event: { date: string; label: string; tone: string } } => Boolean(entry.event))
+    .sort((a, b) => a.event.date.localeCompare(b.event.date))
+    .slice(0, 3), [applications]);
+  const highlight = applications.find((item) => item.statusKey === "today")
+    ?? applications.find((item) => item.statusKey === "open")
+    ?? schedule[0]?.item;
+  const highlightEvent = highlight ? eventFor(highlight) : undefined;
+  const syncedAt = notices.map((notice) => notice.syncedAt).sort().at(-1);
+  const syncedLabel = syncedAt ? new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+  }).format(new Date(syncedAt)) : "동기화 전";
+  const today = koreaToday();
+  const [, thisMonth, thisDay] = today.split("-").map(Number);
 
   const scrollToResults = () => document.querySelector("#applications")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  const submitSearch = (event: FormEvent) => { event.preventDefault(); setActiveStatus("all"); setSavedOnly(false); scrollToResults(); };
+  const resetVisible = () => setVisibleCount(6);
+  const submitSearch = (event: FormEvent) => {
+    event.preventDefault();
+    setActiveStatus("all");
+    setSavedOnly(false);
+    resetVisible();
+    scrollToResults();
+  };
 
   const toggleSaved = (id: number) => {
     const next = new Set(savedIds);
@@ -159,7 +316,8 @@ export default function Home() {
   const applyQuickFilter = (value: string) => {
     setSavedOnly(false);
     setActiveStatus("all");
-    if (["서울", "경기"].includes(value)) {
+    resetVisible();
+    if (REGION_ORDER.includes(value)) {
       setRegion(value);
       setCategory("전체");
     } else {
@@ -169,9 +327,21 @@ export default function Home() {
     scrollToResults();
   };
 
+  const openDetail = async (item: Application) => {
+    setSelected(item);
+    setSelectedDetail(null);
+    setDetailLoading(true);
+    try {
+      setSelectedDetail(await fetchNotice(item.id));
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "상세 정보를 불러오지 못했습니다.");
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
   const answerQuestion = (answer: string) => {
-    const next = [...answers, answer];
-    setAnswers(next);
+    setAnswers((items) => [...items, answer]);
     setQualStep((step) => step + 1);
   };
 
@@ -179,6 +349,8 @@ export default function Home() {
     setQualOpen(false);
     window.setTimeout(() => { setQualStep(0); setAnswers([]); }, 200);
   };
+
+  const detailApplication = selected ? (selectedDetail ? toApplication(selectedDetail) : selected) : null;
 
   return (
     <main>
@@ -194,11 +366,11 @@ export default function Home() {
             <a href="#guide">자격 가이드</a>
           </nav>
           <div className="header-actions">
-            <span className="demo-chip">DEMO</span>
+            <span className="demo-chip live-chip">LIVE DATA</span>
             <button
               className={`saved-button ${savedOnly ? "active" : ""}`}
               type="button"
-              onClick={() => { setSavedOnly((value) => !value); setActiveStatus("all"); scrollToResults(); }}
+              onClick={() => { setSavedOnly((value) => !value); setActiveStatus("all"); resetVisible(); scrollToResults(); }}
               aria-pressed={savedOnly}
             >
               <Icon name="bookmark" /> <span>관심청약</span> <b>{savedIds.size}</b>
@@ -209,47 +381,51 @@ export default function Home() {
 
       <section className="hero" id="top">
         <div className="hero-copy">
-          <div className="eyebrow"><span></span> 복잡한 청약, 이제 쉽게</div>
+          <div className="eyebrow"><span></span> 매일 업데이트되는 청약 정보</div>
           <h1>내 조건에 맞는 청약만,<br/><em>한눈에.</em></h1>
-          <p>흩어진 모집공고를 일일이 찾지 마세요.<br/>지역과 조건을 고르면 중요한 일정부터 자격까지 정리해드려요.</p>
+          <p>흩어진 모집공고를 일일이 찾지 마세요.<br/>청약홈 공고를 지역과 일정별로 보기 쉽게 정리해드려요.</p>
           <form className="search-box" role="search" onSubmit={submitSearch}>
             <label className="search-field">
               <Icon name="search" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="지역 또는 단지명을 검색해보세요" aria-label="청약 검색어" />
+              <input value={query} onChange={(event) => { setQuery(event.target.value); resetVisible(); }} placeholder="지역 또는 단지명을 검색해보세요" aria-label="청약 검색어" />
               {query && <button className="clear-search" type="button" onClick={() => setQuery("")} aria-label="검색어 지우기"><Icon name="close" /></button>}
             </label>
             <button className="search-submit" type="submit">청약 찾기 <Icon name="arrow" /></button>
           </form>
           <div className="quick-filters">
             <span>빠른 검색</span>
-            {["서울", "경기", "신혼부부", "생애최초"].map((item) => <button type="button" key={item} onClick={() => applyQuickFilter(item)}>{item}</button>)}
+            {["서울", "경기", "아파트", "오피스텔"].map((item) => <button type="button" key={item} onClick={() => applyQuickFilter(item)}>{item}</button>)}
           </div>
         </div>
 
         <aside className="week-card" aria-label="이번 주 청약 요약">
           <div className="week-card-head">
-            <div><span className="mini-label">8월 2주차</span><h2>이번 주 청약</h2></div>
+            <div><span className="mini-label">{thisMonth}월 {Math.ceil(thisDay / 7)}주차</span><h2>이번 주 청약</h2></div>
             <span className="live-dot">LIVE</span>
           </div>
           <div className="week-stats">
-            <div><strong>7</strong><span>접수중</span></div>
-            <div><strong>2</strong><span>오늘 마감</span></div>
-            <div><strong>13</strong><span>오픈 예정</span></div>
+            <div><strong>{openCount}</strong><span>접수중</span></div>
+            <div><strong>{todayCount}</strong><span>오늘 마감</span></div>
+            <div><strong>{upcomingCount}</strong><span>오픈 예정</span></div>
           </div>
-          <button className="next-event" type="button" onClick={() => { setActiveStatus("today"); scrollToResults(); }}>
-            <span className="date-box"><strong>14</strong><span>금</span></span>
-            <span><small>오늘 마감</small><b>고양 창릉 A4블록 외 1건</b></span>
-            <Icon name="arrow" />
-          </button>
-          <p className="data-note">실제 연동 전 화면 확인용 예시 데이터입니다.</p>
+          {highlight && highlightEvent ? (
+            <button className="next-event" type="button" onClick={() => openDetail(highlight)}>
+              <span className="date-box"><strong>{Number(highlightEvent.date.slice(8))}</strong><span>{weekday(highlightEvent.date)}</span></span>
+              <span><small>{highlightEvent.label}</small><b>{highlight.title}</b></span>
+              <Icon name="arrow" />
+            </button>
+          ) : (
+            <div className="next-event no-event"><span>새로운 접수 일정을 확인 중입니다.</span></div>
+          )}
+          <p className="data-note">청약홈 실데이터 · {syncedLabel} 기준</p>
         </aside>
       </section>
 
       <section className="dashboard" id="applications">
         <div className="status-tabs" role="tablist" aria-label="청약 상태">
           {statuses.map((status) => (
-            <button className={activeStatus === status.key ? "selected" : ""} type="button" role="tab" aria-selected={activeStatus === status.key} key={status.key} onClick={() => { setActiveStatus(status.key); setSavedOnly(false); setShowAll(false); }}>
-              <span className={`tab-icon ${status.tone}`}><Icon name={status.icon} /></span><span>{status.label}<b>{status.count}</b></span>
+            <button className={activeStatus === status.key ? "selected" : ""} type="button" role="tab" aria-selected={activeStatus === status.key} key={status.key} onClick={() => { setActiveStatus(status.key); setSavedOnly(false); resetVisible(); }}>
+              <span className={`tab-icon ${status.tone}`}><Icon name={status.icon} /></span><span>{status.label}<b>{loading ? "–" : status.count}</b></span>
             </button>
           ))}
         </div>
@@ -258,14 +434,23 @@ export default function Home() {
           <div className="list-panel">
             <div className="section-head">
               <div>
-                <span className="section-kicker">{savedOnly ? "MY SAVED" : "RECOMMENDED"}</span>
+                <span className="section-kicker">{savedOnly ? "MY SAVED" : "REAL-TIME NOTICES"}</span>
                 <h2>{savedOnly ? "관심 청약" : "지금 확인할 청약"}</h2>
-                <p className="result-summary" aria-live="polite">조건에 맞는 공고 {filtered.length}건</p>
+                <p className="result-summary" aria-live="polite">{loading ? "실제 공고를 불러오는 중" : `조건에 맞는 공고 ${filtered.length}건`}</p>
               </div>
-              <button className="filter-button" type="button" onClick={() => setFilterOpen(true)}><Icon name="filter" /> 지역·유형 필터 {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button>
+              <button className="filter-button" type="button" onClick={() => setFilterOpen(true)} disabled={loading}><Icon name="filter" /> 지역·유형 필터 {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button>
             </div>
 
-            {visible.length > 0 ? (
+            {loading ? (
+              <div className="list-loading" role="status" aria-label="청약 공고 불러오는 중">
+                {[0, 1, 2].map((item) => <div className="list-skeleton" key={item}><i></i><strong></strong><span></span><small></small></div>)}
+              </div>
+            ) : loadError ? (
+              <div className="inline-error" role="alert">
+                <span>!</span><h3>공고를 불러오지 못했어요</h3><p>{loadError}</p>
+                <button type="button" onClick={() => setLoadVersion((version) => version + 1)}>다시 불러오기</button>
+              </div>
+            ) : visible.length > 0 ? (
               <>
                 <div className="application-list">
                   {visible.map((item) => (
@@ -278,19 +463,19 @@ export default function Home() {
                         <div><h3>{item.title}</h3><p className="location"><Icon name="pin" /> {item.location}</p></div>
                         <div className="deadline"><strong>{item.dday}</strong><span>{item.period}</span></div>
                       </div>
-                      <div className="card-facts"><span>{item.price}</span><i></i><span>{item.scale}</span><i></i><span>{item.fit}</span></div>
-                      <button className="detail-link" type="button" onClick={() => setSelected(item)}>공고 핵심만 보기 <Icon name="arrow" /></button>
+                      <div className="card-facts"><span>{item.price}</span><i></i><span>{item.scale}</span><i></i><span>{item.region}</span></div>
+                      <button className="detail-link" type="button" onClick={() => openDetail(item)}>공고 핵심만 보기 <Icon name="arrow" /></button>
                     </article>
                   ))}
                 </div>
-                {filtered.length > 3 && <button className="more-button" type="button" onClick={() => setShowAll((value) => !value)}>{showAll ? "간단히 보기" : `나머지 ${filtered.length - 3}건 더보기`} <Icon name="arrow" /></button>}
+                {filtered.length > visibleCount && <button className="more-button" type="button" onClick={() => setVisibleCount((count) => count + 6)}>다음 {Math.min(6, filtered.length - visibleCount)}건 더보기 <Icon name="arrow" /></button>}
               </>
             ) : (
               <div className="empty-state">
                 <span className="empty-icon"><Icon name={savedOnly ? "bookmark" : "search"} /></span>
                 <h3>{savedOnly ? "저장한 관심청약이 없어요" : "조건에 맞는 공고가 없어요"}</h3>
                 <p>{savedOnly ? "관심 있는 공고의 북마크를 눌러 모아보세요." : "검색어나 지역·유형 필터를 조금 넓혀보세요."}</p>
-                <button type="button" onClick={() => { setQuery(""); setRegion("전체"); setCategory("전체"); setActiveStatus("all"); setSavedOnly(false); }}>전체 청약 보기</button>
+                <button type="button" onClick={() => { setQuery(""); setRegion("전체"); setCategory("전체"); setActiveStatus("all"); setSavedOnly(false); resetVisible(); }}>전체 청약 보기</button>
               </div>
             )}
           </div>
@@ -301,54 +486,57 @@ export default function Home() {
                 <span className="plan-illustration"></span>
                 <div><span>나에게 맞는 청약 찾기</span><h2>3분 자격 체크</h2></div>
               </div>
-              <p>몇 가지 질문에 답하면 신청 가능한 특별공급과 우선순위를 알려드려요.</p>
+              <p>몇 가지 질문으로 확인해야 할 특별공급 유형을 간단히 좁혀보세요.</p>
               <ul><li><Icon name="check" /> 무주택 기간</li><li><Icon name="check" /> 청약통장 조건</li><li><Icon name="check" /> 소득·자산 기준</li></ul>
               <button type="button" onClick={() => setQualOpen(true)}>무료로 확인하기 <Icon name="arrow" /></button>
             </section>
 
             <section className="schedule-card" id="schedule">
-              <div className="side-title"><div><span>MY SCHEDULE</span><h2>다가오는 일정</h2></div><button type="button" onClick={() => { setActiveStatus("all"); scrollToResults(); }}>전체보기</button></div>
-              <ol>
-                <li><div className="timeline-date"><strong>14</strong><span>오늘</span></div><div><b>고양 창릉 A4블록</b><span>청약 접수 마감</span></div><i className="coral-dot"></i></li>
-                <li><div className="timeline-date"><strong>20</strong><span>수</span></div><div><b>인천 검단 센트럴</b><span>특별공급 접수</span></div><i className="blue-dot"></i></li>
-                <li><div className="timeline-date"><strong>27</strong><span>수</span></div><div><b>마곡 엠밸리 17단지</b><span>당첨자 발표</span></div><i className="purple-dot"></i></li>
-              </ol>
+              <div className="side-title"><div><span>UPCOMING</span><h2>다가오는 일정</h2></div><button type="button" onClick={() => { setActiveStatus("all"); scrollToResults(); }}>전체보기</button></div>
+              {schedule.length > 0 ? <ol>
+                {schedule.map(({ item, event }) => <li key={`${item.id}-${event.date}`}>
+                  <div className="timeline-date"><strong>{Number(event.date.slice(8))}</strong><span>{event.date === today ? "오늘" : weekday(event.date)}</span></div>
+                  <div><b>{item.title}</b><span>{event.label}</span></div><i className={event.tone}></i>
+                </li>)}
+              </ol> : <p className="schedule-empty">예정된 일정을 확인 중입니다.</p>}
             </section>
           </aside>
         </div>
       </section>
 
-      <footer><div className="footer-inner"><span>청약한눈</span><p>놓치지 말아야 할 청약 정보를 가장 쉽게.</p><small>화면 내 단지와 일정은 프로토타입용 예시입니다.</small></div></footer>
+      <footer><div className="footer-inner"><span>청약한눈</span><p>놓치지 말아야 할 청약 정보를 가장 쉽게.</p><small>정보는 참고용이며 신청 전 청약홈 공식 공고문을 반드시 확인하세요.</small></div></footer>
 
       <nav className="mobile-nav" aria-label="모바일 메뉴">
         <a className="active" href="#top"><Icon name="home" /><span>홈</span></a>
         <a href="#applications"><Icon name="search" /><span>청약찾기</span></a>
         <a href="#schedule"><Icon name="calendar" /><span>일정</span></a>
-        <button type="button" onClick={() => { setSavedOnly(true); setActiveStatus("all"); scrollToResults(); }}><Icon name="bookmark" /><span>관심</span></button>
+        <button type="button" onClick={() => { setSavedOnly(true); setActiveStatus("all"); resetVisible(); scrollToResults(); }}><Icon name="bookmark" /><span>관심</span></button>
       </nav>
 
       {filterOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setFilterOpen(false); }}>
           <section className="modal filter-modal" role="dialog" aria-modal="true" aria-labelledby="filter-title">
             <div className="modal-head"><div><span>FILTER</span><h2 id="filter-title">청약 조건 선택</h2></div><button type="button" onClick={() => setFilterOpen(false)} aria-label="닫기"><Icon name="close" /></button></div>
-            <div className="filter-group"><h3>지역</h3><div className="choice-grid">{["전체", "서울", "경기", "인천", "부산"].map((item) => <button className={region === item ? "active" : ""} type="button" key={item} onClick={() => setRegion(item)}>{item}</button>)}</div></div>
-            <div className="filter-group"><h3>공급 유형</h3><div className="choice-grid">{["전체", "일반공급", "신혼부부", "생애최초"].map((item) => <button className={category === item ? "active" : ""} type="button" key={item} onClick={() => setCategory(item)}>{item}</button>)}</div></div>
-            <div className="modal-actions"><button className="reset-button" type="button" onClick={() => { setRegion("전체"); setCategory("전체"); }}>초기화</button><button className="primary-button" type="button" onClick={() => { setFilterOpen(false); setSavedOnly(false); setShowAll(false); }}>공고 {filtered.length}건 보기</button></div>
+            <div className="filter-group"><h3>지역</h3><div className="choice-grid">{["전체", ...availableRegions].map((item) => <button className={region === item ? "active" : ""} type="button" key={item} onClick={() => { setRegion(item); resetVisible(); }}>{item}</button>)}</div></div>
+            <div className="filter-group"><h3>주택 유형</h3><div className="choice-grid">{["전체", ...availableCategories].map((item) => <button className={category === item ? "active" : ""} type="button" key={item} onClick={() => { setCategory(item); resetVisible(); }}>{item}</button>)}</div></div>
+            <div className="modal-actions"><button className="reset-button" type="button" onClick={() => { setRegion("전체"); setCategory("전체"); resetVisible(); }}>초기화</button><button className="primary-button" type="button" onClick={() => { setFilterOpen(false); setSavedOnly(false); }}>공고 {filtered.length}건 보기</button></div>
           </section>
         </div>
       )}
 
-      {selected && (
+      {detailApplication && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelected(null); }}>
-          <section className="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title">
-            <div className="modal-head"><div><span>NOTICE SUMMARY</span><h2 id="detail-title">{selected.title}</h2></div><button type="button" onClick={() => setSelected(null)} aria-label="닫기"><Icon name="close" /></button></div>
-            <div className="detail-status"><span className={`state ${selected.stateTone}`}>{selected.state}</span><b>{selected.dday}</b><small>{selected.period}</small></div>
+          <section className="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title" aria-busy={detailLoading}>
+            <div className="modal-head"><div><span>OFFICIAL NOTICE</span><h2 id="detail-title">{detailApplication.title}</h2></div><button type="button" onClick={() => setSelected(null)} aria-label="닫기"><Icon name="close" /></button></div>
+            {detailLoading && <div className="detail-loading" role="status">최신 상세 정보를 확인하고 있어요.</div>}
+            <div className="detail-status"><span className={`state ${detailApplication.stateTone}`}>{detailApplication.state}</span><b>{detailApplication.dday}</b><small>{detailApplication.period}</small></div>
             <div className="detail-grid">
-              <div><span>위치</span><strong>{selected.location}</strong></div><div><span>공급</span><strong>{selected.type}</strong></div>
-              <div><span>가격</span><strong>{selected.price}</strong></div><div><span>규모</span><strong>{selected.scale}</strong></div>
+              <div><span>위치</span><strong>{detailApplication.location}</strong></div><div><span>주택 유형</span><strong>{detailApplication.type}</strong></div>
+              <div><span>공고일</span><strong>{formatShortDate(detailApplication.noticeDate)}</strong></div><div><span>공급 규모</span><strong>{detailApplication.scale}</strong></div>
+              <div><span>분양가</span><strong>{detailApplication.price}</strong></div><div><span>당첨 발표</span><strong>{formatShortDate(detailApplication.winnerAnnounceDate)}</strong></div>
             </div>
-            <div className="eligibility-box"><span className="check-round"><Icon name="check" /></span><div><span>핵심 자격</span><h3>{selected.fit}</h3><p>{selected.deposit} · 세부 조건은 반드시 원문 공고에서 확인하세요.</p></div></div>
-            <div className="detail-actions"><button type="button" className="secondary-button" onClick={() => toggleSaved(selected.id)}><Icon name="bookmark" /> {savedIds.has(selected.id) ? "관심 해제" : "관심 저장"}</button><button type="button" className="primary-button" onClick={() => setToast("공식 공고 연결은 데이터 연동 후 제공돼요.")}>공식 공고 보기 <Icon name="arrow" /></button></div>
+            <div className="eligibility-box"><span className="check-round"><Icon name="check" /></span><div><span>데이터 출처</span><h3>{detailApplication.fit}</h3><p>{detailApplication.deposit} · 본 서비스 정보보다 공식 공고문을 우선합니다.</p></div></div>
+            <div className="detail-actions"><button type="button" className="secondary-button" onClick={() => toggleSaved(detailApplication.id)}><Icon name="bookmark" /> {savedIds.has(detailApplication.id) ? "관심 해제" : "관심 저장"}</button>{detailApplication.officialUrl ? <a className="primary-button" href={detailApplication.officialUrl} target="_blank" rel="noreferrer">공식 공고 보기 <Icon name="arrow" /></a> : <button type="button" className="primary-button" disabled>공식 링크 확인 중</button>}</div>
           </section>
         </div>
       )}
@@ -370,9 +558,9 @@ export default function Home() {
               <div className="result-area">
                 <span className="result-icon"><Icon name="check" /></span>
                 <small>간편 진단 결과</small>
-                <h3>{answers[0]?.startsWith("네") ? "신청 가능한 유형이 있어요" : "일반공급 조건부터 확인해보세요"}</h3>
-                <p>{answers[1]?.startsWith("네") ? "신혼부부 특별공급" : "일반공급"}{answers[2]?.startsWith("네") ? "과 생애최초 특별공급" : ""}을 우선 확인해보세요. 정확한 자격은 공고문과 관계기관에서 다시 확인해야 해요.</p>
-                <button className="primary-button" type="button" onClick={() => { closeQualification(); setCategory(answers[1]?.startsWith("네") ? "신혼부부" : "전체"); scrollToResults(); }}>추천 공고 보기 <Icon name="arrow" /></button>
+                <h3>{answers[0]?.startsWith("네") ? "확인해볼 특별공급이 있어요" : "일반공급 조건부터 확인해보세요"}</h3>
+                <p>{answers[1]?.startsWith("네") ? "신혼부부 특별공급" : "일반공급"}{answers[2]?.startsWith("네") ? "과 생애최초 특별공급" : ""} 자격을 공식 공고문에서 확인해보세요. 이 결과는 간편 안내이며 신청 가능 여부를 보장하지 않아요.</p>
+                <button className="primary-button" type="button" onClick={() => { closeQualification(); scrollToResults(); }}>실제 공고 보기 <Icon name="arrow" /></button>
               </div>
             )}
           </section>

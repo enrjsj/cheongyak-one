@@ -27,6 +27,7 @@ public class NoticeQueryService {
             HousingCategory category,
             NoticeStatus status,
             String keyword,
+            String region,
             int page,
             int size
     ) {
@@ -39,8 +40,20 @@ public class NoticeQueryService {
         Specification<SubscriptionNotice> specification = Specification.allOf(
                 category == null ? null : (root, query, cb) -> cb.equal(root.get("housingCategory"), category),
                 status == null ? null : (root, query, cb) -> cb.equal(root.get("status"), status),
-                !StringUtils.hasText(keyword) ? null : (root, query, cb) ->
-                        cb.like(cb.lower(root.get("title")), "%" + keyword.trim().toLowerCase() + "%")
+                !StringUtils.hasText(keyword) ? null : (root, query, cb) -> {
+                    String pattern = "%" + keyword.trim().toLowerCase() + "%";
+                    return cb.or(
+                            cb.like(cb.lower(root.get("title")), pattern),
+                            cb.like(cb.lower(root.get("address")), pattern)
+                    );
+                },
+                !StringUtils.hasText(region) ? null : (root, query, cb) -> {
+                    String normalizedRegion = region.trim().toLowerCase();
+                    return cb.or(
+                            cb.equal(cb.lower(root.get("regionCode")), normalizedRegion),
+                            cb.like(cb.lower(root.get("address")), normalizedRegion + "%")
+                    );
+                }
         );
 
         return noticeRepository.findAll(specification, pageable).map(NoticeSummaryResponse::from);

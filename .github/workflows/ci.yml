@@ -51,13 +51,48 @@ jobs:
         run: test -n "$REB_API_KEY"
       - name: Build executable JAR
         run: mvn -B -pl backend -DskipTests package
-      - name: Run real-data synchronization batch
-        run: >-
-          java -jar backend/target/cheongyak-one-backend-0.1.0-SNAPSHOT.jar
-          --spring.profiles.active=local
-          --spring.main.web-application-type=none
-          --app.notice-sync.run-on-startup=true
-          --app.notice-sync.export-path=backend/target/reb-sample.json
+      - name: Start API with real-data synchronization
+        run: |
+          java -jar backend/target/cheongyak-one-backend-0.1.0-SNAPSHOT.jar \
+            --spring.profiles.active=local \
+            --app.notice-sync.run-on-startup=true \
+            --app.notice-sync.export-path=backend/target/reb-sample.json \
+            > backend/target/real-data-api.log 2>&1 &
+          echo $! > backend/target/real-data-api.pid
+      - name: Smoke test real-data REST API
+        run: |
+          set -euo pipefail
+          for attempt in {1..60}; do
+            if ! kill -0 "$(cat backend/target/real-data-api.pid)" 2>/dev/null; then
+              cat backend/target/real-data-api.log
+              exit 1
+            fi
+            if test -s backend/target/reb-sample.json \
+              && curl --fail --silent http://localhost:8080/actuator/health > /dev/null; then
+              break
+            fi
+            if test "$attempt" = 60; then
+              cat backend/target/real-data-api.log
+              exit 1
+            fi
+            sleep 2
+          done
+
+          curl --fail --silent \
+            'http://localhost:8080/api/v1/notices?page=0&size=10' \
+            > backend/target/notice-page.json
+          jq -e '.totalElements > 0 and (.content | length) > 0' \
+            backend/target/notice-page.json
+          jq -e '.content[0].sourceSystem != null and .content[0].syncedAt != null' \
+            backend/target/notice-page.json
+
+          notice_id="$(jq -r '.content[0].id' backend/target/notice-page.json)"
+          curl --fail --silent \
+            "http://localhost:8080/api/v1/notices/${notice_id}" \
+            > backend/target/notice-detail.json
+          jq -e --argjson notice_id "$notice_id" \
+            '.id == $notice_id and .officialUrl != null' \
+            backend/target/notice-detail.json
       - name: Print public-data summary
         run: >-
           jq '{generatedAt, fetchedCount, savedCount, totalInDatabase,
@@ -66,6 +101,16 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: reb-real-data-sample
-          path: backend/target/reb-sample.json
+          path: |
+            backend/target/reb-sample.json
+            backend/target/notice-page.json
+            backend/target/notice-detail.json
+            backend/target/real-data-api.log
           if-no-files-found: error
           retention-days: 7
+      - name: Stop real-data API
+        if: always()
+        run: |
+          if test -f backend/target/real-data-api.pid; then
+            kill "$(cat backend/target/real-data-api.pid)" 2>/dev/null || true
+          fi

@@ -126,7 +126,7 @@ class RebApiGateway {
                 noticeType.housingCategory(),
                 resolveStatus(applyStartDate, applyEndDate, winnerDate, noticeDate),
                 title,
-                firstText(item, "SUBSCRPT_AREA_CODE", "SUBSCRPT_AREA_CODE_NM"),
+                firstText(item, "SUBSCRPT_AREA_CODE_NM", "SUBSCRPT_AREA_CODE"),
                 firstText(item, "HSSPLY_ADRES", "HSSPLY_ADDRESS"),
                 noticeDate,
                 applyStartDate,
