@@ -56,3 +56,7 @@ Oracle 연결 전에는 H2 기반 local 프로필을 사용할 수 있습니다.
 | REB_API_KEY | 한국부동산원 청약홈 API 키 |
 | MYHOME_API_KEY | 마이홈포털 API 키 |
 | NOTICE_SYNC_CRON | 공고 동기화 실행 시각 |
+
+## 개발 상태
+
+초기 프로젝트 구조와 CI 구성이 완료되었습니다. 외부 청약 API 연동은 후속 단계에서 진행합니다.
