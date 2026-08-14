@@ -39,12 +39,11 @@ class RebApiGateway {
 
     RebApiGateway(
             RebApiProperties properties,
-            RestClient.Builder restClientBuilder,
             ObjectMapper objectMapper,
             Clock clock
     ) {
         this.properties = properties;
-        this.restClient = restClientBuilder.build();
+        this.restClient = RestClient.create();
         this.objectMapper = objectMapper;
         this.clock = clock;
     }

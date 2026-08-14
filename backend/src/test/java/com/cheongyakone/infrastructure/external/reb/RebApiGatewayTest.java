@@ -5,7 +5,6 @@ import com.cheongyakone.domain.notice.HousingCategory;
 import com.cheongyakone.domain.notice.NoticeSnapshot;
 import com.cheongyakone.domain.notice.NoticeStatus;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -25,7 +24,6 @@ class RebApiGatewayTest {
     );
     private final RebApiGateway gateway = new RebApiGateway(
             new RebApiProperties(null, "test-key", 100, 20),
-            RestClient.builder(),
             objectMapper,
             clock
     );
