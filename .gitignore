@@ -1,0 +1,28 @@
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+application-secret.yml
+
+# Java
+target/
+*.log
+hs_err_pid*
+.tooling/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+
+# OS
+.DS_Store
+Thumbs.db
