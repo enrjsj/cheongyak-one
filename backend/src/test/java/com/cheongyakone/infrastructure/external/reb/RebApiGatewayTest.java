@@ -4,10 +4,10 @@ import com.cheongyakone.config.RebApiProperties;
 import com.cheongyakone.domain.notice.HousingCategory;
 import com.cheongyakone.domain.notice.NoticeSnapshot;
 import com.cheongyakone.domain.notice.NoticeStatus;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
 import java.time.Instant;
