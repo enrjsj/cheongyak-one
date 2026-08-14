@@ -46,8 +46,15 @@ management:
         enabled: true
 
 app:
+  reb-api:
+    base-url: ${REB_API_BASE_URL:https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1}
+    service-key: ${REB_API_KEY:}
+    page-size: ${REB_API_PAGE_SIZE:100}
+    max-pages: ${REB_API_MAX_PAGES:20}
   notice-sync:
     cron: "${NOTICE_SYNC_CRON:0 10 3 * * *}"
     zone: Asia/Seoul
+    run-on-startup: false
+    export-path: target/reb-sample.json
 
 spring.lifecycle.timeout-per-shutdown-phase: 30s

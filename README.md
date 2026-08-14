@@ -40,9 +40,20 @@ Oracle 연결 전에는 H2 기반 local 프로필을 사용할 수 있습니다.
 ## 일배치
 
 - 기본 실행 시각: 매일 03:10 (Asia/Seoul)
-- 최근 90일과 향후 공고를 재조회하는 정책을 적용할 예정입니다.
-- 한국부동산원 청약홈 API와 마이홈포털 공공주택 API 클라이언트는 다음 단계에서 연결합니다.
+- 최근 90일과 향후 365일 공고를 재조회합니다.
+- 한국부동산원 청약홈 API에서 APT와 오피스텔 공고를 페이지 단위로 수집합니다.
+- 공공임대는 별도의 마이홈포털 API 키가 준비되면 연결합니다.
 - 실행 이력은 SYNC_EXECUTION에 기록합니다.
+
+GitHub Actions의 `CI / real-data` 작업은 Repository Secret인 `REB_API_KEY`를 환경변수로 주입합니다. Oracle 구성 전에는 H2에 실제 공고를 저장하고 공개 데이터만 `reb-real-data-sample` 아티팩트로 출력합니다.
+
+로컬에서 실제 데이터 배치를 한 번 실행하려면 `REB_API_KEY` 환경변수를 설정한 후 아래 명령을 사용합니다.
+
+    mvn -pl backend clean package
+    java -jar backend/target/cheongyak-one-backend-0.1.0-SNAPSHOT.jar \
+      --spring.profiles.active=local \
+      --spring.main.web-application-type=none \
+      --app.notice-sync.run-on-startup=true
 
 ## 환경변수
 
@@ -56,7 +67,3 @@ Oracle 연결 전에는 H2 기반 local 프로필을 사용할 수 있습니다.
 | REB_API_KEY | 한국부동산원 청약홈 API 키 |
 | MYHOME_API_KEY | 마이홈포털 API 키 |
 | NOTICE_SYNC_CRON | 공고 동기화 실행 시각 |
-
-## 개발 상태
-
-초기 프로젝트 구조와 CI 구성이 완료되었습니다. 외부 청약 API 연동은 후속 단계에서 진행합니다.

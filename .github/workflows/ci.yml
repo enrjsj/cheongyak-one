@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
@@ -32,3 +33,39 @@ jobs:
           java-version: 21
           cache: maven
       - run: mvn -B -pl backend test
+
+  real-data:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      REB_API_KEY: ${{ secrets.REB_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - name: Validate REB secret
+        run: test -n "$REB_API_KEY"
+      - name: Build executable JAR
+        run: mvn -B -pl backend -DskipTests package
+      - name: Run real-data synchronization batch
+        run: >-
+          java -jar backend/target/cheongyak-one-backend-0.1.0-SNAPSHOT.jar
+          --spring.profiles.active=local
+          --spring.main.web-application-type=none
+          --app.notice-sync.run-on-startup=true
+          --app.notice-sync.export-path=backend/target/reb-sample.json
+      - name: Print public-data summary
+        run: >-
+          jq '{generatedAt, fetchedCount, savedCount, totalInDatabase,
+          categories: (.notices | group_by(.category) | map({category: .[0].category, count: length}))}'
+          backend/target/reb-sample.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reb-real-data-sample
+          path: backend/target/reb-sample.json
+          if-no-files-found: error
+          retention-days: 7

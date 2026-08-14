@@ -33,7 +33,7 @@ public class NoticeSyncService {
         this.clock = clock;
     }
 
-    public void synchronize() {
+    public NoticeSyncResult synchronize() {
         Instant startedAt = clock.instant();
         SyncExecution execution = executionRecorder.start(startedAt);
         int fetchedCount = 0;
@@ -55,6 +55,7 @@ public class NoticeSyncService {
             }
 
             executionRecorder.succeed(execution, clock.instant(), fetchedCount, savedCount);
+            return new NoticeSyncResult(fetchedCount, savedCount);
         } catch (RuntimeException exception) {
             executionRecorder.fail(execution, clock.instant(), exception);
             throw exception;
