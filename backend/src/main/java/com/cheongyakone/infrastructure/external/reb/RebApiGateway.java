@@ -14,7 +14,6 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
@@ -141,7 +140,7 @@ class RebApiGateway {
         ));
     }
 
-    private URI buildUri(RebNoticeType noticeType, LocalDate from, LocalDate to, int page) {
+    URI buildUri(RebNoticeType noticeType, LocalDate from, LocalDate to, int page) {
         return UriComponentsBuilder.fromUriString(properties.baseUrl())
                 .pathSegment(noticeType.endpoint())
                 .queryParam("page", page)
@@ -149,9 +148,9 @@ class RebApiGateway {
                 .queryParam("returnType", "JSON")
                 .queryParam("cond[RCRIT_PBLANC_DE::GTE]", from)
                 .queryParam("cond[RCRIT_PBLANC_DE::LTE]", to)
-                .queryParam("serviceKey", properties.decodedServiceKey())
-                .build()
-                .encode(StandardCharsets.UTF_8)
+                .queryParam("serviceKey", "{serviceKey}")
+                .encode()
+                .buildAndExpand(properties.decodedServiceKey())
                 .toUri();
     }
 

@@ -10,6 +10,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Optional;
 
@@ -68,5 +69,23 @@ class RebApiGatewayTest {
         Optional<NoticeSnapshot> snapshot = gateway.mapItem(RebNoticeType.OFFICETEL, item);
 
         assertThat(snapshot).isEmpty();
+    }
+
+    @Test
+    void strictlyEncodesDecodedServiceKey() {
+        RebApiGateway encodedGateway = new RebApiGateway(
+                new RebApiProperties(null, "abc+def/ghi=", 100, 20),
+                objectMapper,
+                clock
+        );
+
+        String rawQuery = encodedGateway.buildUri(
+                RebNoticeType.APARTMENT,
+                LocalDate.of(2026, 8, 1),
+                LocalDate.of(2026, 8, 31),
+                1
+        ).getRawQuery();
+
+        assertThat(rawQuery).contains("serviceKey=abc%2Bdef%2Fghi%3D");
     }
 }
