@@ -47,6 +47,22 @@ Oracle 연결 전에는 H2 기반 local 프로필을 사용할 수 있습니다.
 
 GitHub Actions의 `CI / real-data` 작업은 Repository Secret인 `REB_API_KEY`를 환경변수로 주입합니다. Oracle 구성 전에는 H2에 실제 공고를 저장하고 공개 데이터만 `reb-real-data-sample` 아티팩트로 출력합니다.
 
+프런트엔드는 더 이상 예시 공고를 사용하지 않습니다. 백엔드의 `/api/v1/notices` 목록·상세 API를 호출하며, 개발 서버에서는 Vite 프록시가 `localhost:8080`의 Spring Boot로 요청을 전달합니다.
+
+    # 터미널 1: 실제 데이터가 포함된 백엔드 실행
+    export REB_API_KEY="발급받은 개발키"
+    mvn -pl backend clean package
+    java -jar backend/target/cheongyak-one-backend-0.1.0-SNAPSHOT.jar \
+      --spring.profiles.active=local \
+      --app.notice-sync.run-on-startup=true
+
+    # 터미널 2: 프런트엔드 실행
+    cd frontend
+    npm ci
+    npm run dev
+
+`http://localhost:5173`에서 실제 아파트·오피스텔 공고, 상태별 건수, 지역·주택유형 필터, 상세 공고 링크를 확인할 수 있습니다.
+
 로컬에서 실제 데이터 배치를 한 번 실행하려면 `REB_API_KEY` 환경변수를 설정한 후 아래 명령을 사용합니다.
 
     mvn -pl backend clean package

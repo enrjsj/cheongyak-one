@@ -25,10 +25,11 @@ public class NoticeController {
             @RequestParam(required = false) HousingCategory category,
             @RequestParam(required = false) NoticeStatus status,
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String region,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return noticeQueryService.findNotices(category, status, keyword, page, size);
+        return noticeQueryService.findNotices(category, status, keyword, region, page, size);
     }
 
     @GetMapping("/{id}")

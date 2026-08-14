@@ -27,6 +27,7 @@ public class NoticeQueryService {
             HousingCategory category,
             NoticeStatus status,
             String keyword,
+            String region,
             int page,
             int size
     ) {
@@ -36,12 +37,32 @@ public class NoticeQueryService {
                 Sort.by(Sort.Order.asc("applyEndDate"), Sort.Order.desc("noticeDate"))
         );
 
-        Specification<SubscriptionNotice> specification = Specification.allOf(
-                category == null ? null : (root, query, cb) -> cb.equal(root.get("housingCategory"), category),
-                status == null ? null : (root, query, cb) -> cb.equal(root.get("status"), status),
-                !StringUtils.hasText(keyword) ? null : (root, query, cb) ->
-                        cb.like(cb.lower(root.get("title")), "%" + keyword.trim().toLowerCase() + "%")
-        );
+        // Spring Data JPA 4부터 null Specification 조합이 허용되지 않아 실제 조건만 순서대로 추가한다.
+        Specification<SubscriptionNotice> specification = Specification.unrestricted();
+        if (category != null) {
+            specification = specification.and(
+                    (root, query, cb) -> cb.equal(root.get("housingCategory"), category)
+            );
+        }
+        if (status != null) {
+            specification = specification.and(
+                    (root, query, cb) -> cb.equal(root.get("status"), status)
+            );
+        }
+        if (StringUtils.hasText(keyword)) {
+            String pattern = "%" + keyword.trim().toLowerCase() + "%";
+            specification = specification.and((root, query, cb) -> cb.or(
+                    cb.like(cb.lower(root.get("title")), pattern),
+                    cb.like(cb.lower(root.get("address")), pattern)
+            ));
+        }
+        if (StringUtils.hasText(region)) {
+            String normalizedRegion = region.trim().toLowerCase();
+            specification = specification.and((root, query, cb) -> cb.or(
+                    cb.equal(cb.lower(root.get("regionCode")), normalizedRegion),
+                    cb.like(cb.lower(root.get("address")), normalizedRegion + "%")
+            ));
+        }
 
         return noticeRepository.findAll(specification, pageable).map(NoticeSummaryResponse::from);
     }
