@@ -1,0 +1,11 @@
+{
+  "name": "청약한눈",
+  "short_name": "청약한눈",
+  "description": "내 조건에 맞는 청약 정보와 일정을 한눈에 확인하세요.",
+  "lang": "ko-KR",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f7fa",
+  "theme_color": "#f5f7fa",
+  "orientation": "portrait-primary"
+}
