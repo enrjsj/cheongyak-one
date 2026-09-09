@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    url: ${POSTGRES_TEST_URL}
+    username: ${POSTGRES_TEST_USERNAME:cheongyak}
+    password: ${POSTGRES_TEST_PASSWORD:cheongyak}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+  batch:
+    jdbc:
+      initialize-schema: never
+
+app:
+  notice-sync:
+    cron: "-"

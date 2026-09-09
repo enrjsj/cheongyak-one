@@ -63,4 +63,32 @@ public class SyncExecution {
         String message = exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage();
         this.errorMessage = message.substring(0, Math.min(message.length(), 2000));
     }
+
+    public Long getId() {
+        return id;
+    }
+
+    public SyncExecutionStatus getStatus() {
+        return status;
+    }
+
+    public Instant getStartedAt() {
+        return startedAt;
+    }
+
+    public Instant getFinishedAt() {
+        return finishedAt;
+    }
+
+    public int getFetchedCount() {
+        return fetchedCount;
+    }
+
+    public int getSavedCount() {
+        return savedCount;
+    }
+
+    public String getErrorMessage() {
+        return errorMessage;
+    }
 }

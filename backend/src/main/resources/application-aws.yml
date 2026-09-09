@@ -1,0 +1,41 @@
+# Elastic Beanstalk 단일 인스턴스와 소형 RDS에 맞춘 운영 프로필이다.
+server:
+  port: ${PORT:5000}
+
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 30000
+      validation-timeout: 5000
+      max-lifetime: 840000
+      keepalive-time: 300000
+  jpa:
+    open-in-view: false
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # 운영 환경에서는 내부 메트릭과 설정값이 외부에 노출되지 않게 제한한다.
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+
+logging:
+  file:
+    name: /var/log/cheongyak-one/application.log
+
+app:
+  auth:
+    secure-cookie: true
+  member-mail:
+    # SES SMTP 자격정보 설정 전에는 기존 회원 흐름이 막히지 않도록 비활성화한다.
+    delivery: ${MEMBER_MAIL_DELIVERY:disabled}
+    verification-required: ${MEMBER_EMAIL_VERIFICATION_REQUIRED:false}

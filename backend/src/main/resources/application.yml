@@ -2,10 +2,10 @@ spring:
   application:
     name: cheongyak-one
   datasource:
-    url: ${DB_URL:jdbc:oracle:thin:@//localhost:1521/FREEPDB1}
-    username: ${DB_USERNAME:CHEONGYAK_APP}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/cheongyak}
+    username: ${DB_USERNAME:cheongyak_app}
     password: ${DB_PASSWORD:}
-    driver-class-name: oracle.jdbc.OracleDriver
+    driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
@@ -18,6 +18,7 @@ spring:
       hibernate:
         jdbc:
           batch_size: 50
+          time_zone: UTC
         order_inserts: true
         order_updates: true
   flyway:
@@ -28,6 +29,20 @@ spring:
       enabled: false
     jdbc:
       initialize-schema: never
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH:true}
+          starttls:
+            enable: ${SMTP_STARTTLS:true}
+          connectiontimeout: ${SMTP_CONNECTION_TIMEOUT:5000}
+          timeout: ${SMTP_READ_TIMEOUT:5000}
+          writetimeout: ${SMTP_WRITE_TIMEOUT:5000}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -46,6 +61,16 @@ management:
         enabled: true
 
 app:
+  auth:
+    cookie-name: CHEONGYAK_SESSION
+    csrf-cookie-name: CHEONGYAK_CSRF
+    session-duration: 14d
+    secure-cookie: false
+  member-mail:
+    delivery: ${MEMBER_MAIL_DELIVERY:log}
+    verification-required: ${MEMBER_EMAIL_VERIFICATION_REQUIRED:true}
+    frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+    from-address: ${MEMBER_MAIL_FROM:no-reply@localhost}
   reb-api:
     base-url: ${REB_API_BASE_URL:https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1}
     service-key: ${REB_API_KEY:}
@@ -56,5 +81,10 @@ app:
     zone: Asia/Seoul
     run-on-startup: false
     export-path: target/reb-sample.json
+  member-notification:
+    cron: "${MEMBER_NOTIFICATION_CRON:0 5 * * * *}"
+    email-cron: "${MEMBER_NOTIFICATION_EMAIL_CRON:0 */5 * * * *}"
+    cleanup-cron: "${MEMBER_NOTIFICATION_CLEANUP_CRON:0 45 4 * * *}"
+    zone: Asia/Seoul
 
 spring.lifecycle.timeout-per-shutdown-phase: 30s

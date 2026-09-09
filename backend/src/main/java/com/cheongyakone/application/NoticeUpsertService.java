@@ -1,5 +1,7 @@
 package com.cheongyakone.application;
 
+import com.cheongyakone.domain.notice.NoticeChangeHistory;
+import com.cheongyakone.domain.notice.NoticeChangeHistoryRepository;
 import com.cheongyakone.domain.notice.NoticeSnapshot;
 import com.cheongyakone.domain.notice.SubscriptionNotice;
 import com.cheongyakone.domain.notice.SubscriptionNoticeRepository;
@@ -12,9 +14,11 @@ import java.time.Instant;
 public class NoticeUpsertService {
 
     private final SubscriptionNoticeRepository noticeRepository;
+    private final NoticeChangeHistoryRepository changeHistoryRepository;
 
-    public NoticeUpsertService(SubscriptionNoticeRepository noticeRepository) {
+    public NoticeUpsertService(SubscriptionNoticeRepository noticeRepository, NoticeChangeHistoryRepository changeHistoryRepository) {
         this.noticeRepository = noticeRepository;
+        this.changeHistoryRepository = changeHistoryRepository;
     }
 
     @Transactional
@@ -26,10 +30,15 @@ public class NoticeUpsertService {
                         snapshot.sourceNoticeId(),
                         snapshot.housingCategory(),
                         snapshot.status(),
-                        snapshot.title()
+                        snapshot.title(),
+                        syncTime
                 ));
 
         notice.updateFrom(snapshot, syncTime);
         noticeRepository.save(notice);
+        if (syncTime.equals(notice.getContentChangedAt()) && notice.getLastChangeSummary() != null
+                && !changeHistoryRepository.existsByNoticeIdAndChangedAt(notice.getId(), syncTime)) {
+            changeHistoryRepository.save(new NoticeChangeHistory(notice.getId(), notice.getLastChangeSummary(), syncTime));
+        }
     }
 }
