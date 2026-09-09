@@ -11,6 +11,7 @@ import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -31,6 +32,26 @@ public class Member {
 
     @Column(name = "NICKNAME", nullable = false, length = 40)
     private String nickname;
+
+    @Column(name = "BIRTH_DATE")
+    private LocalDate birthDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "GENDER", length = 20)
+    private MemberGender gender;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "MARITAL_STATUS", length = 20)
+    private MemberMaritalStatus maritalStatus;
+
+    @Column(name = "HOUSEHOLD_MEMBER_COUNT")
+    private Integer householdMemberCount;
+
+    @Column(name = "CHILD_COUNT")
+    private Integer childCount;
+
+    @Column(name = "RESIDENCE_REGION", length = 20)
+    private String residenceRegion;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "MEMBER_STATUS", nullable = false, length = 20)
@@ -72,6 +93,22 @@ public class Member {
         this.role = MemberRole.USER;
         this.createdAt = now;
         this.updatedAt = now;
+    }
+
+    public Member(
+            String email,
+            String passwordHash,
+            String nickname,
+            LocalDate birthDate,
+            MemberGender gender,
+            MemberMaritalStatus maritalStatus,
+            Integer householdMemberCount,
+            Integer childCount,
+            String residenceRegion,
+            Instant now
+    ) {
+        this(email, passwordHash, nickname, now);
+        changeProfile(nickname, birthDate, gender, maritalStatus, householdMemberCount, childCount, residenceRegion, now);
     }
 
     public static String normalizeEmail(String email) {
@@ -147,6 +184,26 @@ public class Member {
         this.updatedAt = now;
     }
 
+    public void changeProfile(
+            String nickname,
+            LocalDate birthDate,
+            MemberGender gender,
+            MemberMaritalStatus maritalStatus,
+            Integer householdMemberCount,
+            Integer childCount,
+            String residenceRegion,
+            Instant now
+    ) {
+        this.nickname = Objects.requireNonNull(nickname).trim();
+        this.birthDate = birthDate;
+        this.gender = gender;
+        this.maritalStatus = maritalStatus;
+        this.householdMemberCount = householdMemberCount;
+        this.childCount = childCount;
+        this.residenceRegion = residenceRegion == null || residenceRegion.isBlank() ? null : residenceRegion.trim();
+        this.updatedAt = Objects.requireNonNull(now);
+    }
+
     public void changePassword(String passwordHash, Instant now) {
         this.passwordHash = Objects.requireNonNull(passwordHash);
         this.updatedAt = now;
@@ -179,6 +236,12 @@ public class Member {
         this.email = "withdrawn+" + id + "@deleted.invalid";
         this.passwordHash = "WITHDRAWN";
         this.nickname = "탈퇴한 회원";
+        this.birthDate = null;
+        this.gender = null;
+        this.maritalStatus = null;
+        this.householdMemberCount = null;
+        this.childCount = null;
+        this.residenceRegion = null;
         this.status = MemberStatus.WITHDRAWN;
         this.role = MemberRole.USER;
         this.failedLoginAttempts = 0;
@@ -202,6 +265,30 @@ public class Member {
 
     public String getNickname() {
         return nickname;
+    }
+
+    public LocalDate getBirthDate() {
+        return birthDate;
+    }
+
+    public MemberGender getGender() {
+        return gender;
+    }
+
+    public MemberMaritalStatus getMaritalStatus() {
+        return maritalStatus;
+    }
+
+    public Integer getHouseholdMemberCount() {
+        return householdMemberCount;
+    }
+
+    public Integer getChildCount() {
+        return childCount;
+    }
+
+    public String getResidenceRegion() {
+        return residenceRegion;
     }
 
     public MemberStatus getStatus() {

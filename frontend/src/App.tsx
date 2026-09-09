@@ -23,6 +23,7 @@ import {
   loginMember,
   logoutMember,
   MemberProfile,
+  MemberProfileInput,
   MemberRecommendationList,
   MemberSearchPreference,
   mergeFavoriteIds,
@@ -83,6 +84,7 @@ type Application = NoticeSummary & {
   category: string;
   period: string;
   dday: string;
+  priceLabel: string;
   price: string;
   scale: string;
   fit: string;
@@ -252,24 +254,33 @@ function toApplication(notice: NoticeSummary): Application {
   const remaining = daysBetween(today, targetDate);
   const minPrice = formatWon(notice.minPrice);
   const maxPrice = formatWon(notice.maxPrice);
+  const publicRental = notice.housingCategory === "PUBLIC_RENTAL";
+  const priceLabel = publicRental ? "임대보증금" : "분양가";
   const price = minPrice && maxPrice
-    ? `분양가 ${minPrice} — ${maxPrice}`
-    : minPrice ? `분양가 ${minPrice}부터` : "분양가는 공고문 확인";
+    ? `${priceLabel} ${minPrice} — ${maxPrice}`
+    : minPrice ? `${publicRental ? "최소 임대보증금" : "분양가"} ${minPrice}부터`
+      : `${priceLabel}은 공고문 확인`;
   const category = CATEGORY_LABELS[notice.housingCategory];
+  const sourceName = notice.sourceSystem === "MYHOME_PUBLIC_RENTAL" ? "마이홈포털" : "청약홈";
 
   return {
     ...notice,
     ...status,
     location: notice.address || "공급 위치는 공고문 확인",
     region: regionLabel(notice.regionCode, notice.address),
-    type: `${category} · 청약홈`,
+    type: `${category} · ${sourceName}`,
     category,
     period: formatPeriod(notice.applyStartDate, notice.applyEndDate, notice.winnerAnnounceDate),
     dday: remaining === undefined ? "일정 확인" : remaining === 0 ? "D-DAY" : remaining > 0 ? `D-${remaining}` : "마감",
+    priceLabel,
     price,
     scale: notice.totalUnits ? `총 ${notice.totalUnits.toLocaleString("ko-KR")}세대 공급` : "공급 규모는 공고문 확인",
-    fit: "한국부동산원 청약홈 공식 공고",
-    deposit: "신청 자격과 예치금은 원문 공고에서 확인",
+    fit: notice.sourceSystem === "MYHOME_PUBLIC_RENTAL"
+      ? "국토교통부 마이홈포털 공식 공고"
+      : "한국부동산원 청약홈 공식 공고",
+    deposit: publicRental
+      ? "임대 조건과 신청 자격은 원문 공고에서 확인"
+      : "신청 자격과 예치금은 원문 공고에서 확인",
   };
 }
 
@@ -849,8 +860,8 @@ export default function Home() {
       : "로그인은 완료됐지만 목록 동기화는 다시 시도해야 합니다.");
   };
 
-  const handleSignup = async (email: string, password: string, nickname: string) => {
-    const profile = await signupMember(email, password, nickname);
+  const handleSignup = async (email: string, password: string, profileInput: MemberProfileInput) => {
+    const profile = await signupMember(email, password, profileInput);
     if (profile.emailVerified) {
       await handleLogin(email, password);
       return;
@@ -889,8 +900,8 @@ export default function Home() {
     setToast("로그아웃했습니다.");
   };
 
-  const handleUpdateProfile = async (nickname: string) => {
-    setMember(await updateMemberProfile(nickname));
+  const handleUpdateProfile = async (profileInput: MemberProfileInput) => {
+    setMember(await updateMemberProfile(profileInput));
   };
 
   const handleChangePassword = async (currentPassword: string, newPassword: string) => {
@@ -1509,7 +1520,7 @@ export default function Home() {
             <div className="detail-grid">
               <div><span>위치</span><strong>{detailApplication.location}</strong></div><div><span>주택 유형</span><strong>{detailApplication.type}</strong></div>
               <div><span>공고일</span><strong>{formatShortDate(detailApplication.noticeDate)}</strong></div><div><span>공급 규모</span><strong>{detailApplication.scale}</strong></div>
-              <div><span>분양가</span><strong>{detailApplication.price}</strong></div><div><span>당첨 발표</span><strong>{formatShortDate(detailApplication.winnerAnnounceDate)}</strong></div>
+              <div><span>{detailApplication.priceLabel}</span><strong>{detailApplication.price}</strong></div><div><span>당첨 발표</span><strong>{formatShortDate(detailApplication.winnerAnnounceDate)}</strong></div>
             </div>
             {selectedDetail && hasExpandedDetails(selectedDetail) && (
               <section className="notice-detail-extra" aria-labelledby="notice-detail-extra-title">
@@ -1546,7 +1557,7 @@ export default function Home() {
                   <tr><th scope="row">현재 상태</th>{comparisonNotices.map((item) => <td key={item.id}><span className={`state ${item.stateTone}`}>{item.state}</span><b className="compare-dday">{item.dday}</b></td>)}</tr>
                   <tr><th scope="row">접수 일정</th>{comparisonNotices.map((item) => <td key={item.id}><strong>{item.period}</strong></td>)}</tr>
                   <tr><th scope="row">당첨 발표</th>{comparisonNotices.map((item) => <td key={item.id}><strong>{formatShortDate(item.winnerAnnounceDate)}</strong></td>)}</tr>
-                  <tr><th scope="row">분양가</th>{comparisonNotices.map((item) => <td key={item.id}><strong>{item.price}</strong></td>)}</tr>
+                  <tr><th scope="row">가격·보증금</th>{comparisonNotices.map((item) => <td key={item.id}><strong>{item.price}</strong></td>)}</tr>
                   <tr><th scope="row">공급 규모</th>{comparisonNotices.map((item) => <td key={item.id}><strong>{item.scale}</strong></td>)}</tr>
                   <tr><th scope="row">공식 공고</th>{comparisonNotices.map((item) => <td key={item.id}>{item.officialUrl ? <a href={item.officialUrl} target="_blank" rel="noreferrer">원문 확인 <Icon name="arrow" /></a> : <span>링크 확인 중</span>}</td>)}</tr>
                 </tbody>

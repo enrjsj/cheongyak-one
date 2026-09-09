@@ -35,9 +35,14 @@ Parameters:
     Type: String
     Default: ""
     Description: Optional Secrets Manager ARN containing the raw REB API key
+  MyHomeApiSecretArn:
+    Type: String
+    Default: ""
+    Description: Optional Secrets Manager ARN containing the raw MyHome API key
 
 Conditions:
   HasRebApiSecret: !Not [!Equals [!Ref RebApiSecretArn, ""]]
+  HasMyHomeApiSecret: !Not [!Equals [!Ref MyHomeApiSecretArn, ""]]
   ProtectDatabase: !Equals [!Ref DatabaseDeletionProtection, "true"]
 
 Resources:
@@ -267,6 +272,12 @@ Resources:
                   Action: secretsmanager:GetSecretValue
                   Resource: !Ref RebApiSecretArn
                 - !Ref AWS::NoValue
+              - !If
+                - HasMyHomeApiSecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref MyHomeApiSecretArn
+                - !Ref AWS::NoValue
 
   ApplicationInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -348,6 +359,12 @@ Resources:
           - Namespace: aws:elasticbeanstalk:application:environmentsecrets
             OptionName: REB_API_KEY
             Value: !Ref RebApiSecretArn
+          - !Ref AWS::NoValue
+        - !If
+          - HasMyHomeApiSecret
+          - Namespace: aws:elasticbeanstalk:application:environmentsecrets
+            OptionName: MYHOME_API_KEY
+            Value: !Ref MyHomeApiSecretArn
           - !Ref AWS::NoValue
         - Namespace: aws:elasticbeanstalk:application:environmentsecrets
           OptionName: DB_PASSWORD

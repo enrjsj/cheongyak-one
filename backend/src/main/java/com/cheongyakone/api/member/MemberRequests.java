@@ -1,17 +1,23 @@
 package com.cheongyakone.api.member;
 
+import com.cheongyakone.domain.member.EligibilityAnswer;
+import com.cheongyakone.domain.member.MemberGender;
+import com.cheongyakone.domain.member.MemberMaritalStatus;
 import com.cheongyakone.domain.member.SearchPreferenceSort;
 import com.cheongyakone.domain.member.SearchPreferenceStatus;
-import com.cheongyakone.domain.member.EligibilityAnswer;
 import com.cheongyakone.domain.notice.HousingCategory;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 
@@ -23,7 +29,13 @@ public final class MemberRequests {
     public record Signup(
             @NotBlank @Email @Size(max = 320) String email,
             @NotBlank @Size(min = 8, max = 72) String password,
-            @NotBlank @Size(min = 2, max = 40) String nickname
+            @NotBlank @Size(min = 2, max = 40) String nickname,
+            @Past LocalDate birthDate,
+            MemberGender gender,
+            MemberMaritalStatus maritalStatus,
+            @Min(1) @Max(20) Integer householdMemberCount,
+            @Min(0) @Max(20) Integer childCount,
+            @Size(max = 20) String residenceRegion
     ) {
     }
 
@@ -50,7 +62,13 @@ public final class MemberRequests {
     }
 
     public record UpdateProfile(
-            @NotBlank @Size(min = 2, max = 40) String nickname
+            @NotBlank @Size(min = 2, max = 40) String nickname,
+            @Past LocalDate birthDate,
+            MemberGender gender,
+            MemberMaritalStatus maritalStatus,
+            @Min(1) @Max(20) Integer householdMemberCount,
+            @Min(0) @Max(20) Integer childCount,
+            @Size(max = 20) String residenceRegion
     ) {
     }
 

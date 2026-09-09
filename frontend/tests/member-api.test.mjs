@@ -37,10 +37,12 @@ import {
   saveSearchPreference,
   saveEligibilityProfile,
   saveNotificationPreference,
+  signupMember,
   setFavorite,
   setComparison,
   suspendAdminMember,
   unlockAdminMember,
+  updateMemberProfile,
 } from "../src/api.ts";
 
 test("notice detail request returns expanded announcement fields", async () => {
@@ -145,6 +147,49 @@ test("member requests include the HttpOnly session cookie and expected methods",
   assert.equal(requests[2].init.method, "DELETE");
   assert.equal(new Headers(requests[0].init.headers).get("Content-Type"), "application/json");
   assert.equal(new Headers(requests[1].init.headers).get("X-CSRF-Token"), "csrf-token");
+});
+
+test("signup and profile update send optional recommendation profile fields", async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  const originalDocument = globalThis.document;
+  globalThis.document = { cookie: "CHEONGYAK_CSRF=profile-token" };
+  globalThis.fetch = async (url, init) => {
+    requests.push({ url, init });
+    return new Response(JSON.stringify({
+      id: 1,
+      email: "profile@example.com",
+      nickname: "맞춤회원",
+      birthDate: "1992-05-17",
+      residenceRegion: "서울",
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  const profile = {
+    nickname: "맞춤회원",
+    birthDate: "1992-05-17",
+    gender: "FEMALE",
+    maritalStatus: "MARRIED",
+    householdMemberCount: 3,
+    childCount: 1,
+    residenceRegion: "서울",
+  };
+  try {
+    await signupMember("profile@example.com", "password-1234", profile);
+    await updateMemberProfile(profile);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+
+  assert.deepEqual(JSON.parse(requests[0].init.body), {
+    email: "profile@example.com",
+    password: "password-1234",
+    ...profile,
+  });
+  assert.deepEqual(JSON.parse(requests[1].init.body), profile);
+  assert.equal(new Headers(requests[1].init.headers).get("X-CSRF-Token"), "profile-token");
 });
 
 test("saved search preference uses authenticated CRUD requests", async () => {

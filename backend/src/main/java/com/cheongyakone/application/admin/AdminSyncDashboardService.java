@@ -44,6 +44,9 @@ public class AdminSyncDashboardService {
                 executionRepository.countByStatusAndStartedAtAfter(
                         SyncExecutionStatus.FAILED,
                         clock.instant().minus(Duration.ofHours(24))
+                ) + executionRepository.countByStatusAndStartedAtAfter(
+                        SyncExecutionStatus.PARTIALLY_SUCCEEDED,
+                        clock.instant().minus(Duration.ofHours(24))
                 ),
                 lastSuccessfulAt,
                 executions

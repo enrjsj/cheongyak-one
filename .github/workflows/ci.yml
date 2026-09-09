@@ -84,6 +84,8 @@ jobs:
     timeout-minutes: 10
     env:
       REB_API_KEY: ${{ secrets.REB_API_KEY }}
+      # Secret이 없으면 마이홈 수집만 건너뛰고 기존 청약홈 실데이터 검증은 계속한다.
+      MYHOME_API_KEY: ${{ secrets.MYHOME_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

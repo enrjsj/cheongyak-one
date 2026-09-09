@@ -75,12 +75,31 @@ export interface MemberProfile {
   id: number;
   email: string;
   nickname: string;
+  birthDate?: string | null;
+  gender?: MemberGender | null;
+  maritalStatus?: MemberMaritalStatus | null;
+  householdMemberCount?: number | null;
+  childCount?: number | null;
+  residenceRegion?: string | null;
   role: "USER" | "ADMIN";
   emailVerified: boolean;
   createdAt: string;
 }
 
-export type SyncExecutionStatus = "RUNNING" | "SUCCEEDED" | "FAILED";
+export type MemberGender = "MALE" | "FEMALE" | "OTHER";
+export type MemberMaritalStatus = "SINGLE" | "MARRIED";
+
+export interface MemberProfileInput {
+  nickname: string;
+  birthDate?: string;
+  gender?: MemberGender;
+  maritalStatus?: MemberMaritalStatus;
+  householdMemberCount?: number;
+  childCount?: number;
+  residenceRegion?: string;
+}
+
+export type SyncExecutionStatus = "RUNNING" | "SUCCEEDED" | "PARTIALLY_SUCCEEDED" | "FAILED";
 
 export interface AdminSyncExecution {
   id: number;
@@ -382,10 +401,10 @@ export async function fetchCurrentMember(): Promise<MemberProfile | undefined> {
   }
 }
 
-export function signupMember(email: string, password: string, nickname: string): Promise<MemberProfile> {
+export function signupMember(email: string, password: string, profile: MemberProfileInput): Promise<MemberProfile> {
   return requestJson<MemberProfile>("/api/v1/auth/signup", {
     method: "POST",
-    body: JSON.stringify({ email, password, nickname }),
+    body: JSON.stringify({ email, password, ...profile }),
   });
 }
 
@@ -428,10 +447,10 @@ export function resetPasswordWithToken(token: string, newPassword: string): Prom
   });
 }
 
-export function updateMemberProfile(nickname: string): Promise<MemberProfile> {
+export function updateMemberProfile(profile: MemberProfileInput): Promise<MemberProfile> {
   return requestJson<MemberProfile>("/api/v1/members/me", {
     method: "PATCH",
-    body: JSON.stringify({ nickname }),
+    body: JSON.stringify(profile),
   });
 }
 

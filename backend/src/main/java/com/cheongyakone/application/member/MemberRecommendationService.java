@@ -56,7 +56,7 @@ public class MemberRecommendationService {
     public MemberRecommendationListResponse recommendations(String rawToken) {
         Member member = memberService.requireMember(rawToken);
         return preferenceRepository.findByMember_Id(member.getId())
-                .map(preference -> recommend(member.getId(), preference))
+                .map(preference -> recommend(member, preference))
                 .orElseGet(MemberRecommendationListResponse::notConfigured);
     }
 
@@ -81,9 +81,9 @@ public class MemberRecommendationService {
         dismissalRepository.deleteByMemberId(member.getId());
     }
 
-    private MemberRecommendationListResponse recommend(Long memberId, MemberSearchPreference preference) {
+    private MemberRecommendationListResponse recommend(Member member, MemberSearchPreference preference) {
         LocalDate today = LocalDate.now(clock);
-        List<Long> dismissedNoticeIds = dismissalRepository.findNoticeIdsByMemberId(memberId);
+        List<Long> dismissedNoticeIds = dismissalRepository.findNoticeIdsByMemberId(member.getId());
         Specification<SubscriptionNotice> specification = candidateSpecification(
                 preference,
                 today,
@@ -99,7 +99,7 @@ public class MemberRecommendationService {
         );
 
         List<MemberRecommendationResponse> recommendations = candidates.stream()
-                .map(notice -> score(notice, preference, today))
+                .map(notice -> score(notice, preference, member, today))
                 .sorted(Comparator
                         .comparingInt(MemberRecommendationResponse::score).reversed()
                         .thenComparing(
@@ -139,6 +139,7 @@ public class MemberRecommendationService {
     private MemberRecommendationResponse score(
             SubscriptionNotice notice,
             MemberSearchPreference preference,
+            Member member,
             LocalDate today
     ) {
         int score = 55;
@@ -146,6 +147,10 @@ public class MemberRecommendationService {
         if (preference.getRegion() != null) {
             score += 15;
             reasons.add(preference.getRegion() + " 지역 조건 일치");
+        } else if (member.getResidenceRegion() != null
+                && member.getResidenceRegion().equals(notice.getRegionCode())) {
+            score += 8;
+            reasons.add("거주 지역과 일치");
         }
         if (preference.getHousingCategory() != null) {
             score += 15;

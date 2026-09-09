@@ -63,6 +63,7 @@ class MemberRecommendationServiceTest {
         );
         SubscriptionNotice notice = notice("추천 아파트", LocalDate.of(2026, 9, 6));
         when(member.getId()).thenReturn(1L);
+        when(member.getResidenceRegion()).thenReturn("서울");
         when(memberService.requireMember("token")).thenReturn(member);
         when(preferenceRepository.findByMember_Id(1L)).thenReturn(Optional.of(preference));
         when(dismissalRepository.findNoticeIdsByMemberId(1L)).thenReturn(List.of());
@@ -73,9 +74,9 @@ class MemberRecommendationServiceTest {
 
         assertThat(result.configured()).isTrue();
         assertThat(result.recommendations()).hasSize(1);
-        assertThat(result.recommendations().getFirst().score()).isEqualTo(95);
+        assertThat(result.recommendations().getFirst().score()).isEqualTo(100);
         assertThat(result.recommendations().getFirst().reasons())
-                .containsExactly("아파트 유형 일치", "현재 접수 가능한 공고", "마감 2일 전");
+                .containsExactly("거주 지역과 일치", "아파트 유형 일치", "현재 접수 가능한 공고", "마감 2일 전");
     }
 
     @Test
