@@ -17,3 +17,9 @@ spring:
 app:
   notice-sync:
     cron: "-"
+
+management:
+  health:
+    # 로컬 기본 설정에는 SMTP 자격정보가 없으므로 전체 readiness를 메일 연결 상태에 종속시키지 않는다.
+    mail:
+      enabled: false
