@@ -1,10 +1,11 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:cheongyak-test;MODE=Oracle;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=true
+    url: jdbc:h2:mem:cheongyak-test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=true;DEFAULT_NULL_ORDERING=HIGH
     username: sa
     password:
     driver-class-name: org.h2.Driver
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: create-drop
   flyway:
@@ -14,6 +15,15 @@ spring:
       initialize-schema: always
 
 app:
+  member-mail:
+    delivery: log
+    verification-required: true
+    frontend-base-url: http://localhost:5173
   notice-sync:
     cron: "-"
+    zone: Asia/Seoul
+  member-notification:
+    cron: "-"
+    email-cron: "-"
+    cleanup-cron: "-"
     zone: Asia/Seoul

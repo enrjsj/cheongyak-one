@@ -135,7 +135,19 @@ class RebApiGateway {
                 firstInteger(item, "TOT_SUPLY_HSHLDCO", "TOT_SUPLY_HSHLD_COUNT"),
                 null,
                 null,
-                firstText(item, "PBLANC_URL", "HMPG_ADRES"),
+                firstHttpUrl(item, "PBLANC_URL", "HMPG_ADRES"),
+                firstText(item, "HSSPLY_ZIP"),
+                firstText(item, "HOUSE_DTL_SECD_NM", "HOUSE_SECD_NM", "HOUSE_TY_NM"),
+                firstText(item, "RENT_SECD_NM"),
+                firstText(item, "BSNS_MBY_NM"),
+                firstText(item, "CNSTRCT_ENTRPS_NM"),
+                firstText(item, "MDHS_TELNO"),
+                firstHttpUrl(item, "HMPG_ADRES"),
+                firstText(item, "MVN_PREARNGE_YM"),
+                firstDate(item, "SPSPLY_RCEPT_BGNDE"),
+                firstDate(item, "SPSPLY_RCEPT_ENDDE"),
+                firstDate(item, "CNTRCT_CNCLS_BGNDE"),
+                firstDate(item, "CNTRCT_CNCLS_ENDDE"),
                 sha256(item)
         ));
     }
@@ -201,6 +213,24 @@ class RebApiGateway {
             }
         }
         return null;
+    }
+
+    private String firstHttpUrl(JsonNode item, String... fieldNames) {
+        String value = firstText(item, fieldNames);
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            URI uri = URI.create(value);
+            boolean supportedScheme = "http".equalsIgnoreCase(uri.getScheme())
+                    || "https".equalsIgnoreCase(uri.getScheme());
+            return supportedScheme && StringUtils.hasText(uri.getHost())
+                    ? uri.toString()
+                    : null;
+        } catch (IllegalArgumentException invalidUrl) {
+            log.warn("Ignored invalid REB URL field");
+            return null;
+        }
     }
 
     private LocalDate firstDate(JsonNode item, String... fieldNames) {

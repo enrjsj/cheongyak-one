@@ -1,6 +1,7 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:cheongyak;MODE=Oracle;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=true
+    # 로컬 H2도 PostgreSQL 호환 모드로 실행해 SQL 차이를 조기에 발견한다.
+    url: jdbc:h2:mem:cheongyak;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=true;DEFAULT_NULL_ORDERING=HIGH
     username: sa
     password:
     driver-class-name: org.h2.Driver

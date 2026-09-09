@@ -1,0 +1,20 @@
+spring:
+  datasource:
+    # Flyway SQL을 PostgreSQL 호환 H2에 실제 적용한 뒤 JPA 매핑까지 검증한다.
+    url: jdbc:h2:mem:cheongyak-migration;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=true;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+  batch:
+    jdbc:
+      initialize-schema: never
+
+app:
+  notice-sync:
+    cron: "-"

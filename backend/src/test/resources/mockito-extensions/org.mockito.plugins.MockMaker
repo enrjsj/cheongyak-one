@@ -1,0 +1,2 @@
+# 제한된 CI·컨테이너에서도 JVM 에이전트 자체 연결 없이 목 객체를 생성한다.
+mock-maker-subclass

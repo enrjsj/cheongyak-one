@@ -1,0 +1,119 @@
+name: Deploy AWS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+# OIDC 단기 자격증명만 허용하고 저장소 콘텐츠는 읽기 전용으로 사용한다.
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: aws-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EB_APPLICATION: ${{ vars.EB_APPLICATION }}
+      EB_ENVIRONMENT: ${{ vars.EB_ENVIRONMENT }}
+      EB_DEPLOYMENT_BUCKET: ${{ vars.EB_DEPLOYMENT_BUCKET }}
+      FRONTEND_BUCKET: ${{ vars.FRONTEND_BUCKET }}
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Validate deployment variables
+        run: |
+          set -euo pipefail
+          for variable_name in AWS_REGION EB_APPLICATION EB_ENVIRONMENT EB_DEPLOYMENT_BUCKET FRONTEND_BUCKET CLOUDFRONT_DISTRIBUTION_ID; do
+            if [[ -z "${!variable_name}" ]]; then
+              echo "Missing GitHub environment variable: ${variable_name}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Test and package backend
+        run: |
+          set -euo pipefail
+          mvn -B -pl backend clean package
+          mkdir -p backend/target/beanstalk
+          cp Procfile backend/target/beanstalk/Procfile
+          cp backend/target/cheongyak-one-backend-0.1.0-SNAPSHOT.jar backend/target/beanstalk/application.jar
+          (cd backend/target/beanstalk && zip -q ../beanstalk.zip Procfile application.jar)
+          test "$(unzip -Z1 backend/target/beanstalk.zip | sort | tr '\n' ' ')" = "Procfile application.jar "
+
+      - name: Deploy backend
+        run: |
+          set -euo pipefail
+          version_label="${GITHUB_SHA:0:12}-${GITHUB_RUN_ATTEMPT}"
+          object_key="releases/${version_label}.zip"
+          aws s3 cp backend/target/beanstalk.zip "s3://${EB_DEPLOYMENT_BUCKET}/${object_key}"
+          aws elasticbeanstalk create-application-version \
+            --application-name "${EB_APPLICATION}" \
+            --version-label "${version_label}" \
+            --source-bundle "S3Bucket=${EB_DEPLOYMENT_BUCKET},S3Key=${object_key}"
+          aws elasticbeanstalk update-environment \
+            --environment-name "${EB_ENVIRONMENT}" \
+            --version-label "${version_label}"
+
+          # 환경이 Ready가 될 때까지 기다리고 명시적인 실패 상태는 즉시 종료한다.
+          for attempt in {1..90}; do
+            read -r status health < <(aws elasticbeanstalk describe-environments \
+              --environment-names "${EB_ENVIRONMENT}" \
+              --query 'Environments[0].[Status,Health]' \
+              --output text)
+            if [[ "${status}" == "Ready" && "${health}" != "Red" ]]; then
+              break
+            fi
+            if [[ "${status}" == "Terminated" || "${health}" == "Red" ]]; then
+              aws elasticbeanstalk describe-events \
+                --environment-name "${EB_ENVIRONMENT}" \
+                --max-items 20
+              exit 1
+            fi
+            if [[ "${attempt}" == "90" ]]; then
+              echo "Elastic Beanstalk deployment timed out." >&2
+              exit 1
+            fi
+            sleep 10
+          done
+
+      - name: Test and build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm test
+
+      - name: Deploy frontend
+        run: |
+          set -euo pipefail
+          aws s3 sync frontend/dist "s3://${FRONTEND_BUCKET}" \
+            --delete \
+            --exclude index.html \
+            --cache-control 'public,max-age=3600'
+          aws s3 cp frontend/dist/index.html "s3://${FRONTEND_BUCKET}/index.html" \
+            --content-type 'text/html; charset=utf-8' \
+            --cache-control 'no-store'
+          aws cloudfront create-invalidation \
+            --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" \
+            --paths '/*'
