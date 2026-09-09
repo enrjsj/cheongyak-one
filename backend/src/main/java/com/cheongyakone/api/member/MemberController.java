@@ -148,6 +148,27 @@ public class MemberController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/eligibility-profile")
+    public ResponseEntity<EligibilityProfileResponse> eligibilityProfile(HttpServletRequest request) {
+        return memberService.eligibilityProfile(token(request))
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    @PutMapping("/eligibility-profile")
+    public EligibilityProfileResponse saveEligibilityProfile(
+            HttpServletRequest servletRequest,
+            @Valid @RequestBody MemberRequests.EligibilityProfile request
+    ) {
+        return memberService.saveEligibilityProfile(token(servletRequest), request);
+    }
+
+    @DeleteMapping("/eligibility-profile")
+    public ResponseEntity<Void> deleteEligibilityProfile(HttpServletRequest request) {
+        memberService.deleteEligibilityProfile(token(request));
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/sessions")
     public List<MemberSessionResponse> sessions(HttpServletRequest request) {
         return memberService.sessions(token(request));

@@ -4,6 +4,7 @@ import {
   clearComparisons,
   confirmEmailVerification,
   deleteSearchPreference,
+  deleteEligibilityProfile,
   dismissMemberRecommendation,
   fetchNoticeFacets,
   fetchNoticePage,
@@ -16,7 +17,9 @@ import {
   fetchNoticeChanges,
   fetchNotificationInbox,
   fetchSearchPreference,
+  fetchEligibilityProfile,
   HousingCategory,
+  EligibilityProfile,
   loginMember,
   logoutMember,
   MemberProfile,
@@ -30,6 +33,7 @@ import {
   NoticeStatus,
   NoticeSearchFacets,
   saveSearchPreference,
+  saveEligibilityProfile,
   revokeMemberSession,
   revokeOtherMemberSessions,
   resetDismissedRecommendations,
@@ -361,6 +365,8 @@ export default function Home() {
   const [passwordResetToken, setPasswordResetToken] = useState("");
   const [authLoading, setAuthLoading] = useState(true);
   const [searchPreference, setSearchPreference] = useState<MemberSearchPreference>();
+  const [eligibilityProfile, setEligibilityProfile] = useState<EligibilityProfile>();
+  const [eligibilityBusy, setEligibilityBusy] = useState(false);
   const [preferenceBusy, setPreferenceBusy] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
@@ -553,6 +559,12 @@ export default function Home() {
           applySearchPreference(preference);
         } catch (error) {
           if (!cancelled) setToast(error instanceof Error ? error.message : "저장한 검색조건을 불러오지 못했습니다.");
+        }
+        try {
+          const profile = await fetchEligibilityProfile();
+          if (!cancelled) setEligibilityProfile(profile);
+        } catch (error) {
+          if (!cancelled) setToast(error instanceof Error ? error.message : "저장한 사전점검을 불러오지 못했습니다.");
         }
       })
       .catch((error: unknown) => {
@@ -824,6 +836,11 @@ export default function Home() {
     } catch {
       // 로그인은 유지하고 검색조건만 사용자가 다시 불러올 수 있게 한다.
     }
+    try {
+      setEligibilityProfile(await fetchEligibilityProfile());
+    } catch {
+      // 로그인은 유지하고 사전점검은 사용자가 다시 시작할 수 있게 한다.
+    }
     setMemberDialog(null);
     setToast(synchronized
       ? preferenceApplied
@@ -864,6 +881,7 @@ export default function Home() {
     setNotificationsOpen(false);
     setAdminSyncOpen(false);
     setSearchPreference(undefined);
+    setEligibilityProfile(undefined);
     setSavedIds(readGuestSavedIds());
     setSavedOnly(false);
     setComparisonIds([]);
@@ -881,6 +899,7 @@ export default function Home() {
     setNotificationsOpen(false);
     setAdminSyncOpen(false);
     setSearchPreference(undefined);
+    setEligibilityProfile(undefined);
     setSavedIds(new Set());
     setSavedOnly(false);
     setComparisonIds([]);
@@ -894,6 +913,7 @@ export default function Home() {
     setNotificationsOpen(false);
     setAdminSyncOpen(false);
     setSearchPreference(undefined);
+    setEligibilityProfile(undefined);
     setSavedIds(new Set());
     setSavedOnly(false);
     setComparisonIds([]);
@@ -1134,6 +1154,60 @@ export default function Home() {
     setQualStep((step) => step + 1);
   };
 
+  const openQualification = (saved = false) => {
+    if (!member) {
+      setMemberDialog("login");
+      setToast("청약 조건 사전점검은 로그인 후 저장하고 관리할 수 있어요.");
+      return;
+    }
+    if (saved && eligibilityProfile) {
+      setAnswers([
+        eligibilityProfile.homeless,
+        eligibilityProfile.subscriptionAccount,
+        eligibilityProfile.newlywed,
+        eligibilityProfile.firstHome,
+      ]);
+      setQualStep(eligibilityQuestions.length);
+    } else {
+      setAnswers([]);
+      setQualStep(0);
+    }
+    setQualOpen(true);
+  };
+
+  const handleSaveEligibilityProfile = async () => {
+    if (answers.length !== eligibilityQuestions.length) return;
+    setEligibilityBusy(true);
+    try {
+      const saved = await saveEligibilityProfile({
+        homeless: answers[0],
+        subscriptionAccount: answers[1],
+        newlywed: answers[2],
+        firstHome: answers[3],
+      });
+      setEligibilityProfile(saved);
+      setToast(eligibilityProfile ? "사전점검 답변을 수정했습니다." : "사전점검 답변을 저장했습니다.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "사전점검을 저장하지 못했습니다.");
+    } finally {
+      setEligibilityBusy(false);
+    }
+  };
+
+  const handleDeleteEligibilityProfile = async () => {
+    setEligibilityBusy(true);
+    try {
+      await deleteEligibilityProfile();
+      setEligibilityProfile(undefined);
+      closeQualification();
+      setToast("저장된 사전점검을 삭제했습니다.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "사전점검을 삭제하지 못했습니다.");
+    } finally {
+      setEligibilityBusy(false);
+    }
+  };
+
   const closeQualification = () => {
     setQualOpen(false);
     window.setTimeout(() => { setQualStep(0); setAnswers([]); }, 200);
@@ -1328,7 +1402,10 @@ export default function Home() {
               </div>
               <p>몇 가지 질문에 답하고 공식 공고문에서 확인할 조건을 정리해보세요.</p>
               <ul><li><Icon name="check" /> 무주택 기간</li><li><Icon name="check" /> 청약통장 조건</li><li><Icon name="check" /> 소득·자산 기준</li></ul>
-              <button type="button" onClick={() => setQualOpen(true)}>확인사항 정리하기 <Icon name="arrow" /></button>
+              {eligibilityProfile && <p className="saved-eligibility-date">최근 저장: {new Date(eligibilityProfile.updatedAt).toLocaleDateString("ko-KR")}</p>}
+              <button type="button" onClick={() => openQualification(Boolean(eligibilityProfile))}>
+                {eligibilityProfile ? "저장된 점검 조회·수정" : member ? "확인사항 정리하기" : "로그인하고 점검하기"} <Icon name="arrow" />
+              </button>
             </section>
 
             {recentNotices.length > 0 && (
@@ -1491,7 +1568,7 @@ export default function Home() {
                 <h3>{eligibilityQuestions[qualStep].title}</h3>
                 <p>{eligibilityQuestions[qualStep].detail}</p>
                 <div className="answer-buttons">{eligibilityQuestions[qualStep].options.map((option) => <button type="button" key={option.value} onClick={() => answerQuestion(option.value)}>{option.label}<Icon name="arrow" /></button>)}</div>
-                <p className="answer-privacy">답변은 이 화면에서만 사용되며 서버에 저장되지 않습니다.</p>
+                <p className="answer-privacy">답변은 결과 확인 후 내 계정에 저장되며 언제든 수정·삭제할 수 있습니다.</p>
                 {qualStep > 0 && <button className="back-button" type="button" onClick={() => { setQualStep((step) => step - 1); setAnswers((items) => items.slice(0, -1)); }}>이전 질문</button>}
               </div>
             ) : (
@@ -1501,7 +1578,12 @@ export default function Home() {
                 <h3>{eligibilityResult.headline}</h3>
                 <ul className="eligibility-check-list">{eligibilityResult.checks.map((check) => <li key={check}><Icon name="check" /> <span>{check}</span></li>)}</ul>
                 <p className="eligibility-disclaimer"><strong>자격 판정 결과가 아닙니다.</strong> 실제 신청 가능 여부는 모집공고일의 관계 법령과 공식 공고문, 사업주체 심사 결과에 따라 달라질 수 있습니다.</p>
-                <button className="primary-button" type="button" onClick={() => { closeQualification(); scrollToResults(); }}>실제 공고 보기 <Icon name="arrow" /></button>
+                <div className="eligibility-result-actions">
+                  <button type="button" onClick={() => { closeQualification(); scrollToResults(); }}>실제 공고 보기 <Icon name="arrow" /></button>
+                  <button type="button" onClick={() => { setAnswers([]); setQualStep(0); }}>답변 수정</button>
+                  <button className="primary-button" type="button" disabled={eligibilityBusy} onClick={() => void handleSaveEligibilityProfile()}>{eligibilityBusy ? "저장 중…" : eligibilityProfile ? "변경사항 저장" : "내 계정에 저장"}</button>
+                  {eligibilityProfile && <button className="danger-text-button" type="button" disabled={eligibilityBusy} onClick={() => void handleDeleteEligibilityProfile()}>저장 내용 삭제</button>}
+                </div>
               </div>
             )}
           </section>

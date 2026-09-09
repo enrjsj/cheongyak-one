@@ -2,6 +2,7 @@ package com.cheongyakone.api.member;
 
 import com.cheongyakone.domain.member.SearchPreferenceSort;
 import com.cheongyakone.domain.member.SearchPreferenceStatus;
+import com.cheongyakone.domain.member.EligibilityAnswer;
 import com.cheongyakone.domain.notice.HousingCategory;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
@@ -79,6 +80,14 @@ public final class MemberRequests {
             HousingCategory housingCategory,
             @NotNull SearchPreferenceStatus status,
             @NotNull SearchPreferenceSort sort
+    ) {
+    }
+
+    public record EligibilityProfile(
+            @NotNull EligibilityAnswer homeless,
+            @NotNull EligibilityAnswer subscriptionAccount,
+            @NotNull EligibilityAnswer newlywed,
+            @NotNull EligibilityAnswer firstHome
     ) {
     }
 

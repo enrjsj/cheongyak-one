@@ -244,6 +244,7 @@ a { color: inherit; text-decoration: none; }
 .plan-head span:not(.plan-illustration) { color: #5972a6; font-size: 9px; font-weight: 700; }
 .plan-head h2 { margin: 2px 0 0; color: var(--navy); font-size: 18px; letter-spacing: -.03em; }
 .plan-card > p { margin: 17px 0; color: #667595; font-size: 11px; line-height: 1.65; }
+.plan-card > .saved-eligibility-date { margin: -8px 0 14px; color: #4769b7; font-size: 9px; font-weight: 700; }
 .plan-card ul { list-style: none; padding: 0; margin: 0 0 19px; display: grid; gap: 9px; }
 .plan-card li { display: flex; align-items: center; gap: 7px; color: #485b80; font-size: 11px; font-weight: 650; }
 .plan-card li .icon { width: 14px; height: 14px; color: var(--blue); }
@@ -568,7 +569,12 @@ footer { background: var(--navy); color: white; }
 .eligibility-check-list .icon { width: 14px; min-width: 14px; margin-top: 1px; color: var(--mint); }
 .result-area .eligibility-disclaimer { margin-top: 15px; padding: 11px 12px; border: 1px solid #f0dfba; border-radius: 9px; background: #fffaf0; color: #846a3a; text-align: left; }
 .eligibility-disclaimer strong { display: block; color: #765821; }
-.result-area > button { width: 100%; margin-top: 24px; }
+.eligibility-result-actions { display: grid; gap: 8px; margin-top: 24px; }
+.eligibility-result-actions button { width: 100%; min-height: 42px; padding: 0 14px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #dce3ed; border-radius: 10px; background: white; color: #58677d; font-size: 11px; font-weight: 750; cursor: pointer; }
+.eligibility-result-actions .icon { width: 14px; }
+.eligibility-result-actions .primary-button { border-color: var(--blue); background: var(--blue); color: white; }
+.eligibility-result-actions .danger-text-button { border-color: transparent; background: transparent; color: #c2535b; text-decoration: underline; }
+.eligibility-result-actions button:disabled { opacity: .55; cursor: wait; }
 .toast { position: fixed; z-index: 100; left: 50%; bottom: 28px; transform: translateX(-50%); min-width: 230px; height: 47px; padding: 0 18px; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 13px; background: #132744; color: white; box-shadow: 0 12px 35px rgba(10,24,45,.25); font-size: 12px; font-weight: 700; animation: toast-up .25s ease-out; }
 .toast .icon { width: 16px; color: #63e4cc; }
 @keyframes fade-in { from { opacity: 0; } }

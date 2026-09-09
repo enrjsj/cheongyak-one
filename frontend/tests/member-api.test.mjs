@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   deleteSearchPreference,
+  deleteEligibilityProfile,
   clearComparisons,
   confirmEmailVerification,
   dismissMemberRecommendation,
@@ -19,6 +20,7 @@ import {
   fetchNotificationInbox,
   fetchNotificationPreference,
   fetchSearchPreference,
+  fetchEligibilityProfile,
   loginMember,
   mergeComparisonIds,
   mergeFavoriteIds,
@@ -33,6 +35,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   saveSearchPreference,
+  saveEligibilityProfile,
   saveNotificationPreference,
   setFavorite,
   setComparison,
@@ -182,6 +185,40 @@ test("saved search preference uses authenticated CRUD requests", async () => {
   assert.equal(requests[2].init.method, "DELETE");
   assert.equal(new Headers(requests[0].init.headers).get("X-CSRF-Token"), "saved-search-token");
   assert.equal(new Headers(requests[2].init.headers).get("X-CSRF-Token"), "saved-search-token");
+});
+
+test("eligibility profile uses authenticated CRUD requests", async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  const originalDocument = globalThis.document;
+  globalThis.document = { cookie: "CHEONGYAK_CSRF=eligibility-token" };
+  globalThis.fetch = async (url, init) => {
+    requests.push({ url: String(url), init });
+    if ((init?.method ?? "GET") === "DELETE") return new Response(null, { status: 204 });
+    return new Response(JSON.stringify({
+      homeless: "YES",
+      subscriptionAccount: "UNKNOWN",
+      newlywed: "NO",
+      firstHome: "YES",
+      updatedAt: "2026-09-09T00:00:00Z",
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  try {
+    const input = { homeless: "YES", subscriptionAccount: "UNKNOWN", newlywed: "NO", firstHome: "YES" };
+    assert.equal((await fetchEligibilityProfile())?.homeless, "YES");
+    assert.equal((await saveEligibilityProfile(input)).firstHome, "YES");
+    await deleteEligibilityProfile();
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+
+  assert.deepEqual(requests.map((request) => request.init.method ?? "GET"), ["GET", "PUT", "DELETE"]);
+  assert.ok(requests.every((request) => request.url === "/api/v1/members/me/eligibility-profile"));
+  assert.equal(new Headers(requests[1].init.headers).get("X-CSRF-Token"), "eligibility-token");
+  assert.equal(new Headers(requests[2].init.headers).get("X-CSRF-Token"), "eligibility-token");
 });
 
 test("comparison list uses authenticated account synchronization endpoints", async () => {

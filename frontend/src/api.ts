@@ -215,6 +215,16 @@ export interface SearchPreferenceInput {
   sort: SearchPreferenceSort;
 }
 
+export interface EligibilityProfile {
+  homeless: "YES" | "NO" | "UNKNOWN";
+  subscriptionAccount: "YES" | "NO" | "UNKNOWN";
+  newlywed: "YES" | "NO" | "UNKNOWN";
+  firstHome: "YES" | "NO" | "UNKNOWN";
+  updatedAt: string;
+}
+
+export type EligibilityProfileInput = Omit<EligibilityProfile, "updatedAt">;
+
 interface FavoriteIdsResponse {
   noticeIds: number[];
 }
@@ -494,6 +504,21 @@ export function saveSearchPreference(input: SearchPreferenceInput): Promise<Memb
 
 export function deleteSearchPreference(): Promise<void> {
   return requestJson<void>("/api/v1/members/me/search-preference", { method: "DELETE" });
+}
+
+export function fetchEligibilityProfile(): Promise<EligibilityProfile | undefined> {
+  return requestJson<EligibilityProfile | undefined>("/api/v1/members/me/eligibility-profile");
+}
+
+export function saveEligibilityProfile(input: EligibilityProfileInput): Promise<EligibilityProfile> {
+  return requestJson<EligibilityProfile>("/api/v1/members/me/eligibility-profile", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteEligibilityProfile(): Promise<void> {
+  return requestJson<void>("/api/v1/members/me/eligibility-profile", { method: "DELETE" });
 }
 
 export function fetchMemberSessions(): Promise<MemberSession[]> {

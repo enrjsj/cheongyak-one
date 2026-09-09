@@ -3,6 +3,7 @@ package com.cheongyakone.application.member;
 import com.cheongyakone.api.member.MemberRequests;
 import com.cheongyakone.api.member.MemberResponse;
 import com.cheongyakone.api.member.MemberSessionResponse;
+import com.cheongyakone.api.member.EligibilityProfileResponse;
 import com.cheongyakone.api.member.SearchPreferenceResponse;
 import com.cheongyakone.config.AuthProperties;
 import com.cheongyakone.domain.member.Member;
@@ -11,6 +12,8 @@ import com.cheongyakone.domain.member.MemberComparison;
 import com.cheongyakone.domain.member.MemberComparisonRepository;
 import com.cheongyakone.domain.member.MemberFavorite;
 import com.cheongyakone.domain.member.MemberFavoriteRepository;
+import com.cheongyakone.domain.member.MemberEligibilityProfile;
+import com.cheongyakone.domain.member.MemberEligibilityProfileRepository;
 import com.cheongyakone.domain.member.MemberLoginSession;
 import com.cheongyakone.domain.member.MemberLoginSessionRepository;
 import com.cheongyakone.domain.member.MemberNotificationPreferenceRepository;
@@ -50,6 +53,7 @@ public class MemberService {
     private final MemberLoginSessionRepository sessionRepository;
     private final MemberFavoriteRepository favoriteRepository;
     private final MemberComparisonRepository comparisonRepository;
+    private final MemberEligibilityProfileRepository eligibilityProfileRepository;
     private final MemberSearchPreferenceRepository searchPreferenceRepository;
     private final MemberNotificationPreferenceRepository notificationPreferenceRepository;
     private final MemberNotificationRepository notificationRepository;
@@ -69,6 +73,7 @@ public class MemberService {
             MemberLoginSessionRepository sessionRepository,
             MemberFavoriteRepository favoriteRepository,
             MemberComparisonRepository comparisonRepository,
+            MemberEligibilityProfileRepository eligibilityProfileRepository,
             MemberSearchPreferenceRepository searchPreferenceRepository,
             MemberNotificationPreferenceRepository notificationPreferenceRepository,
             MemberNotificationRepository notificationRepository,
@@ -86,6 +91,7 @@ public class MemberService {
         this.sessionRepository = sessionRepository;
         this.favoriteRepository = favoriteRepository;
         this.comparisonRepository = comparisonRepository;
+        this.eligibilityProfileRepository = eligibilityProfileRepository;
         this.searchPreferenceRepository = searchPreferenceRepository;
         this.notificationPreferenceRepository = notificationPreferenceRepository;
         this.notificationRepository = notificationRepository;
@@ -281,6 +287,7 @@ public class MemberService {
         sessionRepository.deleteByMemberId(member.getId());
         favoriteRepository.deleteByMemberId(member.getId());
         comparisonRepository.deleteByMemberId(member.getId());
+        eligibilityProfileRepository.deleteByMemberId(member.getId());
         searchPreferenceRepository.deleteByMemberId(member.getId());
         notificationPreferenceRepository.deleteByMemberId(member.getId());
         notificationRepository.deleteByMemberId(member.getId());
@@ -446,6 +453,32 @@ public class MemberService {
     public void deleteSearchPreference(String rawToken) {
         Member member = requireMember(rawToken);
         searchPreferenceRepository.deleteByMemberId(member.getId());
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<EligibilityProfileResponse> eligibilityProfile(String rawToken) {
+        Member member = requireMember(rawToken);
+        return eligibilityProfileRepository.findByMemberId(member.getId())
+                .map(EligibilityProfileResponse::from);
+    }
+
+    @Transactional
+    public EligibilityProfileResponse saveEligibilityProfile(
+            String rawToken,
+            MemberRequests.EligibilityProfile request
+    ) {
+        Member member = requireMember(rawToken);
+        Instant now = clock.instant();
+        MemberEligibilityProfile profile = eligibilityProfileRepository.findByMemberId(member.getId())
+                .orElseGet(() -> new MemberEligibilityProfile(member, now));
+        profile.change(request.homeless(), request.subscriptionAccount(), request.newlywed(), request.firstHome(), now);
+        return EligibilityProfileResponse.from(eligibilityProfileRepository.save(profile));
+    }
+
+    @Transactional
+    public void deleteEligibilityProfile(String rawToken) {
+        Member member = requireMember(rawToken);
+        eligibilityProfileRepository.deleteByMemberId(member.getId());
     }
 
     @Scheduled(cron = "0 30 4 * * *", zone = "Asia/Seoul")

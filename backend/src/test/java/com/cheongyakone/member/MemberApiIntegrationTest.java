@@ -393,6 +393,68 @@ class MemberApiIntegrationTest {
     }
 
     @Test
+    void protectsCreatesReadsUpdatesAndDeletesEligibilityProfile() throws Exception {
+        mockMvc.perform(get("/api/v1/members/me/eligibility-profile"))
+                .andExpect(status().isUnauthorized());
+
+        signup("eligibility@example.com", "사전점검회원");
+        AuthenticatedSession session = authenticatedSession(login("eligibility@example.com", PASSWORD).andReturn());
+
+        mockMvc.perform(get("/api/v1/members/me/eligibility-profile").cookie(session.cookie()))
+                .andExpect(status().isNoContent());
+
+        String initialProfile = """
+                {
+                  "homeless": "YES",
+                  "subscriptionAccount": "YES",
+                  "newlywed": "UNKNOWN",
+                  "firstHome": "NO"
+                }
+                """;
+        mockMvc.perform(put("/api/v1/members/me/eligibility-profile")
+                        .cookie(session.cookie())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(initialProfile))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("CSRF_TOKEN_INVALID"));
+
+        mockMvc.perform(authenticated(put("/api/v1/members/me/eligibility-profile"), session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(initialProfile))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.homeless").value("YES"))
+                .andExpect(jsonPath("$.subscriptionAccount").value("YES"))
+                .andExpect(jsonPath("$.newlywed").value("UNKNOWN"))
+                .andExpect(jsonPath("$.firstHome").value("NO"))
+                .andExpect(jsonPath("$.updatedAt").isNotEmpty());
+
+        mockMvc.perform(get("/api/v1/members/me/eligibility-profile").cookie(session.cookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.firstHome").value("NO"));
+
+        mockMvc.perform(authenticated(put("/api/v1/members/me/eligibility-profile"), session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "homeless": "NO",
+                                  "subscriptionAccount": "UNKNOWN",
+                                  "newlywed": "YES",
+                                  "firstHome": "YES"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.homeless").value("NO"))
+                .andExpect(jsonPath("$.subscriptionAccount").value("UNKNOWN"))
+                .andExpect(jsonPath("$.newlywed").value("YES"))
+                .andExpect(jsonPath("$.firstHome").value("YES"));
+
+        mockMvc.perform(authenticated(delete("/api/v1/members/me/eligibility-profile"), session))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get("/api/v1/members/me/eligibility-profile").cookie(session.cookie()))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
     void listsAndRevokesLoginSessionsWithoutEndingCurrentSession() throws Exception {
         signup("sessions@example.com", "기기관리회원");
         AuthenticatedSession firstSession = authenticatedSession(login(
