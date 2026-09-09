@@ -10,6 +10,7 @@ ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-production}"
 GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-enrjsj/cheongyak-one}"
 GITHUB_ENVIRONMENT="${GITHUB_ENVIRONMENT:-production}"
 REB_API_SECRET_ARN="${REB_API_SECRET_ARN:-}"
+MYHOME_API_SECRET_ARN="${MYHOME_API_SECRET_ARN:-}"
 DATABASE_DELETION_PROTECTION="${DATABASE_DELETION_PROTECTION:-true}"
 BACKEND_STACK="${STACK_PREFIX}-backend"
 EDGE_STACK="${STACK_PREFIX}-edge"
@@ -21,16 +22,20 @@ for command_name in aws; do
   fi
 done
 
-if [[ -n "${REB_API_SECRET_ARN}" ]]; then
-  secret_region="$(printf '%s' "${REB_API_SECRET_ARN}" | cut -d: -f4)"
+for secret_variable_name in REB_API_SECRET_ARN MYHOME_API_SECRET_ARN; do
+  secret_arn="${!secret_variable_name}"
+  if [[ -z "${secret_arn}" ]]; then
+    continue
+  fi
+  secret_region="$(printf '%s' "${secret_arn}" | cut -d: -f4)"
   if [[ "${secret_region}" != "${AWS_REGION}" ]]; then
-    echo "REB_API_SECRET_ARN must be in ${AWS_REGION}." >&2
+    echo "${secret_variable_name} must be in ${AWS_REGION}." >&2
     exit 1
   fi
   aws secretsmanager describe-secret \
     --region "${AWS_REGION}" \
-    --secret-id "${REB_API_SECRET_ARN}" >/dev/null
-fi
+    --secret-id "${secret_arn}" >/dev/null
+done
 
 # 최신 Corretto 21 스택 이름은 리전마다 달라 AWS에서 조회해 전달한다.
 solution_stack_name="$(aws elasticbeanstalk list-available-solution-stacks \
@@ -52,7 +57,8 @@ aws cloudformation deploy \
     "EnvironmentName=${ENVIRONMENT_NAME}" \
     "BeanstalkSolutionStackName=${solution_stack_name}" \
     "DatabaseDeletionProtection=${DATABASE_DELETION_PROTECTION}" \
-    "RebApiSecretArn=${REB_API_SECRET_ARN}"
+    "RebApiSecretArn=${REB_API_SECRET_ARN}" \
+    "MyHomeApiSecretArn=${MYHOME_API_SECRET_ARN}"
 
 stack_output() {
   local stack_name="$1"

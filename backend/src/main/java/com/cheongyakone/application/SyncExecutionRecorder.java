@@ -29,8 +29,26 @@ public class SyncExecutionRecorder {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void fail(SyncExecution execution, Instant finishedAt, RuntimeException exception) {
-        execution.fail(finishedAt, exception);
+    public void partiallySucceed(
+            SyncExecution execution,
+            Instant finishedAt,
+            int fetchedCount,
+            int savedCount,
+            String warningMessage
+    ) {
+        execution.partiallySucceed(finishedAt, fetchedCount, savedCount, warningMessage);
+        repository.save(execution);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void fail(
+            SyncExecution execution,
+            Instant finishedAt,
+            int fetchedCount,
+            int savedCount,
+            RuntimeException exception
+    ) {
+        execution.fail(finishedAt, fetchedCount, savedCount, exception);
         repository.save(execution);
     }
 }

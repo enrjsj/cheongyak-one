@@ -76,11 +76,19 @@ app:
     service-key: ${REB_API_KEY:}
     page-size: ${REB_API_PAGE_SIZE:100}
     max-pages: ${REB_API_MAX_PAGES:20}
+  myhome-api:
+    base-url: ${MYHOME_API_BASE_URL:https://apis.data.go.kr/1613000/HWSPR02}
+    service-key: ${MYHOME_API_KEY:}
+    page-size: ${MYHOME_API_PAGE_SIZE:100}
+    max-pages: ${MYHOME_API_MAX_PAGES:20}
   notice-sync:
     cron: "${NOTICE_SYNC_CRON:0 10 3 * * *}"
     zone: Asia/Seoul
     run-on-startup: false
     export-path: target/reb-sample.json
+    retry:
+      max-attempts: ${NOTICE_SYNC_MAX_ATTEMPTS:3}
+      delay: ${NOTICE_SYNC_RETRY_DELAY:2s}
   member-notification:
     cron: "${MEMBER_NOTIFICATION_CRON:0 5 * * * *}"
     email-cron: "${MEMBER_NOTIFICATION_EMAIL_CRON:0 */5 * * * *}"

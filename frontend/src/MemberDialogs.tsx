@@ -1,5 +1,11 @@
 import { FormEvent, useEffect, useState } from "react";
-import { MemberProfile, MemberSession } from "./api";
+import {
+  MemberGender,
+  MemberMaritalStatus,
+  MemberProfile,
+  MemberProfileInput,
+  MemberSession,
+} from "./api";
 import { useDialogAccessibility } from "./useDialogAccessibility";
 
 export type MemberDialogMode = "login" | "signup" | "verify-email" | "forgot-password" | "reset-password" | "account" | null;
@@ -9,17 +15,26 @@ interface MemberDialogsProps {
   member?: MemberProfile;
   onModeChange: (mode: MemberDialogMode) => void;
   onLogin: (email: string, password: string) => Promise<void>;
-  onSignup: (email: string, password: string, nickname: string) => Promise<void>;
+  onSignup: (email: string, password: string, profile: MemberProfileInput) => Promise<void>;
   onRequestEmailVerification: (email: string) => Promise<void>;
   onRequestPasswordReset: (email: string) => Promise<void>;
   onResetPassword: (newPassword: string) => Promise<void>;
   onLogout: () => Promise<void>;
-  onUpdateProfile: (nickname: string) => Promise<void>;
+  onUpdateProfile: (profile: MemberProfileInput) => Promise<void>;
   onChangePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   onWithdraw: (password: string) => Promise<void>;
   onLoadSessions: () => Promise<MemberSession[]>;
   onRevokeSession: (sessionId: number) => Promise<void>;
   onRevokeOtherSessions: () => Promise<MemberSession[]>;
+}
+
+const RESIDENCE_REGIONS = [
+  "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
+  "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
+];
+
+function optionalNumber(value: string): number | undefined {
+  return value === "" ? undefined : Number(value);
 }
 
 function formatSessionDate(value: string): string {
@@ -54,6 +69,13 @@ export default function MemberDialogs({
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [nickname, setNickname] = useState("");
+  const [signupStep, setSignupStep] = useState<1 | 2>(1);
+  const [birthDate, setBirthDate] = useState("");
+  const [gender, setGender] = useState<MemberGender | "">("");
+  const [maritalStatus, setMaritalStatus] = useState<MemberMaritalStatus | "">("");
+  const [householdMemberCount, setHouseholdMemberCount] = useState("");
+  const [childCount, setChildCount] = useState("");
+  const [residenceRegion, setResidenceRegion] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newPasswordConfirmation, setNewPasswordConfirmation] = useState("");
@@ -78,7 +100,23 @@ export default function MemberDialogs({
     setNewPasswordConfirmation("");
     setWithdrawPassword("");
     setConfirmWithdrawal(false);
-    if (mode === "account" && member) setNickname(member.nickname);
+    setSignupStep(1);
+    if (mode === "account" && member) {
+      setNickname(member.nickname);
+      setBirthDate(member.birthDate ?? "");
+      setGender(member.gender ?? "");
+      setMaritalStatus(member.maritalStatus ?? "");
+      setHouseholdMemberCount(member.householdMemberCount?.toString() ?? "");
+      setChildCount(member.childCount?.toString() ?? "");
+      setResidenceRegion(member.residenceRegion ?? "");
+    } else if (mode === "signup") {
+      setBirthDate("");
+      setGender("");
+      setMaritalStatus("");
+      setHouseholdMemberCount("");
+      setChildCount("");
+      setResidenceRegion("");
+    }
   }, [member, mode]);
 
   useEffect(() => {
@@ -125,15 +163,34 @@ export default function MemberDialogs({
   const submitAuthentication = (event: FormEvent) => {
     event.preventDefault();
     if (mode === "signup") {
+      if (signupStep === 1) {
+        if (password !== passwordConfirmation) {
+          setError("비밀번호 확인이 일치하지 않습니다.");
+          return;
+        }
+        setError("");
+        setSignupStep(2);
+        return;
+      }
       if (password !== passwordConfirmation) {
         setError("비밀번호 확인이 일치하지 않습니다.");
         return;
       }
-      void execute(() => onSignup(email, password, nickname));
+      void execute(() => onSignup(email, password, profileInput()));
     } else {
       void execute(() => onLogin(email, password));
     }
   };
+
+  const profileInput = (): MemberProfileInput => ({
+    nickname,
+    birthDate: birthDate || undefined,
+    gender: gender || undefined,
+    maritalStatus: maritalStatus || undefined,
+    householdMemberCount: optionalNumber(householdMemberCount),
+    childCount: optionalNumber(childCount),
+    residenceRegion: residenceRegion || undefined,
+  });
 
   const title = mode === "account" ? "회원 관리"
     : mode === "signup" ? "회원가입"
@@ -146,7 +203,7 @@ export default function MemberDialogs({
     <div className="modal-backdrop member-backdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget && !busy) onModeChange(null);
     }}>
-      <section ref={dialogRef} tabIndex={-1} className="modal member-modal" role="dialog" aria-modal="true" aria-labelledby="member-dialog-title">
+      <section ref={dialogRef} tabIndex={-1} className={`modal member-modal${mode === "signup" || mode === "account" ? " member-modal-wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby="member-dialog-title">
         <div className="modal-head">
           <div>
             <span>{mode === "account" ? "MY ACCOUNT" : "MEMBER"}</span>
@@ -210,14 +267,48 @@ export default function MemberDialogs({
             </div>
             <form className="member-form" onSubmit={submitAuthentication}>
               {mode === "signup" && (
-                <label>닉네임<input value={nickname} onChange={(event) => setNickname(event.target.value)} minLength={2} maxLength={40} autoComplete="nickname" required /></label>
+                <ol className="signup-progress" aria-label="회원가입 진행 단계">
+                  <li className={signupStep === 1 ? "active" : "complete"}><span>1</span><b>계정 정보</b></li>
+                  <li className={signupStep === 2 ? "active" : ""}><span>2</span><b>맞춤 정보</b></li>
+                </ol>
               )}
-              <label>이메일<input value={email} onChange={(event) => setEmail(event.target.value)} type="email" maxLength={320} autoComplete="email" required /></label>
-              <label>비밀번호<input value={password} onChange={(event) => setPassword(event.target.value)} type="password" minLength={mode === "signup" ? 8 : undefined} maxLength={72} autoComplete={mode === "signup" ? "new-password" : "current-password"} required /></label>
-              {mode === "signup" && <label>비밀번호 확인<input value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} type="password" minLength={8} maxLength={72} autoComplete="new-password" required /></label>}
-              {mode === "signup" && <p className="field-help">8자 이상 입력해주세요. 가입 후 이메일 인증이 필요합니다.</p>}
+              {mode === "signup" && signupStep === 1 ? (
+                <>
+                  <div className="member-form-intro"><b>반가워요!</b><p>먼저 로그인에 필요한 기본 정보만 입력해주세요.</p></div>
+                  <label>닉네임<input value={nickname} onChange={(event) => setNickname(event.target.value)} minLength={2} maxLength={40} autoComplete="nickname" required /></label>
+                  <label>이메일<input value={email} onChange={(event) => setEmail(event.target.value)} type="email" maxLength={320} autoComplete="email" required /></label>
+                  <div className="member-form-grid">
+                    <label>비밀번호<input value={password} onChange={(event) => setPassword(event.target.value)} type="password" minLength={8} maxLength={72} autoComplete="new-password" required /></label>
+                    <label>비밀번호 확인<input value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} type="password" minLength={8} maxLength={72} autoComplete="new-password" required /></label>
+                  </div>
+                  <p className="field-help">8자 이상 입력해주세요. 가입 후 이메일 인증이 필요합니다.</p>
+                </>
+              ) : mode === "signup" ? (
+                <>
+                  <div className="profile-benefit-card">
+                    <span aria-hidden="true">⌂</span>
+                    <div><b>내게 맞는 청약을 더 빨리 찾아드릴게요</b><p>아래 항목은 모두 선택사항이며 추천 보조에만 사용됩니다. 직접 비우거나 회원 탈퇴 시 제거됩니다.</p></div>
+                  </div>
+                  <div className="member-form-grid profile-fields">
+                    <label>생년월일 <small>선택</small><input value={birthDate} onChange={(event) => setBirthDate(event.target.value)} type="date" max={new Date().toISOString().slice(0, 10)} autoComplete="bday" /></label>
+                    <label>거주 지역 <small>선택</small><select value={residenceRegion} onChange={(event) => setResidenceRegion(event.target.value)}><option value="">선택하지 않음</option>{RESIDENCE_REGIONS.map((region) => <option key={region}>{region}</option>)}</select></label>
+                    <label>성별 <small>선택</small><select value={gender} onChange={(event) => setGender(event.target.value as MemberGender | "")}><option value="">응답하지 않음</option><option value="FEMALE">여성</option><option value="MALE">남성</option><option value="OTHER">기타</option></select></label>
+                    <label>혼인 상태 <small>선택</small><select value={maritalStatus} onChange={(event) => setMaritalStatus(event.target.value as MemberMaritalStatus | "")}><option value="">선택하지 않음</option><option value="SINGLE">미혼</option><option value="MARRIED">기혼</option></select></label>
+                    <label>가구원 수 <small>선택</small><input value={householdMemberCount} onChange={(event) => setHouseholdMemberCount(event.target.value)} type="number" min={1} max={20} inputMode="numeric" placeholder="본인 포함" /></label>
+                    <label>자녀 수 <small>선택</small><input value={childCount} onChange={(event) => setChildCount(event.target.value)} type="number" min={0} max={20} inputMode="numeric" placeholder="0" /></label>
+                  </div>
+                  <p className="privacy-note">성별은 프로필에만 저장되며 현재 추천 점수나 청약 자격 판정에는 사용하지 않습니다.</p>
+                </>
+              ) : (
+                <>
+                  <label>이메일<input value={email} onChange={(event) => setEmail(event.target.value)} type="email" maxLength={320} autoComplete="email" required /></label>
+                  <label>비밀번호<input value={password} onChange={(event) => setPassword(event.target.value)} type="password" maxLength={72} autoComplete="current-password" required /></label>
+                </>
+              )}
               {error && <p className="member-message error" role="alert">{error}</p>}
-              <button className="primary-button member-submit" type="submit" disabled={busy}>{busy ? "처리 중…" : mode === "signup" ? "가입하기" : "로그인"}</button>
+              {mode === "signup" && signupStep === 2 && <button className="member-back-button" type="button" onClick={() => setSignupStep(1)} disabled={busy}>이전 단계</button>}
+              <button className="primary-button member-submit" type="submit" disabled={busy}>{busy ? "처리 중…" : mode === "signup" ? signupStep === 1 ? "맞춤 정보 입력하기" : "가입 완료하기" : "로그인"}</button>
+              {mode === "signup" && signupStep === 2 && <button className="member-skip-button" type="button" disabled={busy} onClick={() => void execute(() => onSignup(email, password, { nickname }))}>선택정보 없이 가입</button>}
               {mode === "login" && (
                 <div className="member-flow-actions">
                   <button type="button" onClick={() => onModeChange("forgot-password")}>비밀번호를 잊으셨나요?</button>
@@ -232,11 +323,20 @@ export default function MemberDialogs({
 
             <form className="account-section" onSubmit={(event) => {
               event.preventDefault();
-              void execute(() => onUpdateProfile(nickname), "닉네임을 변경했습니다.");
+              void execute(() => onUpdateProfile(profileInput()), "맞춤 프로필을 저장했습니다.");
             }}>
-              <h3>프로필</h3>
+              <div className="account-section-heading"><div><h3>맞춤 프로필</h3><p>저장한 정보는 공고 추천과 향후 자격 사전점검을 돕는 데 사용됩니다.</p></div><span>선택 입력</span></div>
               <label>닉네임<input value={nickname} onChange={(event) => setNickname(event.target.value)} minLength={2} maxLength={40} required /></label>
-              <button className="secondary-button" type="submit" disabled={busy || nickname.trim() === member.nickname}>닉네임 저장</button>
+              <div className="member-form-grid profile-fields">
+                <label>생년월일<input value={birthDate} onChange={(event) => setBirthDate(event.target.value)} type="date" max={new Date().toISOString().slice(0, 10)} autoComplete="bday" /></label>
+                <label>거주 지역<select value={residenceRegion} onChange={(event) => setResidenceRegion(event.target.value)}><option value="">선택하지 않음</option>{RESIDENCE_REGIONS.map((region) => <option key={region}>{region}</option>)}</select></label>
+                <label>성별<select value={gender} onChange={(event) => setGender(event.target.value as MemberGender | "")}><option value="">응답하지 않음</option><option value="FEMALE">여성</option><option value="MALE">남성</option><option value="OTHER">기타</option></select></label>
+                <label>혼인 상태<select value={maritalStatus} onChange={(event) => setMaritalStatus(event.target.value as MemberMaritalStatus | "")}><option value="">선택하지 않음</option><option value="SINGLE">미혼</option><option value="MARRIED">기혼</option></select></label>
+                <label>가구원 수<input value={householdMemberCount} onChange={(event) => setHouseholdMemberCount(event.target.value)} type="number" min={1} max={20} placeholder="본인 포함" /></label>
+                <label>자녀 수<input value={childCount} onChange={(event) => setChildCount(event.target.value)} type="number" min={0} max={20} placeholder="0" /></label>
+              </div>
+              <p className="privacy-note">모든 항목은 언제든 비우거나 수정할 수 있습니다. 성별은 추천 점수와 자격 판정에 사용하지 않습니다.</p>
+              <button className="secondary-button" type="submit" disabled={busy}>프로필 저장</button>
             </form>
 
             <form className="account-section" onSubmit={(event) => {

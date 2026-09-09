@@ -15,6 +15,7 @@ class RebApiPropertiesTest {
                 0
         );
 
+        assertThat(properties.configured()).isTrue();
         assertThat(properties.serviceKey()).isEqualTo("abc%2Bdef%2Fghi%3D");
         assertThat(properties.decodedServiceKey()).isEqualTo("abc+def/ghi=");
     }

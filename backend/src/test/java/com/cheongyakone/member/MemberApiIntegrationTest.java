@@ -111,6 +111,60 @@ class MemberApiIntegrationTest {
     }
 
     @Test
+    void savesOptionalPersonalProfileDuringSignupAndAllowsClearingIt() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email":"profile@example.com",
+                                  "password":"Strong-password-1!",
+                                  "nickname":"맞춤회원",
+                                  "birthDate":"1992-05-17",
+                                  "gender":"FEMALE",
+                                  "maritalStatus":"MARRIED",
+                                  "householdMemberCount":3,
+                                  "childCount":1,
+                                  "residenceRegion":"서울"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.birthDate").value("1992-05-17"))
+                .andExpect(jsonPath("$.gender").value("FEMALE"))
+                .andExpect(jsonPath("$.maritalStatus").value("MARRIED"))
+                .andExpect(jsonPath("$.householdMemberCount").value(3))
+                .andExpect(jsonPath("$.childCount").value(1))
+                .andExpect(jsonPath("$.residenceRegion").value("서울"));
+
+        confirmEmail("profile@example.com");
+        AuthenticatedSession session = authenticatedSession(
+                login("profile@example.com", PASSWORD).andExpect(status().isOk()).andReturn()
+        );
+        mockMvc.perform(authenticated(patch("/api/v1/members/me"), session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nickname\":\"맞춤회원\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.birthDate").isEmpty())
+                .andExpect(jsonPath("$.gender").isEmpty())
+                .andExpect(jsonPath("$.residenceRegion").isEmpty());
+    }
+
+    @Test
+    void rejectsInvalidPersonalProfileValues() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email":"invalid-profile@example.com",
+                                  "password":"Strong-password-1!",
+                                  "nickname":"검증회원",
+                                  "householdMemberCount":0,
+                                  "residenceRegion":"목록에없는지역"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void locksAccountForTenMinutesAfterFiveFailures() throws Exception {
         signup("locked@example.com", "잠금회원");
 

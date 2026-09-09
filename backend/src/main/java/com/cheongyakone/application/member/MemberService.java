@@ -35,6 +35,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -47,6 +48,10 @@ public class MemberService {
     private static final int MAXIMUM_ACTIVE_SESSIONS = 10;
     private static final int MAXIMUM_COMPARISONS = 3;
     private static final Duration LOGIN_LOCK_DURATION = Duration.ofMinutes(10);
+    private static final Set<String> RESIDENCE_REGIONS = Set.of(
+            "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
+            "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"
+    );
 
     private final MemberRepository memberRepository;
     private final MemberActionTokenRepository actionTokenRepository;
@@ -113,8 +118,20 @@ public class MemberService {
             throw conflict("EMAIL_ALREADY_USED", "이미 가입된 이메일입니다.");
         }
         validateNewPassword(request.password());
+        validatePersonalProfile(request.birthDate(), request.residenceRegion());
         Instant now = clock.instant();
-        Member member = new Member(email, passwordEncoder.encode(request.password()), request.nickname(), now);
+        Member member = new Member(
+                email,
+                passwordEncoder.encode(request.password()),
+                request.nickname(),
+                request.birthDate(),
+                request.gender(),
+                request.maritalStatus(),
+                request.householdMemberCount(),
+                request.childCount(),
+                request.residenceRegion(),
+                now
+        );
         try {
             // 동시 가입 요청도 DB 유니크 제약에서 즉시 확인하도록 flush한다.
             Member saved = memberRepository.saveAndFlush(member);
@@ -258,7 +275,17 @@ public class MemberService {
     @Transactional
     public MemberResponse updateProfile(String rawToken, MemberRequests.UpdateProfile request) {
         Member member = requireMember(rawToken);
-        member.changeNickname(request.nickname(), clock.instant());
+        validatePersonalProfile(request.birthDate(), request.residenceRegion());
+        member.changeProfile(
+                request.nickname(),
+                request.birthDate(),
+                request.gender(),
+                request.maritalStatus(),
+                request.householdMemberCount(),
+                request.childCount(),
+                request.residenceRegion(),
+                clock.instant()
+        );
         return MemberResponse.from(member);
     }
 
@@ -493,6 +520,26 @@ public class MemberService {
                     HttpStatus.BAD_REQUEST,
                     "PASSWORD_TOO_LONG",
                     "비밀번호는 UTF-8 기준 72바이트 이하여야 합니다."
+            );
+        }
+    }
+
+    private void validatePersonalProfile(LocalDate birthDate, String residenceRegion) {
+        LocalDate today = LocalDate.now(clock);
+        if (birthDate != null && birthDate.isBefore(today.minusYears(120))) {
+            throw new MemberApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_BIRTH_DATE",
+                    "생년월일을 다시 확인해주세요."
+            );
+        }
+        if (residenceRegion != null
+                && !residenceRegion.isBlank()
+                && !RESIDENCE_REGIONS.contains(residenceRegion.trim())) {
+            throw new MemberApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_RESIDENCE_REGION",
+                    "거주 지역을 목록에서 선택해주세요."
             );
         }
     }

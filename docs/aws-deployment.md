@@ -6,7 +6,7 @@
 
 - AWS CLI v2 로그인
 - CloudFormation, IAM, VPC, EC2, RDS, S3, CloudFront, Secrets Manager, Elastic Beanstalk 생성 권한
-- 선택 사항: Secrets Manager에 **API 키 원문만** 저장한 청약홈 API Secret
+- 선택 사항: Secrets Manager에 **API 키 원문만** 각각 저장한 청약홈·마이홈 API Secret
 - GitHub Actions 자동 배포를 쓸 경우 GitHub CLI 로그인
 
 실제 비밀번호와 API 키는 템플릿이나 GitHub Secret에 넣지 않습니다. RDS 비밀번호는 CloudFormation이 무작위로 만들고, Elastic Beanstalk가 Secrets Manager에서 실행 시점에 읽습니다. GitHub는 OIDC 단기 자격증명으로 AWS에 접근합니다.
@@ -19,12 +19,13 @@
 export AWS_REGION=ap-northeast-2
 export GITHUB_REPOSITORY=enrjsj/cheongyak-one
 export REB_API_SECRET_ARN='arn:aws:secretsmanager:ap-northeast-2:계정번호:secret:이름'
+export MYHOME_API_SECRET_ARN='arn:aws:secretsmanager:ap-northeast-2:계정번호:secret:이름'
 export ALERT_EMAIL='비용알림을받을주소'
 export MONTHLY_BUDGET_USD=20
 ./scripts/deploy-aws-infrastructure.sh
 ```
 
-아직 API Secret이 없으면 `REB_API_SECRET_ARN`을 생략할 수 있습니다. 이 경우 서버는 배포되지만 실데이터 동기화는 키가 준비될 때까지 동작하지 않습니다. 삭제 연습용 스택이라면 `DATABASE_DELETION_PROTECTION=false`를 명시해야 하며, 운영 기본값은 `true`입니다.
+`REB_API_SECRET_ARN`을 생략하면 청약홈 동기화를 실행할 수 없습니다. `MYHOME_API_SECRET_ARN`을 생략하면 공공임대만 건너뛰고 APT·오피스텔 동기화는 계속됩니다. 삭제 연습용 스택이라면 `DATABASE_DELETION_PROTECTION=false`를 명시해야 하며, 운영 기본값은 `true`입니다.
 
 ## 2. GitHub 환경 연결
 

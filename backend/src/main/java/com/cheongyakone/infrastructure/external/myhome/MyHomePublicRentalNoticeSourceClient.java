@@ -1,6 +1,6 @@
-package com.cheongyakone.infrastructure.external.reb;
+package com.cheongyakone.infrastructure.external.myhome;
 
-import com.cheongyakone.config.RebApiProperties;
+import com.cheongyakone.config.MyHomeApiProperties;
 import com.cheongyakone.domain.notice.NoticeSnapshot;
 import com.cheongyakone.domain.notice.SourceSystem;
 import com.cheongyakone.infrastructure.external.NoticeSourceClient;
@@ -10,19 +10,19 @@ import java.time.LocalDate;
 import java.util.List;
 
 @Component
-public class RebAptNoticeSourceClient implements NoticeSourceClient {
+public class MyHomePublicRentalNoticeSourceClient implements NoticeSourceClient {
 
-    private final RebApiGateway gateway;
-    private final RebApiProperties properties;
+    private final MyHomeApiGateway gateway;
+    private final MyHomeApiProperties properties;
 
-    public RebAptNoticeSourceClient(RebApiGateway gateway, RebApiProperties properties) {
+    public MyHomePublicRentalNoticeSourceClient(MyHomeApiGateway gateway, MyHomeApiProperties properties) {
         this.gateway = gateway;
         this.properties = properties;
     }
 
     @Override
     public SourceSystem sourceSystem() {
-        return SourceSystem.REB_APT;
+        return SourceSystem.MYHOME_PUBLIC_RENTAL;
     }
 
     @Override
@@ -32,6 +32,6 @@ public class RebAptNoticeSourceClient implements NoticeSourceClient {
 
     @Override
     public List<NoticeSnapshot> fetch(LocalDate from, LocalDate to) {
-        return gateway.fetch(RebNoticeType.APARTMENT, from, to);
+        return gateway.fetch(from, to);
     }
 }

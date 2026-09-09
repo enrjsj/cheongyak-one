@@ -414,6 +414,7 @@ footer { background: var(--navy); color: white; }
 .admin-sync-row small { color: #8791a0; font-size: 9px; }
 .sync-status { height: 23px; display: grid; place-items: center; border-radius: 7px; font-size: 8px; font-weight: 800; }
 .sync-status.succeeded { background: #e9f8f1; color: #348264; }
+.sync-status.partially_succeeded { background: #fff4db; color: #9a6412; }
 .sync-status.failed { background: var(--coral-soft); color: var(--coral); }
 .sync-status.running { background: var(--blue-soft); color: var(--blue); }
 .admin-sync-list article > p { margin: 9px 0 0 67px; color: #7a8595; font-size: 9px; }
@@ -460,14 +461,35 @@ footer { background: var(--navy); color: white; }
 .admin-audit-list p span { color: #929caa; }
 .admin-audit-list small { position: absolute; right: 14px; bottom: 13px; color: var(--blue); font-size: 8px; font-weight: 700; }
 .member-modal { width: min(100%, 500px); }
+.member-modal-wide { width: min(100%, 660px); }
 .member-tabs { display: grid; grid-template-columns: 1fr 1fr; margin-top: 24px; padding: 4px; border-radius: 11px; background: #f1f4f8; }
 .member-tabs button { height: 40px; border: 0; border-radius: 8px; background: transparent; color: #7a8493; font-size: 12px; font-weight: 750; cursor: pointer; }
 .member-tabs button.active { background: white; color: var(--blue); box-shadow: 0 3px 10px rgba(26,46,77,.08); }
 .member-form, .account-section, .withdraw-box { display: grid; gap: 13px; }
 .member-form { margin-top: 22px; }
 .member-form label, .account-section label, .withdraw-box label { display: grid; gap: 7px; color: #4d5a6f; font-size: 11px; font-weight: 750; }
-.member-form input, .account-section input, .withdraw-box input { width: 100%; height: 44px; padding: 0 13px; border: 1px solid #dce2ea; border-radius: 9px; outline: 0; background: white; color: var(--navy); font: inherit; font-size: 13px; }
-.member-form input:focus, .account-section input:focus, .withdraw-box input:focus { border-color: #87a6ff; box-shadow: 0 0 0 3px rgba(53,106,244,.1); }
+.member-form input, .member-form select, .account-section input, .account-section select, .withdraw-box input { width: 100%; height: 44px; padding: 0 13px; border: 1px solid #dce2ea; border-radius: 9px; outline: 0; background: white; color: var(--navy); font: inherit; font-size: 13px; }
+.member-form select, .account-section select { cursor: pointer; }
+.member-form input:focus, .member-form select:focus, .account-section input:focus, .account-section select:focus, .withdraw-box input:focus { border-color: #87a6ff; box-shadow: 0 0 0 3px rgba(53,106,244,.1); }
+.member-form label small { justify-self: end; margin-top: -17px; color: #99a3b1; font-size: 9px; font-weight: 600; }
+.member-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.member-form-intro { padding: 3px 1px 5px; }
+.member-form-intro b { color: var(--navy); font-size: 17px; }
+.member-form-intro p { margin: 5px 0 0; color: #778397; font-size: 11px; }
+.signup-progress { position: relative; display: grid; grid-template-columns: 1fr 1fr; margin: 0 0 5px; padding: 0; list-style: none; }
+.signup-progress::before { content: ""; position: absolute; top: 15px; left: 25%; right: 25%; height: 2px; background: #e5eaf2; }
+.signup-progress li { position: relative; z-index: 1; display: grid; justify-items: center; gap: 6px; color: #a0a9b6; font-size: 9px; }
+.signup-progress li span { width: 30px; height: 30px; display: grid; place-items: center; border: 2px solid #e3e8f0; border-radius: 50%; background: white; font-size: 10px; }
+.signup-progress li.active, .signup-progress li.complete { color: var(--blue); }
+.signup-progress li.active span, .signup-progress li.complete span { border-color: var(--blue); background: var(--blue); color: white; }
+.profile-benefit-card { display: flex; align-items: flex-start; gap: 12px; padding: 15px; border: 1px solid #dfe8ff; border-radius: 13px; background: linear-gradient(135deg, #f3f6ff, #f8fbff); }
+.profile-benefit-card > span { width: 34px; height: 34px; flex: 0 0 34px; display: grid; place-items: center; border-radius: 10px; background: white; color: var(--blue); font-size: 17px; box-shadow: 0 4px 12px rgba(45,84,176,.1); }
+.profile-benefit-card b { color: #334b80; font-size: 12px; }
+.profile-benefit-card p { margin: 5px 0 0; color: #7180a0; font-size: 10px; line-height: 1.55; }
+.privacy-note { margin: -2px 0 0; padding: 10px 12px; border-radius: 9px; background: #f6f8fb; color: #7d8999; font-size: 9px; line-height: 1.55; }
+.member-back-button, .member-skip-button { justify-self: center; padding: 2px 6px; border: 0; background: transparent; color: #73819a; font-size: 10px; text-decoration: underline; cursor: pointer; }
+.member-back-button { justify-self: start; }
+.member-skip-button { margin-top: -4px; color: #8993a2; }
 .field-help { margin: -3px 0 0; color: #8490a1; font-size: 10px; line-height: 1.5; }
 .member-flow-description { margin: 0; color: #69768a; font-size: 12px; line-height: 1.65; }
 .member-flow-actions { display: flex; justify-content: space-between; gap: 12px; }
@@ -486,6 +508,9 @@ footer { background: var(--navy); color: white; }
 .account-summary small { margin-top: 4px; color: #7080a1; font-size: 10px; }
 .account-section { padding: 17px; border: 1px solid #e1e6ed; border-radius: 13px; }
 .account-section h3 { margin: 0 0 2px; color: var(--navy); font-size: 13px; }
+.account-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.account-section-heading p { margin: 5px 0 0; color: #7d899a; font-size: 9px; line-height: 1.5; }
+.account-section-heading > span { flex: 0 0 auto; padding: 4px 7px; border-radius: 6px; background: var(--blue-soft); color: var(--blue); font-size: 8px; font-weight: 750; }
 .account-section button { justify-self: end; height: 38px; padding: 0 13px; border-radius: 8px; font-size: 10px; font-weight: 750; cursor: pointer; }
 .session-section { gap: 10px; }
 .session-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
@@ -677,6 +702,8 @@ footer { background: var(--navy); color: white; }
   .modal { width: 100%; max-height: 88vh; padding: 24px 20px calc(23px + env(safe-area-inset-bottom)); border-radius: 22px 22px 0 0; }
   .modal { max-height: 88dvh; }
   .modal-head > button, .answer-buttons button, .member-submit, .notification-tabs button { min-height: 44px; }
+  .member-form-grid { grid-template-columns: 1fr; }
+  .profile-fields { gap: 11px; }
   .compare-modal { max-height: 93vh; padding-inline: 15px; }
   .compare-table { min-width: 650px; }
   .compare-table thead th:first-child, .compare-table tbody th { width: 92px; }
