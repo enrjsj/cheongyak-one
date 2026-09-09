@@ -144,18 +144,25 @@ jobs:
           request_api \
             'http://localhost:8080/api/v1/notices?page=0&size=10' \
             backend/target/notice-page.json
-          jq -e '.totalElements > 0 and (.content | length) > 0' \
+          jq -e '.totalElements >= 0 and (.content | type == "array")' \
             backend/target/notice-page.json
-          jq -e '.content[0].sourceSystem != null and .content[0].syncedAt != null' \
-            backend/target/notice-page.json
+          jq -e '.fetchedCount >= 0 and .savedCount >= 0 and (.notices | type == "array")' \
+            backend/target/reb-sample.json
 
-          notice_id="$(jq -r '.content[0].id' backend/target/notice-page.json)"
-          request_api \
-            "http://localhost:8080/api/v1/notices/${notice_id}" \
-            backend/target/notice-detail.json
-          jq -e --argjson notice_id "$notice_id" \
-            '.id == $notice_id and .officialUrl != null' \
-            backend/target/notice-detail.json
+          # 공개 API가 정상 응답해도 해당 시점의 공고가 0건일 수 있다. 공고가 있을 때만 상세 계약을 검증한다.
+          if [[ "$(jq '.totalElements' backend/target/notice-page.json)" -gt 0 ]]; then
+            jq -e '.content[0].sourceSystem != null and .content[0].syncedAt != null' \
+              backend/target/notice-page.json
+            notice_id="$(jq -r '.content[0].id' backend/target/notice-page.json)"
+            request_api \
+              "http://localhost:8080/api/v1/notices/${notice_id}" \
+              backend/target/notice-detail.json
+            jq -e --argjson notice_id "$notice_id" \
+              '.id == $notice_id and .officialUrl != null' \
+              backend/target/notice-detail.json
+          else
+            echo "Public APIs returned zero current notices; response contracts remain valid."
+          fi
       - name: Print public-data summary
         run: >-
           jq '{generatedAt, fetchedCount, savedCount, totalInDatabase,
