@@ -9,11 +9,11 @@ import java.util.Optional;
 
 public interface MemberSearchPreferenceRepository extends JpaRepository<MemberSearchPreference, Long> {
 
-    Optional<MemberSearchPreference> findByMemberId(Long memberId);
+    Optional<MemberSearchPreference> findByMember_Id(Long memberId);
 
     @EntityGraph(attributePaths = "member")
     @Query("select preference from MemberSearchPreference preference")
     List<MemberSearchPreference> findAllForNotification();
 
-    void deleteByMemberId(Long memberId);
+    void deleteByMember_Id(Long memberId);
 }

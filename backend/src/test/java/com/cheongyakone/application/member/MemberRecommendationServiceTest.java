@@ -64,7 +64,7 @@ class MemberRecommendationServiceTest {
         SubscriptionNotice notice = notice("추천 아파트", LocalDate.of(2026, 9, 6));
         when(member.getId()).thenReturn(1L);
         when(memberService.requireMember("token")).thenReturn(member);
-        when(preferenceRepository.findByMemberId(1L)).thenReturn(Optional.of(preference));
+        when(preferenceRepository.findByMember_Id(1L)).thenReturn(Optional.of(preference));
         when(dismissalRepository.findNoticeIdsByMemberId(1L)).thenReturn(List.of());
         when(noticeRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(notice)));
@@ -82,7 +82,7 @@ class MemberRecommendationServiceTest {
     void returnsConfigurationGuideWhenPreferenceDoesNotExist() {
         when(member.getId()).thenReturn(1L);
         when(memberService.requireMember("token")).thenReturn(member);
-        when(preferenceRepository.findByMemberId(1L)).thenReturn(Optional.empty());
+        when(preferenceRepository.findByMember_Id(1L)).thenReturn(Optional.empty());
 
         var result = service().recommendations("token");
 

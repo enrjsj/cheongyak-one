@@ -70,7 +70,7 @@ public class MemberNotificationService {
     @Transactional(readOnly = true)
     public NotificationPreferenceResponse preference(String rawToken) {
         Member member = memberService.requireMember(rawToken);
-        return preferenceRepository.findByMemberId(member.getId())
+        return preferenceRepository.findByMember_Id(member.getId())
                 .map(NotificationPreferenceResponse::from)
                 .orElseGet(NotificationPreferenceResponse::defaults);
     }
@@ -81,7 +81,7 @@ public class MemberNotificationService {
             MemberRequests.NotificationPreference request
     ) {
         Member member = memberService.requireMember(rawToken);
-        var preference = preferenceRepository.findByMemberId(member.getId())
+        var preference = preferenceRepository.findByMember_Id(member.getId())
                 .orElseGet(() -> new MemberNotificationPreference(member, clock.instant()));
         preference.change(
                 request.applyStartEnabled(),

@@ -10,10 +10,10 @@ import java.util.Optional;
 public interface MemberNotificationPreferenceRepository
         extends JpaRepository<MemberNotificationPreference, Long> {
 
-    Optional<MemberNotificationPreference> findByMemberId(Long memberId);
+    Optional<MemberNotificationPreference> findByMember_Id(Long memberId);
 
     @EntityGraph(attributePaths = "member")
-    List<MemberNotificationPreference> findAllByMemberIdIn(Collection<Long> memberIds);
+    List<MemberNotificationPreference> findAllByMember_IdIn(Collection<Long> memberIds);
 
-    void deleteByMemberId(Long memberId);
+    void deleteByMember_Id(Long memberId);
 }

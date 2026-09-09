@@ -287,9 +287,9 @@ public class MemberService {
         sessionRepository.deleteByMemberId(member.getId());
         favoriteRepository.deleteByMemberId(member.getId());
         comparisonRepository.deleteByMemberId(member.getId());
-        eligibilityProfileRepository.deleteByMemberId(member.getId());
-        searchPreferenceRepository.deleteByMemberId(member.getId());
-        notificationPreferenceRepository.deleteByMemberId(member.getId());
+        eligibilityProfileRepository.deleteByMember_Id(member.getId());
+        searchPreferenceRepository.deleteByMember_Id(member.getId());
+        notificationPreferenceRepository.deleteByMember_Id(member.getId());
         notificationRepository.deleteByMemberId(member.getId());
         recommendationDismissalRepository.deleteByMemberId(member.getId());
         actionTokenRepository.deleteByMemberId(member.getId());
@@ -426,7 +426,7 @@ public class MemberService {
     @Transactional(readOnly = true)
     public Optional<SearchPreferenceResponse> searchPreference(String rawToken) {
         Member member = requireMember(rawToken);
-        return searchPreferenceRepository.findByMemberId(member.getId())
+        return searchPreferenceRepository.findByMember_Id(member.getId())
                 .map(SearchPreferenceResponse::from);
     }
 
@@ -437,7 +437,7 @@ public class MemberService {
     ) {
         Member member = requireMember(rawToken);
         Instant now = clock.instant();
-        MemberSearchPreference preference = searchPreferenceRepository.findByMemberId(member.getId())
+        MemberSearchPreference preference = searchPreferenceRepository.findByMember_Id(member.getId())
                 .orElseGet(() -> new MemberSearchPreference(member, now));
         preference.change(
                 request.region(),
@@ -452,13 +452,13 @@ public class MemberService {
     @Transactional
     public void deleteSearchPreference(String rawToken) {
         Member member = requireMember(rawToken);
-        searchPreferenceRepository.deleteByMemberId(member.getId());
+        searchPreferenceRepository.deleteByMember_Id(member.getId());
     }
 
     @Transactional(readOnly = true)
     public Optional<EligibilityProfileResponse> eligibilityProfile(String rawToken) {
         Member member = requireMember(rawToken);
-        return eligibilityProfileRepository.findByMemberId(member.getId())
+        return eligibilityProfileRepository.findByMember_Id(member.getId())
                 .map(EligibilityProfileResponse::from);
     }
 
@@ -469,7 +469,7 @@ public class MemberService {
     ) {
         Member member = requireMember(rawToken);
         Instant now = clock.instant();
-        MemberEligibilityProfile profile = eligibilityProfileRepository.findByMemberId(member.getId())
+        MemberEligibilityProfile profile = eligibilityProfileRepository.findByMember_Id(member.getId())
                 .orElseGet(() -> new MemberEligibilityProfile(member, now));
         profile.change(request.homeless(), request.subscriptionAccount(), request.newlywed(), request.firstHome(), now);
         return EligibilityProfileResponse.from(eligibilityProfileRepository.save(profile));
@@ -478,7 +478,7 @@ public class MemberService {
     @Transactional
     public void deleteEligibilityProfile(String rawToken) {
         Member member = requireMember(rawToken);
-        eligibilityProfileRepository.deleteByMemberId(member.getId());
+        eligibilityProfileRepository.deleteByMember_Id(member.getId());
     }
 
     @Scheduled(cron = "0 30 4 * * *", zone = "Asia/Seoul")

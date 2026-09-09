@@ -55,7 +55,7 @@ public class MemberRecommendationService {
     @Transactional(readOnly = true)
     public MemberRecommendationListResponse recommendations(String rawToken) {
         Member member = memberService.requireMember(rawToken);
-        return preferenceRepository.findByMemberId(member.getId())
+        return preferenceRepository.findByMember_Id(member.getId())
                 .map(preference -> recommend(member.getId(), preference))
                 .orElseGet(MemberRecommendationListResponse::notConfigured);
     }

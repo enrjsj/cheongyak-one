@@ -87,7 +87,7 @@ public class MemberNotificationGenerator {
                 .map(favorite -> favorite.getMember().getId())
                 .collect(Collectors.toSet());
         Map<Long, NotificationSettings> settingsByMember = new HashMap<>();
-        for (MemberNotificationPreference preference : preferenceRepository.findAllByMemberIdIn(memberIds)) {
+        for (MemberNotificationPreference preference : preferenceRepository.findAllByMember_IdIn(memberIds)) {
             settingsByMember.put(preference.getMemberId(), NotificationSettings.from(preference));
         }
 
@@ -141,7 +141,7 @@ public class MemberNotificationGenerator {
                 .map(preference -> preference.getMemberId())
                 .collect(Collectors.toSet());
         Map<Long, NotificationSettings> settingsByMember = new HashMap<>();
-        for (MemberNotificationPreference preference : preferenceRepository.findAllByMemberIdIn(memberIds)) {
+        for (MemberNotificationPreference preference : preferenceRepository.findAllByMember_IdIn(memberIds)) {
             settingsByMember.put(preference.getMemberId(), NotificationSettings.from(preference));
         }
 
@@ -198,7 +198,7 @@ public class MemberNotificationGenerator {
                 .map(favorite -> favorite.getMember().getId())
                 .collect(Collectors.toSet());
         Map<Long, NotificationSettings> settingsByMember = new HashMap<>();
-        for (MemberNotificationPreference preference : preferenceRepository.findAllByMemberIdIn(memberIds)) {
+        for (MemberNotificationPreference preference : preferenceRepository.findAllByMember_IdIn(memberIds)) {
             settingsByMember.put(preference.getMemberId(), NotificationSettings.from(preference));
         }
 
