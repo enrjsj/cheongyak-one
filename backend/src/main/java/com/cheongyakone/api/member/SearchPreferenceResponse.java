@@ -12,6 +12,8 @@ public record SearchPreferenceResponse(
         HousingCategory housingCategory,
         SearchPreferenceStatus status,
         SearchPreferenceSort sort,
+        Integer minPriceManwon,
+        Integer maxPriceManwon,
         Instant updatedAt
 ) {
     public static SearchPreferenceResponse from(MemberSearchPreference preference) {
@@ -20,6 +22,8 @@ public record SearchPreferenceResponse(
                 preference.getHousingCategory(),
                 preference.getStatus(),
                 preference.getSort(),
+                preference.getMinPriceManwon(),
+                preference.getMaxPriceManwon(),
                 preference.getUpdatedAt()
         );
     }

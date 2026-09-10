@@ -451,7 +451,9 @@ class MemberApiIntegrationTest {
                 .andExpect(jsonPath("$.region").value("서울"))
                 .andExpect(jsonPath("$.housingCategory").value("APARTMENT"))
                 .andExpect(jsonPath("$.status").value("OPEN"))
-                .andExpect(jsonPath("$.sort").value("DEADLINE"));
+                .andExpect(jsonPath("$.sort").value("DEADLINE"))
+                .andExpect(jsonPath("$.minPriceManwon").value(30000))
+                .andExpect(jsonPath("$.maxPriceManwon").value(60000));
 
         mockMvc.perform(get("/api/v1/members/me/search-preference").cookie(session.cookie()))
                 .andExpect(status().isOk())
@@ -1170,7 +1172,7 @@ class MemberApiIntegrationTest {
 
     private String searchPreferenceJson() {
         return """
-                {"region":"서울","housingCategory":"APARTMENT","status":"OPEN","sort":"DEADLINE"}
+                {"region":"서울","housingCategory":"APARTMENT","status":"OPEN","sort":"DEADLINE","minPriceManwon":30000,"maxPriceManwon":60000}
                 """;
     }
 

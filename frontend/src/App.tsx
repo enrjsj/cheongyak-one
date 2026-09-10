@@ -339,6 +339,24 @@ function categoryValue(label: string): HousingCategory | undefined {
     .find(([, categoryLabel]) => categoryLabel === label)?.[0];
 }
 
+function priceInManwon(value: string): number | undefined {
+  if (!/^\d+$/.test(value)) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= 1_000_000 ? parsed : undefined;
+}
+
+function priceInWon(value: string): number | undefined {
+  const manwon = priceInManwon(value);
+  return manwon === undefined ? undefined : manwon * 10_000;
+}
+
+function formatPricePreference(preference: MemberSearchPreference): string {
+  if (preference.minPriceManwon && preference.maxPriceManwon) return `${preference.minPriceManwon.toLocaleString()}~${preference.maxPriceManwon.toLocaleString()}만원`;
+  if (preference.minPriceManwon) return `${preference.minPriceManwon.toLocaleString()}만원 이상`;
+  if (preference.maxPriceManwon) return `${preference.maxPriceManwon.toLocaleString()}만원 이하`;
+  return "전체 예산";
+}
+
 export default function Home() {
   const initialSearch = noticeSearchStateFromSearch(window.location.search);
   const [notices, setNotices] = useState<NoticeSummary[]>([]);
@@ -355,6 +373,8 @@ export default function Home() {
   const [region, setRegion] = useState(initialSearch.region ?? "전체");
   const [category, setCategory] = useState(initialSearch.category ? CATEGORY_LABELS[initialSearch.category] : "전체");
   const [sortKey, setSortKey] = useState<NoticeSortKey>(initialSearch.sort);
+  const [minPriceManwon, setMinPriceManwon] = useState(initialSearch.minPriceManwon ? String(initialSearch.minPriceManwon) : "");
+  const [maxPriceManwon, setMaxPriceManwon] = useState(initialSearch.maxPriceManwon ? String(initialSearch.maxPriceManwon) : "");
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [favoritePendingId, setFavoritePendingId] = useState<number>();
   const [savedOnly, setSavedOnly] = useState(false);
@@ -437,6 +457,8 @@ export default function Home() {
     setCategory(preference.housingCategory ? CATEGORY_LABELS[preference.housingCategory] : "전체");
     setActiveStatus(preference.status.toLowerCase() as StatusKey);
     setSortKey(preference.sort);
+    setMinPriceManwon(preference.minPriceManwon ? String(preference.minPriceManwon) : "");
+    setMaxPriceManwon(preference.maxPriceManwon ? String(preference.maxPriceManwon) : "");
     setSavedOnly(false);
     setVisibleCount(6);
   };
@@ -446,6 +468,8 @@ export default function Home() {
     status: activeStatus === "open" ? "OPEN" as const : activeStatus === "upcoming" ? "UPCOMING" as const : undefined,
     keyword: query,
     region: region === "전체" ? undefined : region,
+    minPrice: priceInWon(minPriceManwon),
+    maxPrice: priceInWon(maxPriceManwon),
     ids: savedOnly ? [...savedIds] : undefined,
     endingToday: activeStatus === "today",
     sort: sortKey,
@@ -486,7 +510,7 @@ export default function Home() {
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, 250);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [activeStatus, category, loadVersion, query, region, savedIds, savedOnly, sortKey]);
+  }, [activeStatus, category, loadVersion, maxPriceManwon, minPriceManwon, query, region, savedIds, savedOnly, sortKey]);
 
   const loadMoreNotices = async () => {
     if (loadingMore || notices.length >= noticeTotal) return;
@@ -723,6 +747,8 @@ export default function Home() {
       status: activeStatus,
       region: region === "전체" ? undefined : region,
       category: categoryValue(category),
+      minPriceManwon: priceInManwon(minPriceManwon),
+      maxPriceManwon: priceInManwon(maxPriceManwon),
       sort: sortKey,
     });
     const targetUrl = new URL(searchUrl);
@@ -730,7 +756,7 @@ export default function Home() {
     if (comparisonIds.length > 0) params.set("compare", comparisonIds.join(","));
     else params.delete("compare");
     window.history.replaceState(window.history.state, "", targetUrl.toString());
-  }, [activeStatus, category, comparisonIds, member, query, region, sortKey]);
+  }, [activeStatus, category, comparisonIds, maxPriceManwon, member, minPriceManwon, query, region, sortKey]);
 
   useEffect(() => {
     if (comparisonOpen && comparisonIds.length < 2) setComparisonOpen(false);
@@ -751,7 +777,7 @@ export default function Home() {
     .filter((item): item is Application => Boolean(item)), [knownApplications, recentNoticeIds]);
 
   const visible = filtered;
-  const activeFilterCount = Number(region !== "전체") + Number(category !== "전체");
+  const activeFilterCount = Number(region !== "전체") + Number(category !== "전체") + Number(Boolean(minPriceManwon || maxPriceManwon));
   const todayCount = noticeFacets.endingToday;
   const openCount = noticeFacets.open;
   const upcomingCount = noticeFacets.upcoming;
@@ -951,6 +977,8 @@ export default function Home() {
         housingCategory: category === "전체" ? undefined : categoryValue(category),
         status: activeStatus.toUpperCase() as MemberSearchPreference["status"],
         sort: sortKey,
+        minPriceManwon: priceInManwon(minPriceManwon),
+        maxPriceManwon: priceInManwon(maxPriceManwon),
       });
       setSearchPreference(preference);
       setToast("현재 검색조건을 계정에 저장했습니다.");
@@ -1066,6 +1094,8 @@ export default function Home() {
       status: activeStatus,
       region: region === "전체" ? undefined : region,
       category: categoryValue(category),
+      minPriceManwon: priceInManwon(minPriceManwon),
+      maxPriceManwon: priceInManwon(maxPriceManwon),
       sort: sortKey,
     }));
     sharedUrl.searchParams.delete("notice");
@@ -1351,7 +1381,7 @@ export default function Home() {
                 </label>
                 {savedOnly && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={() => downloadCalendar(savedNotices, "cheongyak-saved.ics")}><Icon name="calendar" /> 관심 일정 저장</button>}
                 <button className="search-share-button" type="button" onClick={() => void copySearchLink()}><Icon name="arrow" /> 검색 공유</button>
-                <button className="filter-button" type="button" onClick={() => setFilterOpen(true)} disabled={loading}><Icon name="filter" /> 지역·유형 필터 {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button>
+                <button className="filter-button" type="button" onClick={() => setFilterOpen(true)} disabled={loading}><Icon name="filter" /> 지역·유형·예산 필터 {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button>
               </div>
             </div>
 
@@ -1481,13 +1511,14 @@ export default function Home() {
             <div className="modal-head"><div><span>FILTER</span><h2 id="filter-title">청약 조건 선택</h2></div><button type="button" onClick={() => setFilterOpen(false)} aria-label="닫기"><Icon name="close" /></button></div>
             <div className="filter-group"><h3>지역</h3><div className="choice-grid">{["전체", ...availableRegions].map((item) => <button className={region === item ? "active" : ""} type="button" key={item} onClick={() => { setRegion(item); resetVisible(); }}>{item}</button>)}</div></div>
             <div className="filter-group"><h3>주택 유형</h3><div className="choice-grid">{["전체", ...availableCategories].map((item) => <button className={category === item ? "active" : ""} type="button" key={item} onClick={() => { setCategory(item); resetVisible(); }}>{item}</button>)}</div></div>
+            <div className="filter-group"><h3>분양가 예산 <small>(만원 · 최저 분양가 기준)</small></h3><div className="price-range"><label>최소<input type="number" min="0" max="1000000" inputMode="numeric" value={minPriceManwon} onChange={(event) => { setMinPriceManwon(event.target.value); resetVisible(); }} placeholder="예: 30000" /></label><span>~</span><label>최대<input type="number" min="0" max="1000000" inputMode="numeric" value={maxPriceManwon} onChange={(event) => { setMaxPriceManwon(event.target.value); resetVisible(); }} placeholder="예: 60000" /></label></div><p className="price-help">가격 정보가 없는 공고는 예산 필터 결과에서 제외됩니다.</p></div>
             <div className="search-preference-box">
-              <div><b>내 맞춤 검색조건</b><span>지역·유형·상태·정렬을 계정에 저장합니다.</span></div>
+              <div><b>내 맞춤 검색조건</b><span>지역·유형·예산·상태·정렬을 계정에 저장합니다.</span></div>
               {member ? (
                 <>
                   {searchPreference && (
                     <div className="saved-preference">
-                      <p>{searchPreference.region ?? "전국"} · {searchPreference.housingCategory ? CATEGORY_LABELS[searchPreference.housingCategory] : "전체 유형"} · {STATUS_LABELS[searchPreference.status.toLowerCase() as StatusKey]} · {searchPreference.sort === "DEADLINE" ? "마감 임박순" : "최신순"}</p>
+                      <p>{searchPreference.region ?? "전국"} · {searchPreference.housingCategory ? CATEGORY_LABELS[searchPreference.housingCategory] : "전체 유형"} · {formatPricePreference(searchPreference)} · {STATUS_LABELS[searchPreference.status.toLowerCase() as StatusKey]} · {searchPreference.sort === "DEADLINE" ? "마감 임박순" : "최신순"}</p>
                       <button type="button" onClick={() => { applySearchPreference(searchPreference); setToast("저장된 검색조건을 적용했습니다."); }} disabled={preferenceBusy}>불러오기</button>
                       <button type="button" onClick={() => void handleDeleteSearchPreference()} disabled={preferenceBusy}>삭제</button>
                     </div>
@@ -1498,7 +1529,7 @@ export default function Home() {
                 <button className="save-preference-button" type="button" onClick={() => void handleSaveSearchPreference()}>로그인하고 조건 저장</button>
               )}
             </div>
-            <div className="modal-actions"><button className="reset-button" type="button" onClick={() => { setRegion("전체"); setCategory("전체"); resetVisible(); }}>초기화</button><button className="primary-button" type="button" onClick={() => { setFilterOpen(false); setSavedOnly(false); }}>공고 {noticeTotal}건 보기</button></div>
+            <div className="modal-actions"><button className="reset-button" type="button" onClick={() => { setRegion("전체"); setCategory("전체"); setMinPriceManwon(""); setMaxPriceManwon(""); resetVisible(); }}>초기화</button><button className="primary-button" type="button" onClick={() => { setFilterOpen(false); setSavedOnly(false); }}>공고 {noticeTotal}건 보기</button></div>
           </section>
         </div>
       )}

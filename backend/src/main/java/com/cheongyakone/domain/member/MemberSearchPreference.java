@@ -49,6 +49,12 @@ public class MemberSearchPreference {
     @Column(name = "SORT_OPTION", nullable = false, length = 20)
     private SearchPreferenceSort sort;
 
+    @Column(name = "MIN_PRICE_MANWON")
+    private Integer minPriceManwon;
+
+    @Column(name = "MAX_PRICE_MANWON")
+    private Integer maxPriceManwon;
+
     @Column(name = "CREATED_AT", nullable = false)
     private Instant createdAt;
 
@@ -69,12 +75,16 @@ public class MemberSearchPreference {
             HousingCategory housingCategory,
             SearchPreferenceStatus status,
             SearchPreferenceSort sort,
+            Integer minPriceManwon,
+            Integer maxPriceManwon,
             Instant now
     ) {
         this.region = region == null || region.isBlank() ? null : region.trim();
         this.housingCategory = housingCategory;
         this.status = Objects.requireNonNull(status);
         this.sort = Objects.requireNonNull(sort);
+        this.minPriceManwon = minPriceManwon;
+        this.maxPriceManwon = maxPriceManwon;
         this.updatedAt = Objects.requireNonNull(now);
     }
 
@@ -105,6 +115,10 @@ public class MemberSearchPreference {
     public SearchPreferenceSort getSort() {
         return sort;
     }
+
+    public Integer getMinPriceManwon() { return minPriceManwon; }
+
+    public Integer getMaxPriceManwon() { return maxPriceManwon; }
 
     public Instant getUpdatedAt() {
         return updatedAt;

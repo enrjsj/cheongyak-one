@@ -7,6 +7,7 @@ import com.cheongyakone.domain.notice.SubscriptionNotice;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.Locale;
 
 final class MemberNoticePreferenceMatcher {
@@ -29,6 +30,14 @@ final class MemberNoticePreferenceMatcher {
                     cb.equal(cb.lower(root.get("regionCode")), region),
                     cb.like(cb.lower(root.get("address")), region + "%")
             ));
+        }
+        if (preference.getMinPriceManwon() != null) {
+            specification = specification.and((root, query, cb) -> cb.greaterThanOrEqualTo(
+                    root.<BigDecimal>get("minPrice"), won(preference.getMinPriceManwon())));
+        }
+        if (preference.getMaxPriceManwon() != null) {
+            specification = specification.and((root, query, cb) -> cb.lessThanOrEqualTo(
+                    root.<BigDecimal>get("minPrice"), won(preference.getMaxPriceManwon())));
         }
         specification = switch (preference.getStatus()) {
             case TODAY -> specification.and((root, query, cb) -> cb.equal(root.get("applyEndDate"), today));
@@ -56,6 +65,10 @@ final class MemberNoticePreferenceMatcher {
         if (preference.getRegion() != null && !matchesRegion(notice, preference.getRegion())) {
             return false;
         }
+        if (preference.getMinPriceManwon() != null && (notice.getMinPrice() == null
+                || notice.getMinPrice().compareTo(won(preference.getMinPriceManwon())) < 0)) return false;
+        if (preference.getMaxPriceManwon() != null && (notice.getMinPrice() == null
+                || notice.getMinPrice().compareTo(won(preference.getMaxPriceManwon())) > 0)) return false;
         if (!matchesStatus(notice, preference.getStatus(), today)) {
             return false;
         }
@@ -80,6 +93,10 @@ final class MemberNoticePreferenceMatcher {
             case UPCOMING -> notice.getStatus() == NoticeStatus.UPCOMING;
             case ALL -> notice.getStatus() == NoticeStatus.OPEN || notice.getStatus() == NoticeStatus.UPCOMING;
         };
+    }
+
+    private static BigDecimal won(int manwon) {
+        return BigDecimal.valueOf(manwon).movePointRight(4);
     }
 
     private static String normalized(String value) {
