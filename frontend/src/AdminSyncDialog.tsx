@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { AdminSyncDashboard, fetchAdminSyncDashboard, SyncExecutionStatus } from "./api";
+import {
+  AdminSyncDashboard,
+  fetchAdminSyncDashboard,
+  requestAdminNoticeSynchronization,
+  SyncExecutionStatus,
+} from "./api";
 import AdminMembersPanel from "./AdminMembersPanel";
 import AdminAuditPanel from "./AdminAuditPanel";
 import AdminMemberStatisticsPanel from "./AdminMemberStatisticsPanel";
@@ -40,6 +45,8 @@ export default function AdminSyncDialog({ open, onClose, currentMemberId }: Admi
   const [dashboard, setDashboard] = useState<AdminSyncDashboard>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [syncNotice, setSyncNotice] = useState("");
+  const [requestingSync, setRequestingSync] = useState(false);
   const [version, setVersion] = useState(0);
   const dialogRef = useDialogAccessibility<HTMLElement>(open, onClose);
 
@@ -62,6 +69,22 @@ export default function AdminSyncDialog({ open, onClose, currentMemberId }: Admi
   }, [open, version, tab]);
 
   if (!open) return null;
+
+  const requestSynchronization = async () => {
+    if (!window.confirm("지금 공고 데이터를 다시 수집할까요? 실행 중에는 같은 요청을 다시 할 수 없습니다.")) return;
+    setRequestingSync(true);
+    setError("");
+    setSyncNotice("");
+    try {
+      await requestAdminNoticeSynchronization();
+      setSyncNotice("공고 동기화를 시작했습니다. 아래 실행 이력에서 진행 상태를 확인하세요.");
+      window.setTimeout(() => setVersion((value) => value + 1), 500);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "공고 동기화를 시작하지 못했습니다.");
+    } finally {
+      setRequestingSync(false);
+    }
+  };
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
@@ -89,7 +112,8 @@ export default function AdminSyncDialog({ open, onClose, currentMemberId }: Admi
               <div className={dashboard.failuresLast24Hours > 0 ? "danger" : ""}><span>24시간 오류</span><strong>{dashboard.failuresLast24Hours}</strong></div>
               <div><span>최근 성공</span><strong>{formatDate(dashboard.lastSuccessfulAt)}</strong></div>
             </div>
-            <div className="admin-sync-headline"><b>최근 실행 50건</b><button type="button" onClick={() => setVersion((value) => value + 1)} disabled={loading}>{loading ? "갱신 중…" : "새로고침"}</button></div>
+            <div className="admin-sync-headline"><b>최근 실행 50건</b><span><button type="button" className="admin-sync-trigger" onClick={() => void requestSynchronization()} disabled={requestingSync}>{requestingSync ? "요청 중…" : "지금 동기화"}</button><button type="button" onClick={() => setVersion((value) => value + 1)} disabled={loading}>{loading ? "갱신 중…" : "새로고침"}</button></span></div>
+            {syncNotice && <p className="admin-member-message success" role="status">{syncNotice}</p>}
             <div className="admin-sync-list">
               {dashboard.executions.map((execution) => (
                 <article key={execution.id}>

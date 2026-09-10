@@ -936,6 +936,9 @@ class MemberApiIntegrationTest {
         mockMvc.perform(get("/api/v1/admin/sync-executions").cookie(regularSession.cookie()))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ADMIN_REQUIRED"));
+        mockMvc.perform(authenticated(post("/api/v1/admin/sync-executions"), regularSession))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ADMIN_REQUIRED"));
         mockMvc.perform(get("/api/v1/admin/members").cookie(regularSession.cookie()))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ADMIN_REQUIRED"));

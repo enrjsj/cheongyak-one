@@ -3,7 +3,9 @@ package com.cheongyakone.api.admin;
 import com.cheongyakone.api.member.SessionCookieSupport;
 import com.cheongyakone.application.admin.AdminSyncDashboardService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -25,5 +27,11 @@ public class AdminSyncDashboardController {
     @GetMapping
     public AdminSyncDashboardResponse dashboard(HttpServletRequest request) {
         return dashboardService.dashboard(cookieSupport.read(request));
+    }
+
+    @PostMapping
+    public ResponseEntity<Void> requestSynchronization(HttpServletRequest request) {
+        dashboardService.requestSynchronization(cookieSupport.read(request));
+        return ResponseEntity.accepted().build();
     }
 }

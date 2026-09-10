@@ -622,6 +622,10 @@ export function fetchAdminSyncDashboard(): Promise<AdminSyncDashboard> {
   return requestJson<AdminSyncDashboard>("/api/v1/admin/sync-executions");
 }
 
+export function requestAdminNoticeSynchronization(): Promise<void> {
+  return requestJson<void>("/api/v1/admin/sync-executions", { method: "POST" });
+}
+
 export function fetchAdminMembers(
   query: string,
   status: AdminMemberStatus | "",
