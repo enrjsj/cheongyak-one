@@ -2,6 +2,7 @@ package com.cheongyakone.application.admin;
 
 import com.cheongyakone.api.admin.AdminMemberPageResponse;
 import com.cheongyakone.api.admin.AdminMemberResponse;
+import com.cheongyakone.api.admin.AdminMemberStatisticsResponse;
 import com.cheongyakone.application.member.MemberApiException;
 import com.cheongyakone.application.member.MemberService;
 import com.cheongyakone.domain.admin.AdminAuditAction;
@@ -19,6 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.Period;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -86,6 +91,63 @@ public class AdminMemberService {
                 result.getSize(),
                 result.getTotalElements(),
                 result.getTotalPages()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public AdminMemberStatisticsResponse statistics(String rawToken) {
+        memberService.requireAdmin(rawToken);
+        MemberStatus active = MemberStatus.ACTIVE;
+        LocalDate today = LocalDate.now(clock);
+
+        Map<String, Long> genderCounts = buckets("FEMALE", "MALE", "OTHER");
+        addCategoryCounts(genderCounts, memberRepository.countProfiledByGender(active));
+
+        Map<String, Long> ageCounts = buckets(
+                "UNDER_20", "TWENTIES", "THIRTIES", "FORTIES", "FIFTIES", "SIXTIES_PLUS"
+        );
+        memberRepository.countProfiledByBirthDate(active).forEach(row -> {
+            LocalDate birthDate = (LocalDate) row[0];
+            int age = Period.between(birthDate, today).getYears();
+            String key = age < 20 ? "UNDER_20"
+                    : age < 30 ? "TWENTIES"
+                    : age < 40 ? "THIRTIES"
+                    : age < 50 ? "FORTIES"
+                    : age < 60 ? "FIFTIES"
+                    : "SIXTIES_PLUS";
+            ageCounts.merge(key, ((Number) row[1]).longValue(), Long::sum);
+        });
+
+        Map<String, Long> maritalCounts = buckets("SINGLE", "MARRIED");
+        addCategoryCounts(maritalCounts, memberRepository.countProfiledByMaritalStatus(active));
+
+        List<AdminMemberStatisticsResponse.Bucket> residenceRegions = memberRepository
+                .countProfiledByResidenceRegion(active).stream()
+                .map(row -> bucket(String.valueOf(row[0]), String.valueOf(row[0]), row[1]))
+                .toList();
+
+        Map<String, Long> householdCounts = buckets("ONE", "TWO", "THREE", "FOUR_PLUS");
+        addNumberCounts(householdCounts, memberRepository.countProfiledByHouseholdMemberCount(active), false);
+        Map<String, Long> childCounts = buckets("ZERO", "ONE", "TWO", "THREE_PLUS");
+        addNumberCounts(childCounts, memberRepository.countProfiledByChildCount(active), true);
+
+        return new AdminMemberStatisticsResponse(
+                memberRepository.countByStatus(active),
+                memberRepository.countByStatusAndPersonalProfileConsentedAtIsNotNull(active),
+                toBuckets(genderCounts, Map.of("FEMALE", "여성", "MALE", "남성", "OTHER", "기타")),
+                toBuckets(ageCounts, Map.of(
+                        "UNDER_20", "20세 미만", "TWENTIES", "20대", "THIRTIES", "30대",
+                        "FORTIES", "40대", "FIFTIES", "50대", "SIXTIES_PLUS", "60대 이상"
+                )),
+                toBuckets(maritalCounts, Map.of("SINGLE", "미혼", "MARRIED", "기혼")),
+                residenceRegions,
+                toBuckets(householdCounts, Map.of(
+                        "ONE", "1명", "TWO", "2명", "THREE", "3명", "FOUR_PLUS", "4명 이상"
+                )),
+                toBuckets(childCounts, Map.of(
+                        "ZERO", "0명", "ONE", "1명", "TWO", "2명", "THREE_PLUS", "3명 이상"
+                )),
+                clock.instant()
         );
     }
 
@@ -196,5 +258,51 @@ public class AdminMemberService {
                 .findFirst()
                 .map(MemberLoginSessionRepository.MemberSessionCount::getSessionCount)
                 .orElse(0L);
+    }
+
+    private Map<String, Long> buckets(String... keys) {
+        Map<String, Long> counts = new LinkedHashMap<>();
+        for (String key : keys) {
+            counts.put(key, 0L);
+        }
+        return counts;
+    }
+
+    private void addCategoryCounts(Map<String, Long> target, List<Object[]> rows) {
+        rows.forEach(row -> target.put(String.valueOf(row[0]), ((Number) row[1]).longValue()));
+    }
+
+    private void addNumberCounts(Map<String, Long> target, List<Object[]> rows, boolean includeZero) {
+        rows.forEach(row -> {
+            int value = ((Number) row[0]).intValue();
+            String key;
+            if (includeZero && value == 0) {
+                key = "ZERO";
+            } else if (value <= 1) {
+                key = "ONE";
+            } else if (value == 2) {
+                key = "TWO";
+            } else if (!includeZero && value == 3) {
+                key = "THREE";
+            } else {
+                key = includeZero ? "THREE_PLUS" : "FOUR_PLUS";
+            }
+            target.merge(key, ((Number) row[1]).longValue(), Long::sum);
+        });
+    }
+
+    private List<AdminMemberStatisticsResponse.Bucket> toBuckets(
+            Map<String, Long> counts,
+            Map<String, String> labels
+    ) {
+        return counts.entrySet().stream()
+                .map(entry -> new AdminMemberStatisticsResponse.Bucket(
+                        entry.getKey(), labels.get(entry.getKey()), entry.getValue()
+                ))
+                .toList();
+    }
+
+    private AdminMemberStatisticsResponse.Bucket bucket(String key, String label, Object count) {
+        return new AdminMemberStatisticsResponse.Bucket(key, label, ((Number) count).longValue());
     }
 }

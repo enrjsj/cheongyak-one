@@ -10,6 +10,7 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface MemberRepository extends JpaRepository<Member, Long> {
@@ -47,4 +48,69 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
             @Param("status") MemberStatus status,
             Pageable pageable
     );
+
+    long countByStatus(MemberStatus status);
+
+    long countByStatusAndPersonalProfileConsentedAtIsNotNull(MemberStatus status);
+
+    @Query("""
+            select member.gender, count(member)
+            from Member member
+            where member.status = :status
+              and member.personalProfileConsentedAt is not null
+              and member.gender is not null
+            group by member.gender
+            """)
+    List<Object[]> countProfiledByGender(@Param("status") MemberStatus status);
+
+    @Query("""
+            select member.birthDate, count(member)
+            from Member member
+            where member.status = :status
+              and member.personalProfileConsentedAt is not null
+              and member.birthDate is not null
+            group by member.birthDate
+            """)
+    List<Object[]> countProfiledByBirthDate(@Param("status") MemberStatus status);
+
+    @Query("""
+            select member.maritalStatus, count(member)
+            from Member member
+            where member.status = :status
+              and member.personalProfileConsentedAt is not null
+              and member.maritalStatus is not null
+            group by member.maritalStatus
+            """)
+    List<Object[]> countProfiledByMaritalStatus(@Param("status") MemberStatus status);
+
+    @Query("""
+            select member.residenceRegion, count(member)
+            from Member member
+            where member.status = :status
+              and member.personalProfileConsentedAt is not null
+              and member.residenceRegion is not null
+            group by member.residenceRegion
+            order by count(member) desc, member.residenceRegion asc
+            """)
+    List<Object[]> countProfiledByResidenceRegion(@Param("status") MemberStatus status);
+
+    @Query("""
+            select member.householdMemberCount, count(member)
+            from Member member
+            where member.status = :status
+              and member.personalProfileConsentedAt is not null
+              and member.householdMemberCount is not null
+            group by member.householdMemberCount
+            """)
+    List<Object[]> countProfiledByHouseholdMemberCount(@Param("status") MemberStatus status);
+
+    @Query("""
+            select member.childCount, count(member)
+            from Member member
+            where member.status = :status
+              and member.personalProfileConsentedAt is not null
+              and member.childCount is not null
+            group by member.childCount
+            """)
+    List<Object[]> countProfiledByChildCount(@Param("status") MemberStatus status);
 }

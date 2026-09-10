@@ -49,7 +49,7 @@ public class MemberService {
     private static final int MAXIMUM_LOGIN_ATTEMPTS = 5;
     private static final int MAXIMUM_ACTIVE_SESSIONS = 10;
     private static final int MAXIMUM_COMPARISONS = 3;
-    public static final String PERSONAL_PROFILE_CONSENT_VERSION = "2026-09-10";
+    public static final String PERSONAL_PROFILE_CONSENT_VERSION = "2026-09-10-v2";
     private static final Duration LOGIN_LOCK_DURATION = Duration.ofMinutes(10);
     private static final Set<String> RESIDENCE_REGIONS = Set.of(
             "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
