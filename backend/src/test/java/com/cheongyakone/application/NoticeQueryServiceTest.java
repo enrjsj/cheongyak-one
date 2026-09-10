@@ -36,7 +36,7 @@ class NoticeQueryServiceTest {
         NoticeQueryService service = new NoticeQueryService(noticeRepository, changeHistoryRepository,
                 Clock.fixed(Instant.parse("2026-09-08T00:00:00Z"), ZoneOffset.UTC));
 
-        var notices = service.findNotices(null, null, null, null, null, false, "DEADLINE", 0, 20);
+        var notices = service.findNotices(null, null, null, null, null, null, null, false, "DEADLINE", 0, 20);
 
         assertThat(notices).isEmpty();
     }
@@ -47,7 +47,7 @@ class NoticeQueryServiceTest {
         NoticeQueryService service = new NoticeQueryService(noticeRepository, changeHistoryRepository,
                 Clock.fixed(Instant.parse("2026-09-08T00:00:00Z"), ZoneOffset.UTC));
 
-        var facets = service.findFacets(null, "서울", null);
+        var facets = service.findFacets(null, "서울", null, null, null);
 
         assertThat(facets.total()).isEqualTo(10);
         assertThat(facets.endingToday()).isEqualTo(1);

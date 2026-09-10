@@ -58,6 +58,8 @@ test("notice search URL restores valid filters and drops invalid values", () => 
     status: "open",
     region: "서울",
     category: "APARTMENT",
+    minPriceManwon: 30000,
+    maxPriceManwon: 60000,
     sort: "DEADLINE",
   });
   const restored = noticeSearchStateFromSearch(new URL(sharedUrl).search);
@@ -67,6 +69,8 @@ test("notice search URL restores valid filters and drops invalid values", () => 
     status: "open",
     region: "서울",
     category: "APARTMENT",
+    minPriceManwon: 30000,
+    maxPriceManwon: 60000,
     sort: "DEADLINE",
   });
   assert.equal(new URL(sharedUrl).searchParams.get("notice"), "7");

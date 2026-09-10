@@ -308,6 +308,12 @@ footer { background: var(--navy); color: white; }
 .modal-head > button .icon { width: 17px; }
 .filter-group { margin-top: 27px; }
 .filter-group h3 { margin: 0 0 11px; color: #4f5c70; font-size: 12px; }
+.filter-group h3 small { color: #7b8798; font-size: 10px; font-weight: 500; }
+.price-range { display: grid; grid-template-columns: 1fr 18px 1fr; align-items: end; gap: 8px; }
+.price-range label { display: grid; gap: 6px; color: #657083; font-size: 10px; font-weight: 700; }
+.price-range input { width: 100%; height: 42px; box-sizing: border-box; padding: 0 11px; border: 1px solid #dfe4eb; border-radius: 10px; color: #34425a; font: inherit; font-size: 12px; }
+.price-range > span { padding-bottom: 13px; color: #8792a2; text-align: center; }
+.price-help { margin: 8px 0 0; color: #7a8798; font-size: 10px; line-height: 1.5; }
 .choice-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .choice-grid button { height: 42px; border: 1px solid #dfe4eb; border-radius: 10px; background: white; color: #657083; font-size: 11px; font-weight: 650; cursor: pointer; }
 .choice-grid button.active { color: var(--blue); border-color: #87a6ff; background: var(--blue-soft); box-shadow: inset 0 0 0 1px #87a6ff; }

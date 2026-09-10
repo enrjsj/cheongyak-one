@@ -59,6 +59,8 @@ class MemberRecommendationServiceTest {
                 HousingCategory.APARTMENT,
                 SearchPreferenceStatus.OPEN,
                 SearchPreferenceSort.DEADLINE,
+                null,
+                null,
                 NOW
         );
         SubscriptionNotice notice = notice("추천 아파트", LocalDate.of(2026, 9, 6));

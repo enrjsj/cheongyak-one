@@ -64,6 +64,8 @@ export interface NoticeSearchRequest {
   status?: NoticeStatus;
   keyword?: string;
   region?: string;
+  minPrice?: number;
+  maxPrice?: number;
   ids?: number[];
   endingToday?: boolean;
   sort?: "LATEST" | "DEADLINE";
@@ -245,6 +247,8 @@ export interface MemberSearchPreference {
   housingCategory?: HousingCategory;
   status: SearchPreferenceStatus;
   sort: SearchPreferenceSort;
+  minPriceManwon?: number;
+  maxPriceManwon?: number;
   updatedAt: string;
 }
 
@@ -253,6 +257,8 @@ export interface SearchPreferenceInput {
   housingCategory?: HousingCategory;
   status: SearchPreferenceStatus;
   sort: SearchPreferenceSort;
+  minPriceManwon?: number;
+  maxPriceManwon?: number;
 }
 
 export interface EligibilityProfile {
@@ -388,6 +394,8 @@ export function noticeSearchParams(request: NoticeSearchRequest): URLSearchParam
   if (request.status) params.set("status", request.status);
   if (request.keyword?.trim()) params.set("keyword", request.keyword.trim());
   if (request.region?.trim()) params.set("region", request.region.trim());
+  if (request.minPrice !== undefined) params.set("minPrice", String(request.minPrice));
+  if (request.maxPrice !== undefined) params.set("maxPrice", String(request.maxPrice));
   if (request.ids?.length) request.ids.forEach((id) => params.append("ids", String(id)));
   if (request.endingToday) params.set("endingToday", "true");
   return params;
@@ -397,7 +405,7 @@ export function fetchNoticePage(request: NoticeSearchRequest, signal?: AbortSign
   return fetchNotices(noticeSearchParams(request), signal);
 }
 
-export function fetchNoticeFacets(request: Pick<NoticeSearchRequest, "category" | "keyword" | "region">, signal?: AbortSignal): Promise<NoticeSearchFacets> {
+export function fetchNoticeFacets(request: Pick<NoticeSearchRequest, "category" | "keyword" | "region" | "minPrice" | "maxPrice">, signal?: AbortSignal): Promise<NoticeSearchFacets> {
   const params = noticeSearchParams({ ...request, page: 0, size: 1 });
   params.delete("page");
   params.delete("size");

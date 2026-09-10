@@ -9,6 +9,8 @@ export interface NoticeSearchState {
   status: NoticeFilterStatus;
   region?: string;
   category?: NoticeFilterCategory;
+  minPriceManwon?: number;
+  maxPriceManwon?: number;
   sort: NoticeSortKey;
 }
 
@@ -44,6 +46,8 @@ export function noticeSearchStateFromSearch(search: string): NoticeSearchState {
   const params = new URLSearchParams(search);
   const statusValue = params.get("status");
   const categoryValue = params.get("category");
+  const minPriceManwon = positiveInteger(params.get("minPriceManwon"));
+  const maxPriceManwon = positiveInteger(params.get("maxPriceManwon"));
   return {
     query: (params.get("q") ?? "").trim().slice(0, 100),
     status: (["today", "open", "upcoming"] as const).includes(statusValue as "today" | "open" | "upcoming")
@@ -53,6 +57,8 @@ export function noticeSearchStateFromSearch(search: string): NoticeSearchState {
     category: (["APARTMENT", "PUBLIC_RENTAL", "OFFICETEL"] as const).includes(categoryValue as NoticeFilterCategory)
       ? categoryValue as NoticeFilterCategory
       : undefined,
+    ...(minPriceManwon ? { minPriceManwon } : {}),
+    ...(maxPriceManwon ? { maxPriceManwon } : {}),
     sort: params.get("sort") === "DEADLINE" ? "DEADLINE" : "LATEST",
   };
 }
@@ -65,6 +71,8 @@ export function noticeSearchUrl(currentUrl: string, state: NoticeSearchState): s
     ["status", state.status === "all" ? undefined : state.status],
     ["region", state.region?.trim().slice(0, 30) || undefined],
     ["category", state.category],
+    ["minPriceManwon", state.minPriceManwon ? String(state.minPriceManwon) : undefined],
+    ["maxPriceManwon", state.maxPriceManwon ? String(state.maxPriceManwon) : undefined],
     ["sort", state.sort === "LATEST" ? undefined : state.sort],
   ];
   for (const [name, value] of values) {
@@ -72,6 +80,12 @@ export function noticeSearchUrl(currentUrl: string, state: NoticeSearchState): s
     else url.searchParams.delete(name);
   }
   return url.toString();
+}
+
+function positiveInteger(value: string | null): number | undefined {
+  if (!value || !/^\d+$/.test(value)) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= 1_000_000 ? parsed : undefined;
 }
 
 /** 손상된 브라우저 저장값을 제거하고 최근 공고 ID 개수를 제한한다. */

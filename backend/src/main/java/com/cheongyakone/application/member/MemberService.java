@@ -494,6 +494,10 @@ public class MemberService {
             MemberRequests.SearchPreference request
     ) {
         Member member = requireMember(rawToken);
+        if (request.minPriceManwon() != null && request.maxPriceManwon() != null
+                && request.minPriceManwon() > request.maxPriceManwon()) {
+            throw new MemberApiException(HttpStatus.BAD_REQUEST, "PRICE_RANGE_INVALID", "최소 예산은 최대 예산보다 클 수 없습니다.");
+        }
         Instant now = clock.instant();
         MemberSearchPreference preference = searchPreferenceRepository.findByMember_Id(member.getId())
                 .orElseGet(() -> new MemberSearchPreference(member, now));
@@ -502,6 +506,8 @@ public class MemberService {
                 request.housingCategory(),
                 request.status(),
                 request.sort(),
+                request.minPriceManwon(),
+                request.maxPriceManwon(),
                 now
         );
         return SearchPreferenceResponse.from(searchPreferenceRepository.save(preference));
