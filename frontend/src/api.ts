@@ -241,6 +241,19 @@ export interface MemberRecommendationList {
 
 export type SearchPreferenceStatus = "ALL" | "TODAY" | "OPEN" | "UPCOMING";
 export type SearchPreferenceSort = "LATEST" | "DEADLINE";
+export type FavoriteProgress = "SAVED" | "CHECKING" | "READY" | "APPLIED";
+
+export interface FavoriteTracker {
+  noticeId: number;
+  progress: FavoriteProgress;
+  memo?: string;
+  updatedAt: string;
+}
+
+export interface FavoriteTrackerInput {
+  progress: FavoriteProgress;
+  memo?: string;
+}
 
 export interface MemberSearchPreference {
   region?: string;
@@ -505,6 +518,17 @@ export function withdrawMember(password: string): Promise<void> {
 
 export async function fetchFavoriteIds(): Promise<number[]> {
   return (await requestJson<FavoriteIdsResponse>("/api/v1/members/me/favorites")).noticeIds;
+}
+
+export function fetchFavoriteTrackers(): Promise<FavoriteTracker[]> {
+  return requestJson<FavoriteTracker[]>("/api/v1/members/me/favorites/tracker");
+}
+
+export function updateFavoriteTracker(id: number, input: FavoriteTrackerInput): Promise<FavoriteTracker> {
+  return requestJson<FavoriteTracker>(`/api/v1/members/me/favorites/${id}/tracker`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
 }
 
 export async function mergeFavoriteIds(noticeIds: number[]): Promise<number[]> {

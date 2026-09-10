@@ -3,6 +3,8 @@ package com.cheongyakone.domain.member;
 import com.cheongyakone.domain.notice.SubscriptionNotice;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -42,6 +44,16 @@ public class MemberFavorite {
     @Column(name = "CREATED_AT", nullable = false)
     private Instant createdAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "PROGRESS", nullable = false, length = 20)
+    private FavoriteProgress progress = FavoriteProgress.SAVED;
+
+    @Column(name = "MEMO", length = 500)
+    private String memo;
+
+    @Column(name = "UPDATED_AT", nullable = false)
+    private Instant updatedAt;
+
     protected MemberFavorite() {
     }
 
@@ -49,6 +61,7 @@ public class MemberFavorite {
         this.member = Objects.requireNonNull(member);
         this.notice = Objects.requireNonNull(notice);
         this.createdAt = Objects.requireNonNull(createdAt);
+        this.updatedAt = createdAt;
     }
 
     public Long getNoticeId() {
@@ -61,5 +74,17 @@ public class MemberFavorite {
 
     public SubscriptionNotice getNotice() {
         return notice;
+    }
+
+    public FavoriteProgress getProgress() { return progress; }
+
+    public String getMemo() { return memo; }
+
+    public Instant getUpdatedAt() { return updatedAt; }
+
+    public void updateTracker(FavoriteProgress progress, String memo, Instant updatedAt) {
+        this.progress = Objects.requireNonNull(progress);
+        this.memo = memo == null || memo.isBlank() ? null : memo.trim();
+        this.updatedAt = Objects.requireNonNull(updatedAt);
     }
 }

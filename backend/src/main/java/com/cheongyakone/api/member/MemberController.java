@@ -74,6 +74,20 @@ public class MemberController {
         return new FavoriteIdsResponse(memberService.favoriteIds(token(request)));
     }
 
+    @GetMapping("/favorites/tracker")
+    public List<FavoriteTrackerResponse> favoriteTrackers(HttpServletRequest request) {
+        return memberService.favoriteTrackers(token(request));
+    }
+
+    @PatchMapping("/favorites/{noticeId}/tracker")
+    public FavoriteTrackerResponse updateFavoriteTracker(
+            HttpServletRequest servletRequest,
+            @PathVariable @Positive Long noticeId,
+            @Valid @RequestBody MemberRequests.FavoriteTracker request
+    ) {
+        return memberService.updateFavoriteTracker(token(servletRequest), noticeId, request);
+    }
+
     @PutMapping("/favorites/{noticeId}")
     public FavoriteIdsResponse addFavorite(
             HttpServletRequest request,

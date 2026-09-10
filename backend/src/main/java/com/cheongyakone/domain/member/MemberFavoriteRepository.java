@@ -41,6 +41,8 @@ public interface MemberFavoriteRepository extends JpaRepository<MemberFavorite, 
 
     List<MemberFavorite> findAllByMemberIdOrderByCreatedAtAsc(Long memberId);
 
+    java.util.Optional<MemberFavorite> findByMemberIdAndNotice_Id(Long memberId, Long noticeId);
+
     boolean existsByMemberIdAndNotice_Id(Long memberId, Long noticeId);
 
     void deleteByMemberIdAndNotice_Id(Long memberId, Long noticeId);
