@@ -46,6 +46,11 @@ public class MemberController {
         return memberService.updateProfile(token(servletRequest), request);
     }
 
+    @DeleteMapping("/personal-profile")
+    public MemberResponse deletePersonalProfile(HttpServletRequest request) {
+        return memberService.deletePersonalProfile(token(request));
+    }
+
     @PutMapping("/password")
     public ResponseEntity<Void> changePassword(
             HttpServletRequest servletRequest,

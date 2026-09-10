@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   deleteSearchPreference,
   deleteEligibilityProfile,
+  deleteMemberPersonalProfile,
   clearComparisons,
   confirmEmailVerification,
   dismissMemberRecommendation,
@@ -173,10 +174,12 @@ test("signup and profile update send optional recommendation profile fields", as
     householdMemberCount: 3,
     childCount: 1,
     residenceRegion: "서울",
+    personalProfileConsent: true,
   };
   try {
     await signupMember("profile@example.com", "password-1234", profile);
     await updateMemberProfile(profile);
+    await deleteMemberPersonalProfile();
   } finally {
     globalThis.fetch = originalFetch;
     if (originalDocument === undefined) delete globalThis.document;
@@ -190,6 +193,9 @@ test("signup and profile update send optional recommendation profile fields", as
   });
   assert.deepEqual(JSON.parse(requests[1].init.body), profile);
   assert.equal(new Headers(requests[1].init.headers).get("X-CSRF-Token"), "profile-token");
+  assert.equal(requests[2].url, "/api/v1/members/me/personal-profile");
+  assert.equal(requests[2].init.method, "DELETE");
+  assert.equal(new Headers(requests[2].init.headers).get("X-CSRF-Token"), "profile-token");
 });
 
 test("saved search preference uses authenticated CRUD requests", async () => {

@@ -53,6 +53,12 @@ public class Member {
     @Column(name = "RESIDENCE_REGION", length = 20)
     private String residenceRegion;
 
+    @Column(name = "PERSONAL_PROFILE_CONSENTED_AT")
+    private Instant personalProfileConsentedAt;
+
+    @Column(name = "PERSONAL_PROFILE_CONSENT_VERSION", length = 20)
+    private String personalProfileConsentVersion;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "MEMBER_STATUS", nullable = false, length = 20)
     private MemberStatus status;
@@ -105,10 +111,22 @@ public class Member {
             Integer householdMemberCount,
             Integer childCount,
             String residenceRegion,
+            String personalProfileConsentVersion,
             Instant now
     ) {
         this(email, passwordHash, nickname, now);
-        changeProfile(nickname, birthDate, gender, maritalStatus, householdMemberCount, childCount, residenceRegion, now);
+        changeProfile(
+                nickname,
+                birthDate,
+                gender,
+                maritalStatus,
+                householdMemberCount,
+                childCount,
+                residenceRegion,
+                true,
+                personalProfileConsentVersion,
+                now
+        );
     }
 
     public static String normalizeEmail(String email) {
@@ -192,6 +210,8 @@ public class Member {
             Integer householdMemberCount,
             Integer childCount,
             String residenceRegion,
+            boolean personalProfileConsent,
+            String personalProfileConsentVersion,
             Instant now
     ) {
         this.nickname = Objects.requireNonNull(nickname).trim();
@@ -201,6 +221,40 @@ public class Member {
         this.householdMemberCount = householdMemberCount;
         this.childCount = childCount;
         this.residenceRegion = residenceRegion == null || residenceRegion.isBlank() ? null : residenceRegion.trim();
+        if (hasPersonalProfile()) {
+            if (!personalProfileConsent) {
+                throw new IllegalArgumentException("Personal profile consent is required");
+            }
+            if (personalProfileConsentedAt == null
+                    || !Objects.equals(this.personalProfileConsentVersion, personalProfileConsentVersion)) {
+                this.personalProfileConsentedAt = Objects.requireNonNull(now);
+                this.personalProfileConsentVersion = Objects.requireNonNull(personalProfileConsentVersion);
+            }
+        } else {
+            this.personalProfileConsentedAt = null;
+            this.personalProfileConsentVersion = null;
+        }
+        this.updatedAt = Objects.requireNonNull(now);
+    }
+
+    public boolean hasPersonalProfile() {
+        return birthDate != null
+                || gender != null
+                || maritalStatus != null
+                || householdMemberCount != null
+                || childCount != null
+                || residenceRegion != null;
+    }
+
+    public void clearPersonalProfile(Instant now) {
+        this.birthDate = null;
+        this.gender = null;
+        this.maritalStatus = null;
+        this.householdMemberCount = null;
+        this.childCount = null;
+        this.residenceRegion = null;
+        this.personalProfileConsentedAt = null;
+        this.personalProfileConsentVersion = null;
         this.updatedAt = Objects.requireNonNull(now);
     }
 
@@ -242,6 +296,8 @@ public class Member {
         this.householdMemberCount = null;
         this.childCount = null;
         this.residenceRegion = null;
+        this.personalProfileConsentedAt = null;
+        this.personalProfileConsentVersion = null;
         this.status = MemberStatus.WITHDRAWN;
         this.role = MemberRole.USER;
         this.failedLoginAttempts = 0;
@@ -289,6 +345,14 @@ public class Member {
 
     public String getResidenceRegion() {
         return residenceRegion;
+    }
+
+    public Instant getPersonalProfileConsentedAt() {
+        return personalProfileConsentedAt;
+    }
+
+    public String getPersonalProfileConsentVersion() {
+        return personalProfileConsentVersion;
     }
 
     public MemberStatus getStatus() {

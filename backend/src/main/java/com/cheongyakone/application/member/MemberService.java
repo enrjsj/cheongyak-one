@@ -12,10 +12,12 @@ import com.cheongyakone.domain.member.MemberComparison;
 import com.cheongyakone.domain.member.MemberComparisonRepository;
 import com.cheongyakone.domain.member.MemberFavorite;
 import com.cheongyakone.domain.member.MemberFavoriteRepository;
+import com.cheongyakone.domain.member.MemberGender;
 import com.cheongyakone.domain.member.MemberEligibilityProfile;
 import com.cheongyakone.domain.member.MemberEligibilityProfileRepository;
 import com.cheongyakone.domain.member.MemberLoginSession;
 import com.cheongyakone.domain.member.MemberLoginSessionRepository;
+import com.cheongyakone.domain.member.MemberMaritalStatus;
 import com.cheongyakone.domain.member.MemberNotificationPreferenceRepository;
 import com.cheongyakone.domain.member.MemberNotificationRepository;
 import com.cheongyakone.domain.member.MemberRecommendationDismissalRepository;
@@ -47,6 +49,7 @@ public class MemberService {
     private static final int MAXIMUM_LOGIN_ATTEMPTS = 5;
     private static final int MAXIMUM_ACTIVE_SESSIONS = 10;
     private static final int MAXIMUM_COMPARISONS = 3;
+    public static final String PERSONAL_PROFILE_CONSENT_VERSION = "2026-09-10";
     private static final Duration LOGIN_LOCK_DURATION = Duration.ofMinutes(10);
     private static final Set<String> RESIDENCE_REGIONS = Set.of(
             "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
@@ -119,6 +122,15 @@ public class MemberService {
         }
         validateNewPassword(request.password());
         validatePersonalProfile(request.birthDate(), request.residenceRegion());
+        requirePersonalProfileConsent(
+                request.birthDate(),
+                request.gender(),
+                request.maritalStatus(),
+                request.householdMemberCount(),
+                request.childCount(),
+                request.residenceRegion(),
+                request.personalProfileConsent()
+        );
         Instant now = clock.instant();
         Member member = new Member(
                 email,
@@ -130,6 +142,7 @@ public class MemberService {
                 request.householdMemberCount(),
                 request.childCount(),
                 request.residenceRegion(),
+                PERSONAL_PROFILE_CONSENT_VERSION,
                 now
         );
         try {
@@ -276,6 +289,15 @@ public class MemberService {
     public MemberResponse updateProfile(String rawToken, MemberRequests.UpdateProfile request) {
         Member member = requireMember(rawToken);
         validatePersonalProfile(request.birthDate(), request.residenceRegion());
+        requirePersonalProfileConsent(
+                request.birthDate(),
+                request.gender(),
+                request.maritalStatus(),
+                request.householdMemberCount(),
+                request.childCount(),
+                request.residenceRegion(),
+                request.personalProfileConsent()
+        );
         member.changeProfile(
                 request.nickname(),
                 request.birthDate(),
@@ -284,8 +306,17 @@ public class MemberService {
                 request.householdMemberCount(),
                 request.childCount(),
                 request.residenceRegion(),
+                Boolean.TRUE.equals(request.personalProfileConsent()),
+                PERSONAL_PROFILE_CONSENT_VERSION,
                 clock.instant()
         );
+        return MemberResponse.from(member);
+    }
+
+    @Transactional
+    public MemberResponse deletePersonalProfile(String rawToken) {
+        Member member = requireMember(rawToken);
+        member.clearPersonalProfile(clock.instant());
         return MemberResponse.from(member);
     }
 
@@ -540,6 +571,30 @@ public class MemberService {
                     HttpStatus.BAD_REQUEST,
                     "INVALID_RESIDENCE_REGION",
                     "거주 지역을 목록에서 선택해주세요."
+            );
+        }
+    }
+
+    private void requirePersonalProfileConsent(
+            LocalDate birthDate,
+            MemberGender gender,
+            MemberMaritalStatus maritalStatus,
+            Integer householdMemberCount,
+            Integer childCount,
+            String residenceRegion,
+            Boolean personalProfileConsent
+    ) {
+        boolean hasPersonalProfile = birthDate != null
+                || gender != null
+                || maritalStatus != null
+                || householdMemberCount != null
+                || childCount != null
+                || (residenceRegion != null && !residenceRegion.isBlank());
+        if (hasPersonalProfile && !Boolean.TRUE.equals(personalProfileConsent)) {
+            throw new MemberApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "PERSONAL_PROFILE_CONSENT_REQUIRED",
+                    "맞춤 정보를 저장하려면 개인정보 수집·이용에 동의해주세요."
             );
         }
     }

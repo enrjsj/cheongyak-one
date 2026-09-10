@@ -487,6 +487,13 @@ footer { background: var(--navy); color: white; }
 .profile-benefit-card b { color: #334b80; font-size: 12px; }
 .profile-benefit-card p { margin: 5px 0 0; color: #7180a0; font-size: 10px; line-height: 1.55; }
 .privacy-note { margin: -2px 0 0; padding: 10px 12px; border-radius: 9px; background: #f6f8fb; color: #7d8999; font-size: 9px; line-height: 1.55; }
+.profile-consent { display: flex !important; grid-template-columns: none !important; align-items: flex-start; gap: 10px !important; padding: 13px; border: 1px solid #dce5f7; border-radius: 11px; background: #fbfcff; cursor: pointer; }
+.profile-consent input { width: 17px !important; height: 17px !important; flex: 0 0 17px; margin-top: 1px; accent-color: var(--blue); }
+.profile-consent span { display: grid; gap: 5px; }
+.profile-consent b { color: #405274; font-size: 10px; line-height: 1.45; }
+.profile-consent small { color: #78869d; font-size: 8px; font-weight: 500; line-height: 1.55; }
+.profile-consent em { color: var(--blue); font-size: 8px; font-style: normal; font-weight: 700; }
+.consent-required { margin: -5px 2px 0; color: #b04e4a; font-size: 9px; font-weight: 700; }
 .member-back-button, .member-skip-button { justify-self: center; padding: 2px 6px; border: 0; background: transparent; color: #73819a; font-size: 10px; text-decoration: underline; cursor: pointer; }
 .member-back-button { justify-self: start; }
 .member-skip-button { margin-top: -4px; color: #8993a2; }
@@ -512,6 +519,14 @@ footer { background: var(--navy); color: white; }
 .account-section-heading p { margin: 5px 0 0; color: #7d899a; font-size: 9px; line-height: 1.5; }
 .account-section-heading > span { flex: 0 0 auto; padding: 4px 7px; border-radius: 6px; background: var(--blue-soft); color: var(--blue); font-size: 8px; font-weight: 750; }
 .account-section button { justify-self: end; height: 38px; padding: 0 13px; border-radius: 8px; font-size: 10px; font-weight: 750; cursor: pointer; }
+.profile-form-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.profile-form-actions .danger-text-button { justify-self: start; padding: 0; border: 0; background: transparent; color: #b04e4a; }
+.profile-delete-box { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px; border: 1px solid #efcfcc; border-radius: 10px; background: #fffafa; }
+.profile-delete-box b { color: #9b4540; font-size: 10px; }
+.profile-delete-box p { margin: 4px 0 0; color: #8d706e; font-size: 8px; line-height: 1.5; }
+.profile-delete-box > div:last-child { display: flex; flex: 0 0 auto; gap: 6px; }
+.profile-delete-box button { height: 32px; border: 1px solid #e3d4d2; background: white; color: #765f5d; }
+.profile-delete-box .danger-button { border-color: #c84f48; background: #c84f48; color: white; }
 .session-section { gap: 10px; }
 .session-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .session-heading p { margin: 5px 0 0; color: #7d899a; font-size: 9px; line-height: 1.5; }
@@ -704,6 +719,8 @@ footer { background: var(--navy); color: white; }
   .modal-head > button, .answer-buttons button, .member-submit, .notification-tabs button { min-height: 44px; }
   .member-form-grid { grid-template-columns: 1fr; }
   .profile-fields { gap: 11px; }
+  .profile-form-actions, .profile-delete-box { align-items: stretch; flex-direction: column; }
+  .profile-form-actions button, .profile-delete-box > div:last-child, .profile-delete-box button { width: 100%; }
   .compare-modal { max-height: 93vh; padding-inline: 15px; }
   .compare-table { min-width: 650px; }
   .compare-table thead th:first-child, .compare-table tbody th { width: 92px; }

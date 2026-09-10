@@ -35,7 +35,8 @@ public final class MemberRequests {
             MemberMaritalStatus maritalStatus,
             @Min(1) @Max(20) Integer householdMemberCount,
             @Min(0) @Max(20) Integer childCount,
-            @Size(max = 20) String residenceRegion
+            @Size(max = 20) String residenceRegion,
+            Boolean personalProfileConsent
     ) {
     }
 
@@ -68,7 +69,8 @@ public final class MemberRequests {
             MemberMaritalStatus maritalStatus,
             @Min(1) @Max(20) Integer householdMemberCount,
             @Min(0) @Max(20) Integer childCount,
-            @Size(max = 20) String residenceRegion
+            @Size(max = 20) String residenceRegion,
+            Boolean personalProfileConsent
     ) {
     }
 
