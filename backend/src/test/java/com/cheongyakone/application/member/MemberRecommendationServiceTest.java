@@ -64,6 +64,7 @@ class MemberRecommendationServiceTest {
         SubscriptionNotice notice = notice("추천 아파트", LocalDate.of(2026, 9, 6));
         when(member.getId()).thenReturn(1L);
         when(member.getResidenceRegion()).thenReturn("서울");
+        when(member.getPersonalProfileConsentedAt()).thenReturn(NOW);
         when(memberService.requireMember("token")).thenReturn(member);
         when(preferenceRepository.findByMember_Id(1L)).thenReturn(Optional.of(preference));
         when(dismissalRepository.findNoticeIdsByMemberId(1L)).thenReturn(List.of());
