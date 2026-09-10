@@ -44,6 +44,7 @@ import {
   setFavorite,
   setComparison,
   signupMember,
+  deleteMemberPersonalProfile,
   updateMemberProfile,
   withdrawMember,
 } from "./api";
@@ -904,6 +905,10 @@ export default function Home() {
     setMember(await updateMemberProfile(profileInput));
   };
 
+  const handleDeletePersonalProfile = async () => {
+    setMember(await deleteMemberPersonalProfile());
+  };
+
   const handleChangePassword = async (currentPassword: string, newPassword: string) => {
     await changeMemberPassword(currentPassword, newPassword);
     setMember(undefined);
@@ -1612,6 +1617,7 @@ export default function Home() {
         onResetPassword={handleResetPassword}
         onLogout={handleLogout}
         onUpdateProfile={handleUpdateProfile}
+        onDeletePersonalProfile={handleDeletePersonalProfile}
         onChangePassword={handleChangePassword}
         onWithdraw={handleWithdraw}
         onLoadSessions={fetchMemberSessions}

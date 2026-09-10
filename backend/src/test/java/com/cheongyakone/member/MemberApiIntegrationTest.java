@@ -111,7 +111,20 @@ class MemberApiIntegrationTest {
     }
 
     @Test
-    void savesOptionalPersonalProfileDuringSignupAndAllowsClearingIt() throws Exception {
+    void requiresConsentForPersonalProfileAndAllowsDeletingItSeparately() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email":"profile@example.com",
+                                  "password":"Strong-password-1!",
+                                  "nickname":"맞춤회원",
+                                  "birthDate":"1992-05-17"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PERSONAL_PROFILE_CONSENT_REQUIRED"));
+
         mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -124,7 +137,8 @@ class MemberApiIntegrationTest {
                                   "maritalStatus":"MARRIED",
                                   "householdMemberCount":3,
                                   "childCount":1,
-                                  "residenceRegion":"서울"
+                                  "residenceRegion":"서울",
+                                  "personalProfileConsent":true
                                 }
                                 """))
                 .andExpect(status().isCreated())
@@ -133,19 +147,22 @@ class MemberApiIntegrationTest {
                 .andExpect(jsonPath("$.maritalStatus").value("MARRIED"))
                 .andExpect(jsonPath("$.householdMemberCount").value(3))
                 .andExpect(jsonPath("$.childCount").value(1))
-                .andExpect(jsonPath("$.residenceRegion").value("서울"));
+                .andExpect(jsonPath("$.residenceRegion").value("서울"))
+                .andExpect(jsonPath("$.personalProfileConsentedAt").isNotEmpty())
+                .andExpect(jsonPath("$.personalProfileConsentVersion").value("2026-09-10"));
 
         confirmEmail("profile@example.com");
         AuthenticatedSession session = authenticatedSession(
                 login("profile@example.com", PASSWORD).andExpect(status().isOk()).andReturn()
         );
-        mockMvc.perform(authenticated(patch("/api/v1/members/me"), session)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nickname\":\"맞춤회원\"}"))
+        mockMvc.perform(authenticated(delete("/api/v1/members/me/personal-profile"), session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.birthDate").isEmpty())
                 .andExpect(jsonPath("$.gender").isEmpty())
-                .andExpect(jsonPath("$.residenceRegion").isEmpty());
+                .andExpect(jsonPath("$.residenceRegion").isEmpty())
+                .andExpect(jsonPath("$.personalProfileConsentedAt").isEmpty())
+                .andExpect(jsonPath("$.personalProfileConsentVersion").isEmpty())
+                .andExpect(jsonPath("$.nickname").value("맞춤회원"));
     }
 
     @Test

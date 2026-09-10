@@ -147,7 +147,8 @@ public class MemberRecommendationService {
         if (preference.getRegion() != null) {
             score += 15;
             reasons.add(preference.getRegion() + " 지역 조건 일치");
-        } else if (member.getResidenceRegion() != null
+        } else if (member.getPersonalProfileConsentedAt() != null
+                && member.getResidenceRegion() != null
                 && member.getResidenceRegion().equals(notice.getRegionCode())) {
             score += 8;
             reasons.add("거주 지역과 일치");

@@ -18,6 +18,8 @@ public record MemberResponse(
         Integer householdMemberCount,
         Integer childCount,
         String residenceRegion,
+        Instant personalProfileConsentedAt,
+        String personalProfileConsentVersion,
         MemberRole role,
         boolean emailVerified,
         Instant createdAt
@@ -33,6 +35,8 @@ public record MemberResponse(
                 member.getHouseholdMemberCount(),
                 member.getChildCount(),
                 member.getResidenceRegion(),
+                member.getPersonalProfileConsentedAt(),
+                member.getPersonalProfileConsentVersion(),
                 member.getRole(),
                 member.isEmailVerified(),
                 member.getCreatedAt()

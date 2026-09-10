@@ -21,6 +21,7 @@ interface MemberDialogsProps {
   onResetPassword: (newPassword: string) => Promise<void>;
   onLogout: () => Promise<void>;
   onUpdateProfile: (profile: MemberProfileInput) => Promise<void>;
+  onDeletePersonalProfile: () => Promise<void>;
   onChangePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   onWithdraw: (password: string) => Promise<void>;
   onLoadSessions: () => Promise<MemberSession[]>;
@@ -48,6 +49,15 @@ function formatSessionDate(value: string): string {
   }).format(new Date(value));
 }
 
+function formatConsentDate(value: string): string {
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(new Date(value));
+}
+
 export default function MemberDialogs({
   mode,
   member,
@@ -59,6 +69,7 @@ export default function MemberDialogs({
   onResetPassword,
   onLogout,
   onUpdateProfile,
+  onDeletePersonalProfile,
   onChangePassword,
   onWithdraw,
   onLoadSessions,
@@ -76,6 +87,8 @@ export default function MemberDialogs({
   const [householdMemberCount, setHouseholdMemberCount] = useState("");
   const [childCount, setChildCount] = useState("");
   const [residenceRegion, setResidenceRegion] = useState("");
+  const [personalProfileConsent, setPersonalProfileConsent] = useState(false);
+  const [confirmPersonalProfileDeletion, setConfirmPersonalProfileDeletion] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newPasswordConfirmation, setNewPasswordConfirmation] = useState("");
@@ -100,6 +113,7 @@ export default function MemberDialogs({
     setNewPasswordConfirmation("");
     setWithdrawPassword("");
     setConfirmWithdrawal(false);
+    setConfirmPersonalProfileDeletion(false);
     setSignupStep(1);
     if (mode === "account" && member) {
       setNickname(member.nickname);
@@ -109,6 +123,7 @@ export default function MemberDialogs({
       setHouseholdMemberCount(member.householdMemberCount?.toString() ?? "");
       setChildCount(member.childCount?.toString() ?? "");
       setResidenceRegion(member.residenceRegion ?? "");
+      setPersonalProfileConsent(Boolean(member.personalProfileConsentedAt));
     } else if (mode === "signup") {
       setBirthDate("");
       setGender("");
@@ -116,6 +131,7 @@ export default function MemberDialogs({
       setHouseholdMemberCount("");
       setChildCount("");
       setResidenceRegion("");
+      setPersonalProfileConsent(false);
     }
   }, [member, mode]);
 
@@ -176,6 +192,10 @@ export default function MemberDialogs({
         setError("비밀번호 확인이 일치하지 않습니다.");
         return;
       }
+      if (hasPersonalProfileInput && !personalProfileConsent) {
+        setError("맞춤 정보를 저장하려면 선택 개인정보 수집·이용에 동의해주세요.");
+        return;
+      }
       void execute(() => onSignup(email, password, profileInput()));
     } else {
       void execute(() => onLogin(email, password));
@@ -190,7 +210,12 @@ export default function MemberDialogs({
     householdMemberCount: optionalNumber(householdMemberCount),
     childCount: optionalNumber(childCount),
     residenceRegion: residenceRegion || undefined,
+    personalProfileConsent: personalProfileConsent || undefined,
   });
+
+  const hasPersonalProfileInput = Boolean(
+    birthDate || gender || maritalStatus || householdMemberCount || childCount || residenceRegion,
+  );
 
   const title = mode === "account" ? "회원 관리"
     : mode === "signup" ? "회원가입"
@@ -298,6 +323,11 @@ export default function MemberDialogs({
                     <label>자녀 수 <small>선택</small><input value={childCount} onChange={(event) => setChildCount(event.target.value)} type="number" min={0} max={20} inputMode="numeric" placeholder="0" /></label>
                   </div>
                   <p className="privacy-note">성별은 프로필에만 저장되며 현재 추천 점수나 청약 자격 판정에는 사용하지 않습니다.</p>
+                  <label className="profile-consent">
+                    <input type="checkbox" checked={personalProfileConsent} onChange={(event) => setPersonalProfileConsent(event.target.checked)} />
+                    <span><b>[선택] 맞춤 추천을 위한 개인정보 수집·이용에 동의합니다.</b><small>목적: 공고 추천 및 자격 사전점검 보조 · 항목: 생년월일, 성별, 혼인 상태, 가구원·자녀 수, 거주 지역 · 보유: 맞춤정보 삭제 또는 회원 탈퇴까지</small><em>동의하지 않아도 선택정보 없이 가입할 수 있습니다.</em></span>
+                  </label>
+                  {hasPersonalProfileInput && !personalProfileConsent && <p className="consent-required" role="status">입력한 맞춤 정보를 저장하려면 위 동의가 필요합니다.</p>}
                 </>
               ) : (
                 <>
@@ -307,7 +337,7 @@ export default function MemberDialogs({
               )}
               {error && <p className="member-message error" role="alert">{error}</p>}
               {mode === "signup" && signupStep === 2 && <button className="member-back-button" type="button" onClick={() => setSignupStep(1)} disabled={busy}>이전 단계</button>}
-              <button className="primary-button member-submit" type="submit" disabled={busy}>{busy ? "처리 중…" : mode === "signup" ? signupStep === 1 ? "맞춤 정보 입력하기" : "가입 완료하기" : "로그인"}</button>
+              <button className="primary-button member-submit" type="submit" disabled={busy || (mode === "signup" && signupStep === 2 && hasPersonalProfileInput && !personalProfileConsent)}>{busy ? "처리 중…" : mode === "signup" ? signupStep === 1 ? "맞춤 정보 입력하기" : "가입 완료하기" : "로그인"}</button>
               {mode === "signup" && signupStep === 2 && <button className="member-skip-button" type="button" disabled={busy} onClick={() => void execute(() => onSignup(email, password, { nickname }))}>선택정보 없이 가입</button>}
               {mode === "login" && (
                 <div className="member-flow-actions">
@@ -323,9 +353,13 @@ export default function MemberDialogs({
 
             <form className="account-section" onSubmit={(event) => {
               event.preventDefault();
+              if (hasPersonalProfileInput && !personalProfileConsent) {
+                setError("맞춤 정보를 저장하려면 선택 개인정보 수집·이용에 동의해주세요.");
+                return;
+              }
               void execute(() => onUpdateProfile(profileInput()), "맞춤 프로필을 저장했습니다.");
             }}>
-              <div className="account-section-heading"><div><h3>맞춤 프로필</h3><p>저장한 정보는 공고 추천과 향후 자격 사전점검을 돕는 데 사용됩니다.</p></div><span>선택 입력</span></div>
+              <div className="account-section-heading"><div><h3>맞춤 프로필</h3><p>저장한 정보는 공고 추천과 향후 자격 사전점검을 돕는 데 사용됩니다.</p></div><span>{member.personalProfileConsentedAt ? `동의 ${formatConsentDate(member.personalProfileConsentedAt)}` : "선택 입력"}</span></div>
               <label>닉네임<input value={nickname} onChange={(event) => setNickname(event.target.value)} minLength={2} maxLength={40} required /></label>
               <div className="member-form-grid profile-fields">
                 <label>생년월일<input value={birthDate} onChange={(event) => setBirthDate(event.target.value)} type="date" max={new Date().toISOString().slice(0, 10)} autoComplete="bday" /></label>
@@ -336,7 +370,23 @@ export default function MemberDialogs({
                 <label>자녀 수<input value={childCount} onChange={(event) => setChildCount(event.target.value)} type="number" min={0} max={20} placeholder="0" /></label>
               </div>
               <p className="privacy-note">모든 항목은 언제든 비우거나 수정할 수 있습니다. 성별은 추천 점수와 자격 판정에 사용하지 않습니다.</p>
-              <button className="secondary-button" type="submit" disabled={busy}>프로필 저장</button>
+              <label className="profile-consent">
+                <input type="checkbox" checked={personalProfileConsent} onChange={(event) => setPersonalProfileConsent(event.target.checked)} />
+                <span><b>[선택] 맞춤 추천을 위한 개인정보 수집·이용에 동의합니다.</b><small>목적: 공고 추천 및 자격 사전점검 보조 · 항목: 생년월일, 성별, 혼인 상태, 가구원·자녀 수, 거주 지역 · 보유: 맞춤정보 삭제 또는 회원 탈퇴까지</small></span>
+              </label>
+              {hasPersonalProfileInput && !personalProfileConsent && <p className="consent-required" role="status">입력한 맞춤 정보를 저장하려면 위 동의가 필요합니다.</p>}
+              <div className="profile-form-actions">
+                {(member.personalProfileConsentedAt || member.birthDate || member.gender || member.maritalStatus || member.householdMemberCount != null || member.childCount != null || member.residenceRegion) && (
+                  <button className="danger-text-button" type="button" onClick={() => setConfirmPersonalProfileDeletion((value) => !value)} disabled={busy}>맞춤 정보 전체 삭제</button>
+                )}
+                <button className="secondary-button" type="submit" disabled={busy || (hasPersonalProfileInput && !personalProfileConsent)}>프로필 저장</button>
+              </div>
+              {confirmPersonalProfileDeletion && (
+                <div className="profile-delete-box" role="alert">
+                  <div><b>맞춤 정보를 모두 삭제할까요?</b><p>닉네임과 계정은 유지되며 선택정보와 동의 이력만 즉시 삭제됩니다.</p></div>
+                  <div><button type="button" onClick={() => setConfirmPersonalProfileDeletion(false)} disabled={busy}>취소</button><button className="danger-button" type="button" disabled={busy} onClick={() => void execute(onDeletePersonalProfile, "맞춤 정보를 모두 삭제했습니다.")}>{busy ? "삭제 중…" : "삭제"}</button></div>
+                </div>
+              )}
             </form>
 
             <form className="account-section" onSubmit={(event) => {

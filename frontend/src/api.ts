@@ -81,6 +81,8 @@ export interface MemberProfile {
   householdMemberCount?: number | null;
   childCount?: number | null;
   residenceRegion?: string | null;
+  personalProfileConsentedAt?: string | null;
+  personalProfileConsentVersion?: string | null;
   role: "USER" | "ADMIN";
   emailVerified: boolean;
   createdAt: string;
@@ -97,6 +99,7 @@ export interface MemberProfileInput {
   householdMemberCount?: number;
   childCount?: number;
   residenceRegion?: string;
+  personalProfileConsent?: boolean;
 }
 
 export type SyncExecutionStatus = "RUNNING" | "SUCCEEDED" | "PARTIALLY_SUCCEEDED" | "FAILED";
@@ -451,6 +454,12 @@ export function updateMemberProfile(profile: MemberProfileInput): Promise<Member
   return requestJson<MemberProfile>("/api/v1/members/me", {
     method: "PATCH",
     body: JSON.stringify(profile),
+  });
+}
+
+export function deleteMemberPersonalProfile(): Promise<MemberProfile> {
+  return requestJson<MemberProfile>("/api/v1/members/me/personal-profile", {
+    method: "DELETE",
   });
 }
 
