@@ -32,6 +32,7 @@ import {
   requestEmailVerification,
   requestPasswordReset,
   reactivateAdminMember,
+  requestAdminNoticeSynchronization,
   resetPasswordWithToken,
   revokeAdminMemberSessions,
   markAllNotificationsRead,
@@ -522,6 +523,30 @@ test("admin sync dashboard uses the authenticated operations endpoint", async ()
   assert.equal(request.url, "/api/v1/admin/sync-executions");
   assert.equal(request.init.method ?? "GET", "GET");
   assert.equal(request.init.credentials, "include");
+});
+
+test("manual notice synchronization uses the CSRF-protected admin endpoint", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalDocument = globalThis.document;
+  globalThis.document = { cookie: "CHEONGYAK_CSRF=sync-token" };
+  let request;
+  globalThis.fetch = async (url, init) => {
+    request = { url: String(url), init };
+    return new Response(null, { status: 202 });
+  };
+
+  try {
+    await requestAdminNoticeSynchronization();
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+
+  assert.equal(request.url, "/api/v1/admin/sync-executions");
+  assert.equal(request.init.method, "POST");
+  assert.equal(request.init.credentials, "include");
+  assert.equal(new Headers(request.init.headers).get("X-CSRF-Token"), "sync-token");
 });
 
 test("admin member management searches, unlocks, revokes, and changes status with CSRF", async () => {

@@ -406,7 +406,9 @@ footer { background: var(--navy); color: white; }
 .admin-sync-summary .danger strong { color: var(--coral); }
 .admin-sync-headline { margin-top: 23px; display: flex; align-items: center; justify-content: space-between; }
 .admin-sync-headline b { color: var(--navy); font-size: 12px; }
+.admin-sync-headline > span { display: flex; align-items: center; gap: 6px; }
 .admin-sync-headline button { padding: 4px; border: 0; background: transparent; color: var(--blue); font-size: 9px; font-weight: 750; cursor: pointer; }
+.admin-sync-headline .admin-sync-trigger { padding: 6px 9px; border-radius: 7px; background: var(--blue); color: white; }
 .admin-sync-headline button:disabled { opacity: .55; cursor: wait; }
 .admin-sync-list { max-height: 420px; margin-top: 8px; display: grid; gap: 8px; overflow-y: auto; }
 .admin-sync-list article { padding: 13px 14px; border: 1px solid #e2e7ee; border-radius: 11px; background: white; }
