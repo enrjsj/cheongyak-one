@@ -47,6 +47,11 @@ public class AdminMemberController {
         return adminMemberService.search(cookieSupport.read(request), query, status, page, size);
     }
 
+    @GetMapping("/statistics")
+    public AdminMemberStatisticsResponse statistics(HttpServletRequest request) {
+        return adminMemberService.statistics(cookieSupport.read(request));
+    }
+
     @PostMapping("/{memberId}/unlock")
     public AdminMemberResponse unlock(
             HttpServletRequest request,

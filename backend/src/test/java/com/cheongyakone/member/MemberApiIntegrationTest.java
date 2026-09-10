@@ -149,7 +149,7 @@ class MemberApiIntegrationTest {
                 .andExpect(jsonPath("$.childCount").value(1))
                 .andExpect(jsonPath("$.residenceRegion").value("서울"))
                 .andExpect(jsonPath("$.personalProfileConsentedAt").isNotEmpty())
-                .andExpect(jsonPath("$.personalProfileConsentVersion").value("2026-09-10"));
+                .andExpect(jsonPath("$.personalProfileConsentVersion").value("2026-09-10-v2"));
 
         confirmEmail("profile@example.com");
         AuthenticatedSession session = authenticatedSession(
@@ -939,6 +939,9 @@ class MemberApiIntegrationTest {
         mockMvc.perform(get("/api/v1/admin/members").cookie(regularSession.cookie()))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ADMIN_REQUIRED"));
+        mockMvc.perform(get("/api/v1/admin/members/statistics").cookie(regularSession.cookie()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ADMIN_REQUIRED"));
         mockMvc.perform(get("/api/v1/admin/audit-logs").cookie(regularSession.cookie()))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ADMIN_REQUIRED"));
@@ -958,6 +961,48 @@ class MemberApiIntegrationTest {
         AuthenticatedSession adminSession = authenticatedSession(login("admin@example.com", PASSWORD)
                 .andExpect(jsonPath("$.role").value("ADMIN"))
                 .andReturn());
+
+        String statisticsBirthDate = LocalDate.now(ZoneId.of("Asia/Seoul")).minusYears(32).toString();
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email":"statistics-member@example.com",
+                                  "password":"Strong-password-1!",
+                                  "nickname":"통계회원",
+                                  "birthDate":"%s",
+                                  "gender":"FEMALE",
+                                  "maritalStatus":"MARRIED",
+                                  "householdMemberCount":3,
+                                  "childCount":1,
+                                  "residenceRegion":"서울",
+                                  "personalProfileConsent":true
+                                }
+                                """.formatted(statisticsBirthDate)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/admin/members/statistics").cookie(adminSession.cookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activeMemberCount").value(
+                        org.hamcrest.Matchers.greaterThanOrEqualTo(3)
+                ))
+                .andExpect(jsonPath("$.consentedProfileCount").value(
+                        org.hamcrest.Matchers.greaterThanOrEqualTo(1)
+                ))
+                .andExpect(jsonPath("$.genders[0].key").value("FEMALE"))
+                .andExpect(jsonPath("$.genders[0].count").value(
+                        org.hamcrest.Matchers.greaterThanOrEqualTo(1)
+                ))
+                .andExpect(jsonPath("$.ageGroups[2].key").value("THIRTIES"))
+                .andExpect(jsonPath("$.ageGroups[2].count").value(
+                        org.hamcrest.Matchers.greaterThanOrEqualTo(1)
+                ))
+                .andExpect(jsonPath("$.residenceRegions[*].label").value(
+                        org.hamcrest.Matchers.hasItem("서울")
+                ))
+                .andExpect(jsonPath("$.generatedAt").isNotEmpty())
+                .andExpect(jsonPath("$.email").doesNotExist())
+                .andExpect(jsonPath("$.birthDate").doesNotExist());
 
         SyncExecution succeeded = SyncExecution.start(Instant.parse("2026-09-04T00:00:00Z"));
         succeeded.succeed(Instant.parse("2026-09-04T00:00:12Z"), 20, 18);

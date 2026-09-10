@@ -8,6 +8,7 @@ import {
   confirmEmailVerification,
   dismissMemberRecommendation,
   fetchAdminAuditLogs,
+  fetchAdminMemberStatistics,
   fetchAdminMembers,
   fetchAdminSyncDashboard,
   fetchCurrentMember,
@@ -562,6 +563,37 @@ test("admin member management searches, unlocks, revokes, and changes status wit
   assert.equal(new Headers(requests[2].init.headers).get("X-CSRF-Token"), "admin-member-token");
   assert.equal(new Headers(requests[3].init.headers).get("X-CSRF-Token"), "admin-member-token");
   assert.equal(JSON.parse(requests[3].init.body).reason, "운영정책 위반");
+});
+
+test("admin member statistics loads consented profile aggregates", async () => {
+  const originalFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (url, init) => {
+    request = { url: String(url), init };
+    return new Response(JSON.stringify({
+      activeMemberCount: 10,
+      consentedProfileCount: 6,
+      genders: [{ key: "FEMALE", label: "여성", count: 4 }],
+      ageGroups: [{ key: "THIRTIES", label: "30대", count: 3 }],
+      maritalStatuses: [],
+      residenceRegions: [{ key: "서울", label: "서울", count: 5 }],
+      householdSizes: [],
+      childCounts: [],
+      generatedAt: "2026-09-10T00:00:00Z",
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  try {
+    const result = await fetchAdminMemberStatistics();
+    assert.equal(result.consentedProfileCount, 6);
+    assert.equal(result.genders[0].label, "여성");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(request.url, "/api/v1/admin/members/statistics");
+  assert.equal(request.init.method ?? "GET", "GET");
+  assert.equal(request.init.credentials, "include");
 });
 
 test("admin audit history uses the authenticated read endpoint", async () => {

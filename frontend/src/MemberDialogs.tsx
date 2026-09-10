@@ -322,10 +322,10 @@ export default function MemberDialogs({
                     <label>가구원 수 <small>선택</small><input value={householdMemberCount} onChange={(event) => setHouseholdMemberCount(event.target.value)} type="number" min={1} max={20} inputMode="numeric" placeholder="본인 포함" /></label>
                     <label>자녀 수 <small>선택</small><input value={childCount} onChange={(event) => setChildCount(event.target.value)} type="number" min={0} max={20} inputMode="numeric" placeholder="0" /></label>
                   </div>
-                  <p className="privacy-note">성별은 프로필에만 저장되며 현재 추천 점수나 청약 자격 판정에는 사용하지 않습니다.</p>
+                  <p className="privacy-note">성별은 추천 점수나 청약 자격 판정에는 사용하지 않고, 동의 회원의 서비스 통계에 집계 형태로만 활용합니다.</p>
                   <label className="profile-consent">
                     <input type="checkbox" checked={personalProfileConsent} onChange={(event) => setPersonalProfileConsent(event.target.checked)} />
-                    <span><b>[선택] 맞춤 추천을 위한 개인정보 수집·이용에 동의합니다.</b><small>목적: 공고 추천 및 자격 사전점검 보조 · 항목: 생년월일, 성별, 혼인 상태, 가구원·자녀 수, 거주 지역 · 보유: 맞춤정보 삭제 또는 회원 탈퇴까지</small><em>동의하지 않아도 선택정보 없이 가입할 수 있습니다.</em></span>
+                    <span><b>[선택] 맞춤 서비스·통계를 위한 개인정보 수집·이용에 동의합니다.</b><small>목적: 공고 추천, 자격 사전점검 보조, 서비스 이용 통계 및 추천 품질 개선 · 항목: 생년월일, 성별, 혼인 상태, 가구원·자녀 수, 거주 지역 · 보유: 맞춤정보 삭제 또는 회원 탈퇴까지</small><em>동의하지 않아도 선택정보 없이 가입할 수 있습니다.</em></span>
                   </label>
                   {hasPersonalProfileInput && !personalProfileConsent && <p className="consent-required" role="status">입력한 맞춤 정보를 저장하려면 위 동의가 필요합니다.</p>}
                 </>
@@ -369,10 +369,10 @@ export default function MemberDialogs({
                 <label>가구원 수<input value={householdMemberCount} onChange={(event) => setHouseholdMemberCount(event.target.value)} type="number" min={1} max={20} placeholder="본인 포함" /></label>
                 <label>자녀 수<input value={childCount} onChange={(event) => setChildCount(event.target.value)} type="number" min={0} max={20} placeholder="0" /></label>
               </div>
-              <p className="privacy-note">모든 항목은 언제든 비우거나 수정할 수 있습니다. 성별은 추천 점수와 자격 판정에 사용하지 않습니다.</p>
+              <p className="privacy-note">모든 항목은 언제든 비우거나 수정할 수 있습니다. 성별은 추천 점수나 자격 판정에는 사용하지 않고 서비스 통계에 집계 형태로만 활용합니다.</p>
               <label className="profile-consent">
                 <input type="checkbox" checked={personalProfileConsent} onChange={(event) => setPersonalProfileConsent(event.target.checked)} />
-                <span><b>[선택] 맞춤 추천을 위한 개인정보 수집·이용에 동의합니다.</b><small>목적: 공고 추천 및 자격 사전점검 보조 · 항목: 생년월일, 성별, 혼인 상태, 가구원·자녀 수, 거주 지역 · 보유: 맞춤정보 삭제 또는 회원 탈퇴까지</small></span>
+                <span><b>[선택] 맞춤 서비스·통계를 위한 개인정보 수집·이용에 동의합니다.</b><small>목적: 공고 추천, 자격 사전점검 보조, 서비스 이용 통계 및 추천 품질 개선 · 항목: 생년월일, 성별, 혼인 상태, 가구원·자녀 수, 거주 지역 · 보유: 맞춤정보 삭제 또는 회원 탈퇴까지</small></span>
               </label>
               {hasPersonalProfileInput && !personalProfileConsent && <p className="consent-required" role="status">입력한 맞춤 정보를 저장하려면 위 동의가 필요합니다.</p>}
               <div className="profile-form-actions">

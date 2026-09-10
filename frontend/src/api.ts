@@ -147,6 +147,24 @@ export interface AdminMemberPage {
   totalPages: number;
 }
 
+export interface AdminMemberStatisticBucket {
+  key: string;
+  label: string;
+  count: number;
+}
+
+export interface AdminMemberStatistics {
+  activeMemberCount: number;
+  consentedProfileCount: number;
+  genders: AdminMemberStatisticBucket[];
+  ageGroups: AdminMemberStatisticBucket[];
+  maritalStatuses: AdminMemberStatisticBucket[];
+  residenceRegions: AdminMemberStatisticBucket[];
+  householdSizes: AdminMemberStatisticBucket[];
+  childCounts: AdminMemberStatisticBucket[];
+  generatedAt: string;
+}
+
 export type AdminAuditAction = "MEMBER_LOGIN_UNLOCKED" | "MEMBER_SESSIONS_REVOKED" | "MEMBER_SUSPENDED" | "MEMBER_REACTIVATED";
 
 export interface AdminAuditLog {
@@ -613,6 +631,10 @@ export function fetchAdminMembers(
   if (query.trim()) parameters.set("query", query.trim());
   if (status) parameters.set("status", status);
   return requestJson<AdminMemberPage>(`/api/v1/admin/members?${parameters}`);
+}
+
+export function fetchAdminMemberStatistics(): Promise<AdminMemberStatistics> {
+  return requestJson<AdminMemberStatistics>("/api/v1/admin/members/statistics");
 }
 
 export function unlockAdminMember(memberId: number): Promise<AdminMember> {

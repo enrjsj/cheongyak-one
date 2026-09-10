@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AdminSyncDashboard, fetchAdminSyncDashboard, SyncExecutionStatus } from "./api";
 import AdminMembersPanel from "./AdminMembersPanel";
 import AdminAuditPanel from "./AdminAuditPanel";
+import AdminMemberStatisticsPanel from "./AdminMemberStatisticsPanel";
 import { useDialogAccessibility } from "./useDialogAccessibility";
 
 interface AdminSyncDialogProps {
@@ -35,7 +36,7 @@ function formatDuration(seconds?: number | null): string {
 }
 
 export default function AdminSyncDialog({ open, onClose, currentMemberId }: AdminSyncDialogProps) {
-  const [tab, setTab] = useState<"sync" | "members" | "audit">("sync");
+  const [tab, setTab] = useState<"sync" | "members" | "statistics" | "audit">("sync");
   const [dashboard, setDashboard] = useState<AdminSyncDashboard>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -75,10 +76,11 @@ export default function AdminSyncDialog({ open, onClose, currentMemberId }: Admi
         <div className="admin-operation-tabs" role="tablist" aria-label="운영 관리 메뉴">
           <button type="button" role="tab" aria-selected={tab === "sync"} className={tab === "sync" ? "active" : ""} onClick={() => setTab("sync")}>공고 동기화</button>
           <button type="button" role="tab" aria-selected={tab === "members"} className={tab === "members" ? "active" : ""} onClick={() => setTab("members")}>회원 관리</button>
+          <button type="button" role="tab" aria-selected={tab === "statistics"} className={tab === "statistics" ? "active" : ""} onClick={() => setTab("statistics")}>회원 통계</button>
           <button type="button" role="tab" aria-selected={tab === "audit"} className={tab === "audit" ? "active" : ""} onClick={() => setTab("audit")}>감사 로그</button>
         </div>
 
-        {tab === "members" ? <AdminMembersPanel currentMemberId={currentMemberId} /> : tab === "audit" ? <AdminAuditPanel /> : loading && !dashboard ? <p className="admin-sync-loading" role="status">운영 현황을 불러오는 중…</p> : error ? (
+        {tab === "members" ? <AdminMembersPanel currentMemberId={currentMemberId} /> : tab === "statistics" ? <AdminMemberStatisticsPanel /> : tab === "audit" ? <AdminAuditPanel /> : loading && !dashboard ? <p className="admin-sync-loading" role="status">운영 현황을 불러오는 중…</p> : error ? (
           <div className="admin-sync-error" role="alert"><p>{error}</p><button type="button" onClick={() => setVersion((value) => value + 1)}>다시 시도</button></div>
         ) : dashboard && (
           <>
