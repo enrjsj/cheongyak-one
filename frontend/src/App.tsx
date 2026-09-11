@@ -78,6 +78,7 @@ type StatusKey = "all" | "today" | "open" | "upcoming";
 type StateTone = "mint" | "coral" | "blue" | "purple" | "gray";
 type PresentationStatus = Exclude<StatusKey, "all"> | "announcement" | "closed";
 type IconName = "search" | "pin" | "home" | "calendar" | "bookmark" | "arrow" | "check" | "bell" | "grid" | "close" | "filter" | "user";
+type FavoriteProgressFilter = FavoriteProgress | "ALL";
 
 const FAVORITE_PROGRESS_LABELS: Record<FavoriteProgress, string> = {
   SAVED: "저장만 함",
@@ -398,6 +399,7 @@ export default function Home() {
   const [favoriteTrackerPendingId, setFavoriteTrackerPendingId] = useState<number>();
   const [favoritePendingId, setFavoritePendingId] = useState<number>();
   const [savedOnly, setSavedOnly] = useState(false);
+  const [favoriteProgressFilter, setFavoriteProgressFilter] = useState<FavoriteProgressFilter>("ALL");
   const [comparisonIds, setComparisonIds] = useState<number[]>(initialComparisonIds);
   const [comparisonPendingId, setComparisonPendingId] = useState<number>();
   const [comparisonResetPending, setComparisonResetPending] = useState(false);
@@ -814,14 +816,14 @@ export default function Home() {
   const visible = useMemo(() => {
     if (!savedOnly) return filtered;
 
-    return [...filtered].sort((left, right) => {
+    return filtered.filter((item) => favoriteProgressFilter === "ALL" || (favoriteTrackers.get(item.id)?.progress ?? "SAVED") === favoriteProgressFilter).sort((left, right) => {
       const leftProgress = favoriteTrackers.get(left.id)?.progress ?? "SAVED";
       const rightProgress = favoriteTrackers.get(right.id)?.progress ?? "SAVED";
       const progressOrder = FAVORITE_PROGRESS_PRIORITY[leftProgress] - FAVORITE_PROGRESS_PRIORITY[rightProgress];
       if (progressOrder !== 0) return progressOrder;
       return (dateValue(left.applyEndDate) ?? Number.MAX_SAFE_INTEGER) - (dateValue(right.applyEndDate) ?? Number.MAX_SAFE_INTEGER);
     });
-  }, [favoriteTrackers, filtered, savedOnly]);
+  }, [favoriteProgressFilter, favoriteTrackers, filtered, savedOnly]);
   const activeFilterCount = Number(region !== "전체") + Number(category !== "전체") + Number(Boolean(minPriceManwon || maxPriceManwon));
   const todayCount = noticeFacets.endingToday;
   const openCount = noticeFacets.open;
@@ -1352,7 +1354,7 @@ export default function Home() {
             <button
               className={`saved-button ${savedOnly ? "active" : ""}`}
               type="button"
-              onClick={() => { setSavedOnly((value) => !value); setActiveStatus("all"); resetVisible(); scrollToResults(); }}
+              onClick={() => { setSavedOnly((value) => !value); setFavoriteProgressFilter("ALL"); setActiveStatus("all"); resetVisible(); scrollToResults(); }}
               aria-pressed={savedOnly}
             >
               <Icon name="bookmark" /> <span>관심청약</span> <b>{savedIds.size}</b>
@@ -1425,7 +1427,7 @@ export default function Home() {
       <section className="dashboard" id="applications">
         <div className="status-tabs" role="tablist" aria-label="청약 상태">
           {statuses.map((status) => (
-            <button className={activeStatus === status.key ? "selected" : ""} type="button" role="tab" aria-selected={activeStatus === status.key} key={status.key} onClick={() => { setActiveStatus(status.key); setSavedOnly(false); resetVisible(); }}>
+            <button className={activeStatus === status.key ? "selected" : ""} type="button" role="tab" aria-selected={activeStatus === status.key} key={status.key} onClick={() => { setActiveStatus(status.key); setSavedOnly(false); setFavoriteProgressFilter("ALL"); resetVisible(); }}>
               <span className={`tab-icon ${status.tone}`}><Icon name={status.icon} /></span><span>{status.label}<b>{loading ? "–" : status.count}</b></span>
             </button>
           ))}
@@ -1437,7 +1439,7 @@ export default function Home() {
               <div>
                 <span className="section-kicker">{savedOnly ? "MY SAVED" : "REAL-TIME NOTICES"}</span>
                 <h2>{savedOnly ? "관심 청약" : "지금 확인할 청약"}</h2>
-                <p className="result-summary" aria-live="polite">{loading ? "실제 공고를 불러오는 중" : `조건에 맞는 공고 ${noticeTotal}건`}</p>
+                <p className="result-summary" aria-live="polite">{loading ? "실제 공고를 불러오는 중" : `조건에 맞는 공고 ${savedOnly && favoriteProgressFilter !== "ALL" ? visible.length : noticeTotal}건`}</p>
               </div>
               <div className="section-actions">
                 <label className="sort-control">
@@ -1475,6 +1477,13 @@ export default function Home() {
                       <span><b>{favoritePreparation.counts.READY}</b> 신청 준비 완료</span>
                       <span><b>{favoritePreparation.counts.APPLIED}</b> 신청 완료</span>
                       {favoritePreparation.urgent > 0 && <em>마감 3일 이내 {favoritePreparation.urgent}건</em>}
+                    </div>
+                    <div className="favorite-progress-filters" role="group" aria-label="관심청약 준비 상태 필터">
+                      {(["ALL", "CHECKING", "READY", "APPLIED"] as FavoriteProgressFilter[]).map((progress) => (
+                        <button className={favoriteProgressFilter === progress ? "active" : ""} type="button" key={progress} onClick={() => setFavoriteProgressFilter(progress)}>
+                          {progress === "ALL" ? `전체 ${savedNotices.length}` : `${FAVORITE_PROGRESS_LABELS[progress]} ${favoritePreparation.counts[progress]}`}
+                        </button>
+                      ))}
                     </div>
                   </section>
                 )}
@@ -1514,9 +1523,9 @@ export default function Home() {
             ) : (
               <div className="empty-state">
                 <span className="empty-icon"><Icon name={savedOnly ? "bookmark" : "search"} /></span>
-                <h3>{savedOnly ? "저장한 관심청약이 없어요" : "조건에 맞는 공고가 없어요"}</h3>
-                <p>{savedOnly ? "관심 있는 공고의 북마크를 눌러 모아보세요." : "검색어나 지역·유형 필터를 조금 넓혀보세요."}</p>
-                <button type="button" onClick={() => { setQuery(""); setRegion("전체"); setCategory("전체"); setActiveStatus("all"); setSavedOnly(false); resetVisible(); }}>전체 청약 보기</button>
+                <h3>{savedOnly ? favoriteProgressFilter === "ALL" ? "저장한 관심청약이 없어요" : "선택한 준비 상태의 관심청약이 없어요" : "조건에 맞는 공고가 없어요"}</h3>
+                <p>{savedOnly ? favoriteProgressFilter === "ALL" ? "관심 있는 공고의 북마크를 눌러 모아보세요." : "다른 준비 상태를 선택하거나 전체 관심청약을 확인해 보세요." : "검색어나 지역·유형 필터를 조금 넓혀보세요."}</p>
+                <button type="button" onClick={() => { if (savedOnly && favoriteProgressFilter !== "ALL") { setFavoriteProgressFilter("ALL"); return; } setQuery(""); setRegion("전체"); setCategory("전체"); setActiveStatus("all"); setSavedOnly(false); resetVisible(); }}>{savedOnly && favoriteProgressFilter !== "ALL" ? "전체 관심청약 보기" : "전체 청약 보기"}</button>
               </div>
             )}
           </div>
@@ -1584,7 +1593,7 @@ export default function Home() {
         <a className="active" href="#top"><Icon name="home" /><span>홈</span></a>
         <a href="#applications"><Icon name="search" /><span>청약찾기</span></a>
         <a href="#schedule"><Icon name="calendar" /><span>일정</span></a>
-        <button type="button" onClick={() => { setSavedOnly(true); setActiveStatus("all"); resetVisible(); scrollToResults(); }}><Icon name="bookmark" /><span>관심</span></button>
+        <button type="button" onClick={() => { setSavedOnly(true); setFavoriteProgressFilter("ALL"); setActiveStatus("all"); resetVisible(); scrollToResults(); }}><Icon name="bookmark" /><span>관심</span></button>
         <button type="button" onClick={() => setMemberDialog(member ? "account" : "login")} disabled={authLoading}><Icon name="user" /><span>{member ? "내 정보" : "로그인"}</span></button>
       </nav>
 
