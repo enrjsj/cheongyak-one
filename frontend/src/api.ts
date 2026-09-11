@@ -247,12 +247,20 @@ export interface FavoriteTracker {
   noticeId: number;
   progress: FavoriteProgress;
   memo?: string;
+  noticeDocumentChecked: boolean;
+  eligibilityChecked: boolean;
+  scheduleChecked: boolean;
+  fundsChecked: boolean;
   updatedAt: string;
 }
 
 export interface FavoriteTrackerInput {
   progress: FavoriteProgress;
   memo?: string;
+  noticeDocumentChecked: boolean;
+  eligibilityChecked: boolean;
+  scheduleChecked: boolean;
+  fundsChecked: boolean;
 }
 
 export interface MemberSearchPreference {
