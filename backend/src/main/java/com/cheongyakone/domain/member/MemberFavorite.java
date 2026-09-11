@@ -54,6 +54,18 @@ public class MemberFavorite {
     @Column(name = "UPDATED_AT", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "NOTICE_DOCUMENT_CHECKED", nullable = false)
+    private boolean noticeDocumentChecked;
+
+    @Column(name = "ELIGIBILITY_CHECKED", nullable = false)
+    private boolean eligibilityChecked;
+
+    @Column(name = "SCHEDULE_CHECKED", nullable = false)
+    private boolean scheduleChecked;
+
+    @Column(name = "FUNDS_CHECKED", nullable = false)
+    private boolean fundsChecked;
+
     protected MemberFavorite() {
     }
 
@@ -82,9 +94,29 @@ public class MemberFavorite {
 
     public Instant getUpdatedAt() { return updatedAt; }
 
-    public void updateTracker(FavoriteProgress progress, String memo, Instant updatedAt) {
+    public boolean isNoticeDocumentChecked() { return noticeDocumentChecked; }
+
+    public boolean isEligibilityChecked() { return eligibilityChecked; }
+
+    public boolean isScheduleChecked() { return scheduleChecked; }
+
+    public boolean isFundsChecked() { return fundsChecked; }
+
+    public void updateTracker(
+            FavoriteProgress progress,
+            String memo,
+            boolean noticeDocumentChecked,
+            boolean eligibilityChecked,
+            boolean scheduleChecked,
+            boolean fundsChecked,
+            Instant updatedAt
+    ) {
         this.progress = Objects.requireNonNull(progress);
         this.memo = memo == null || memo.isBlank() ? null : memo.trim();
+        this.noticeDocumentChecked = noticeDocumentChecked;
+        this.eligibilityChecked = eligibilityChecked;
+        this.scheduleChecked = scheduleChecked;
+        this.fundsChecked = fundsChecked;
         this.updatedAt = Objects.requireNonNull(updatedAt);
     }
 }

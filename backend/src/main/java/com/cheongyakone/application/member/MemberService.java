@@ -384,7 +384,15 @@ public class MemberService {
                         "FAVORITE_NOT_FOUND",
                         "관심청약으로 저장한 공고만 준비 상태를 관리할 수 있습니다."
                 ));
-        favorite.updateTracker(request.progress(), request.memo(), clock.instant());
+        favorite.updateTracker(
+                request.progress(),
+                request.memo(),
+                request.noticeDocumentChecked(),
+                request.eligibilityChecked(),
+                request.scheduleChecked(),
+                request.fundsChecked(),
+                clock.instant()
+        );
         return FavoriteTrackerResponse.from(favorite);
     }
 
