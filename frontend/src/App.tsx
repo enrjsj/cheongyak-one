@@ -79,6 +79,7 @@ type StateTone = "mint" | "coral" | "blue" | "purple" | "gray";
 type PresentationStatus = Exclude<StatusKey, "all"> | "announcement" | "closed";
 type IconName = "search" | "pin" | "home" | "calendar" | "bookmark" | "arrow" | "check" | "bell" | "grid" | "close" | "filter" | "user";
 type FavoriteProgressFilter = FavoriteProgress | "ALL";
+type FavoriteChecklistKey = "noticeDocumentChecked" | "eligibilityChecked" | "scheduleChecked" | "fundsChecked";
 
 const FAVORITE_PROGRESS_LABELS: Record<FavoriteProgress, string> = {
   SAVED: "저장만 함",
@@ -93,6 +94,13 @@ const FAVORITE_PROGRESS_PRIORITY: Record<FavoriteProgress, number> = {
   SAVED: 2,
   APPLIED: 3,
 };
+
+const FAVORITE_CHECKLIST_ITEMS: { key: FavoriteChecklistKey; label: string }[] = [
+  { key: "noticeDocumentChecked", label: "공고문 확인" },
+  { key: "eligibilityChecked", label: "자격 조건 확인" },
+  { key: "scheduleChecked", label: "접수 일정 확인" },
+  { key: "fundsChecked", label: "자금 계획 확인" },
+];
 
 type Application = NoticeSummary & {
   state: string;
@@ -891,11 +899,24 @@ export default function Home() {
     }
   };
 
-  const saveFavoriteTracker = async (noticeId: number, progress: FavoriteProgress, memo: string) => {
+  const saveFavoriteTracker = async (
+    noticeId: number,
+    progress: FavoriteProgress,
+    memo: string,
+    checklist: Partial<Pick<FavoriteTracker, FavoriteChecklistKey>> = {},
+  ) => {
     if (!member || favoriteTrackerPendingId !== undefined) return;
+    const current = favoriteTrackers.get(noticeId);
     setFavoriteTrackerPendingId(noticeId);
     try {
-      const tracker = await updateFavoriteTracker(noticeId, { progress, memo: memo.trim() || undefined });
+      const tracker = await updateFavoriteTracker(noticeId, {
+        progress,
+        memo: memo.trim() || undefined,
+        noticeDocumentChecked: checklist.noticeDocumentChecked ?? current?.noticeDocumentChecked ?? false,
+        eligibilityChecked: checklist.eligibilityChecked ?? current?.eligibilityChecked ?? false,
+        scheduleChecked: checklist.scheduleChecked ?? current?.scheduleChecked ?? false,
+        fundsChecked: checklist.fundsChecked ?? current?.fundsChecked ?? false,
+      });
       setFavoriteTrackers((current) => new Map(current).set(noticeId, tracker));
       setToast("관심청약 준비 상태를 저장했습니다.");
     } catch (error) {
@@ -1520,6 +1541,7 @@ export default function Home() {
                           <label>내 메모
                             <input key={`${item.id}-${favoriteTrackers.get(item.id)?.updatedAt ?? "new"}`} defaultValue={favoriteTrackers.get(item.id)?.memo ?? ""} maxLength={500} placeholder="예: 모집공고문 소득 기준 확인" onBlur={(event) => void saveFavoriteTracker(item.id, favoriteTrackers.get(item.id)?.progress ?? "SAVED", event.target.value)} />
                           </label>
+                          <span className="favorite-checklist-progress">사전 확인 {FAVORITE_CHECKLIST_ITEMS.filter(({ key }) => favoriteTrackers.get(item.id)?.[key]).length}/4</span>
                         </div>
                       )}
                       {savedOnly && member && (favoriteTrackers.get(item.id)?.progress ?? "SAVED") === "READY" && (
@@ -1710,6 +1732,18 @@ export default function Home() {
                   <label>내 메모
                     <input key={`${detailApplication.id}-${favoriteTrackers.get(detailApplication.id)?.updatedAt ?? "new"}`} defaultValue={favoriteTrackers.get(detailApplication.id)?.memo ?? ""} maxLength={500} placeholder="예: 모집공고문 소득 기준 확인" onBlur={(event) => void saveFavoriteTracker(detailApplication.id, favoriteTrackers.get(detailApplication.id)?.progress ?? "SAVED", event.target.value)} />
                   </label>
+                </div>
+                <div className="favorite-checklist" aria-label="신청 전 확인 항목">
+                  <div><span>신청 전 확인</span><strong>{FAVORITE_CHECKLIST_ITEMS.filter(({ key }) => favoriteTrackers.get(detailApplication.id)?.[key]).length}/4 완료</strong></div>
+                  <p>체크리스트는 준비를 돕기 위한 개인 기록이며, 실제 자격 판정은 공식 공고문을 확인하세요.</p>
+                  <div className="favorite-checklist-options">
+                    {FAVORITE_CHECKLIST_ITEMS.map(({ key, label }) => (
+                      <label key={key}>
+                        <input type="checkbox" checked={favoriteTrackers.get(detailApplication.id)?.[key] ?? false} disabled={favoriteTrackerPendingId === detailApplication.id} onChange={(event) => void saveFavoriteTracker(detailApplication.id, favoriteTrackers.get(detailApplication.id)?.progress ?? "SAVED", favoriteTrackers.get(detailApplication.id)?.memo ?? "", { [key]: event.target.checked })} />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </section>
             )}
