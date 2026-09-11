@@ -78,7 +78,7 @@ type StatusKey = "all" | "today" | "open" | "upcoming";
 type StateTone = "mint" | "coral" | "blue" | "purple" | "gray";
 type PresentationStatus = Exclude<StatusKey, "all"> | "announcement" | "closed";
 type IconName = "search" | "pin" | "home" | "calendar" | "bookmark" | "arrow" | "check" | "bell" | "grid" | "close" | "filter" | "user";
-type FavoriteProgressFilter = FavoriteProgress | "ALL";
+type FavoriteProgressFilter = FavoriteProgress | "ALL" | "INCOMPLETE";
 type FavoriteChecklistKey = "noticeDocumentChecked" | "eligibilityChecked" | "scheduleChecked" | "fundsChecked";
 
 const FAVORITE_PROGRESS_LABELS: Record<FavoriteProgress, string> = {
@@ -101,6 +101,14 @@ const FAVORITE_CHECKLIST_ITEMS: { key: FavoriteChecklistKey; label: string }[] =
   { key: "scheduleChecked", label: "접수 일정 확인" },
   { key: "fundsChecked", label: "자금 계획 확인" },
 ];
+
+function completedChecklistCount(tracker?: FavoriteTracker): number {
+  return FAVORITE_CHECKLIST_ITEMS.filter(({ key }) => tracker?.[key]).length;
+}
+
+function incompleteChecklistLabels(tracker?: FavoriteTracker): string {
+  return FAVORITE_CHECKLIST_ITEMS.filter(({ key }) => !tracker?.[key]).map(({ label }) => label).join(" · ");
+}
 
 type Application = NoticeSummary & {
   state: string;
@@ -810,23 +818,30 @@ export default function Home() {
   const favoritePreparation = useMemo(() => {
     const counts: Record<FavoriteProgress, number> = { SAVED: 0, CHECKING: 0, READY: 0, APPLIED: 0 };
     let urgent = 0;
+    let checklistIncomplete = 0;
     const today = koreaToday();
 
     savedIds.forEach((noticeId) => {
       const progress = favoriteTrackers.get(noticeId)?.progress ?? "SAVED";
       counts[progress] += 1;
+      if (progress !== "APPLIED" && completedChecklistCount(favoriteTrackers.get(noticeId)) < FAVORITE_CHECKLIST_ITEMS.length) checklistIncomplete += 1;
       const item = knownApplications.find((application) => application.id === noticeId);
       if (!item) return;
       const remaining = daysBetween(today, item.applyEndDate);
       if (progress !== "APPLIED" && remaining !== undefined && remaining >= 0 && remaining <= 3) urgent += 1;
     });
 
-    return { counts, urgent };
+    return { counts, urgent, checklistIncomplete };
   }, [favoriteTrackers, knownApplications, savedIds]);
   const visible = useMemo(() => {
     if (!savedOnly) return filtered;
 
-    return filtered.filter((item) => favoriteProgressFilter === "ALL" || (favoriteTrackers.get(item.id)?.progress ?? "SAVED") === favoriteProgressFilter).sort((left, right) => {
+    return filtered.filter((item) => {
+      const tracker = favoriteTrackers.get(item.id);
+      if (favoriteProgressFilter === "ALL") return true;
+      if (favoriteProgressFilter === "INCOMPLETE") return (tracker?.progress ?? "SAVED") !== "APPLIED" && completedChecklistCount(tracker) < FAVORITE_CHECKLIST_ITEMS.length;
+      return (tracker?.progress ?? "SAVED") === favoriteProgressFilter;
+    }).sort((left, right) => {
       const leftProgress = favoriteTrackers.get(left.id)?.progress ?? "SAVED";
       const rightProgress = favoriteTrackers.get(right.id)?.progress ?? "SAVED";
       const progressOrder = FAVORITE_PROGRESS_PRIORITY[leftProgress] - FAVORITE_PROGRESS_PRIORITY[rightProgress];
@@ -1508,12 +1523,13 @@ export default function Home() {
                       <span><b>{favoritePreparation.counts.CHECKING}</b> 조건 확인 중</span>
                       <span><b>{favoritePreparation.counts.READY}</b> 신청 준비 완료</span>
                       <span><b>{favoritePreparation.counts.APPLIED}</b> 신청 완료</span>
+                      {favoritePreparation.checklistIncomplete > 0 && <em>확인 항목 남음 {favoritePreparation.checklistIncomplete}건</em>}
                       {favoritePreparation.urgent > 0 && <em>마감 3일 이내 {favoritePreparation.urgent}건</em>}
                     </div>
                     <div className="favorite-progress-filters" role="group" aria-label="관심청약 준비 상태 필터">
-                      {(["ALL", "CHECKING", "READY", "APPLIED"] as FavoriteProgressFilter[]).map((progress) => (
+                      {(["ALL", "INCOMPLETE", "CHECKING", "READY", "APPLIED"] as FavoriteProgressFilter[]).map((progress) => (
                         <button className={favoriteProgressFilter === progress ? "active" : ""} type="button" key={progress} onClick={() => setFavoriteProgressFilter(progress)}>
-                          {progress === "ALL" ? `전체 ${savedIds.size}` : `${FAVORITE_PROGRESS_LABELS[progress]} ${favoritePreparation.counts[progress]}`}
+                          {progress === "ALL" ? `전체 ${savedIds.size}` : progress === "INCOMPLETE" ? `확인 필요 ${favoritePreparation.checklistIncomplete}` : `${FAVORITE_PROGRESS_LABELS[progress]} ${favoritePreparation.counts[progress]}`}
                         </button>
                       ))}
                     </div>
@@ -1541,7 +1557,8 @@ export default function Home() {
                           <label>내 메모
                             <input key={`${item.id}-${favoriteTrackers.get(item.id)?.updatedAt ?? "new"}`} defaultValue={favoriteTrackers.get(item.id)?.memo ?? ""} maxLength={500} placeholder="예: 모집공고문 소득 기준 확인" onBlur={(event) => void saveFavoriteTracker(item.id, favoriteTrackers.get(item.id)?.progress ?? "SAVED", event.target.value)} />
                           </label>
-                          <span className="favorite-checklist-progress">사전 확인 {FAVORITE_CHECKLIST_ITEMS.filter(({ key }) => favoriteTrackers.get(item.id)?.[key]).length}/4</span>
+                          <span className="favorite-checklist-progress">사전 확인 {completedChecklistCount(favoriteTrackers.get(item.id))}/4</span>
+                          {completedChecklistCount(favoriteTrackers.get(item.id)) < FAVORITE_CHECKLIST_ITEMS.length && <span className="favorite-checklist-missing">남은 확인: {incompleteChecklistLabels(favoriteTrackers.get(item.id))}</span>}
                         </div>
                       )}
                       {savedOnly && member && (favoriteTrackers.get(item.id)?.progress ?? "SAVED") === "READY" && (
@@ -1565,8 +1582,8 @@ export default function Home() {
             ) : (
               <div className="empty-state">
                 <span className="empty-icon"><Icon name={savedOnly ? "bookmark" : "search"} /></span>
-                <h3>{savedOnly ? favoriteProgressFilter === "ALL" ? "저장한 관심청약이 없어요" : "선택한 준비 상태의 관심청약이 없어요" : "조건에 맞는 공고가 없어요"}</h3>
-                <p>{savedOnly ? favoriteProgressFilter === "ALL" ? "관심 있는 공고의 북마크를 눌러 모아보세요." : "다른 준비 상태를 선택하거나 전체 관심청약을 확인해 보세요." : "검색어나 지역·유형 필터를 조금 넓혀보세요."}</p>
+                <h3>{savedOnly ? favoriteProgressFilter === "ALL" ? "저장한 관심청약이 없어요" : favoriteProgressFilter === "INCOMPLETE" ? "확인 항목이 남은 관심청약이 없어요" : "선택한 준비 상태의 관심청약이 없어요" : "조건에 맞는 공고가 없어요"}</h3>
+                <p>{savedOnly ? favoriteProgressFilter === "ALL" ? "관심 있는 공고의 북마크를 눌러 모아보세요." : favoriteProgressFilter === "INCOMPLETE" ? "현재 보이는 관심청약의 체크리스트를 모두 완료했어요." : "다른 준비 상태를 선택하거나 전체 관심청약을 확인해 보세요." : "검색어나 지역·유형 필터를 조금 넓혀보세요."}</p>
                 <button type="button" onClick={() => { if (savedOnly && favoriteProgressFilter !== "ALL") { setFavoriteProgressFilter("ALL"); return; } setQuery(""); setRegion("전체"); setCategory("전체"); setActiveStatus("all"); setSavedOnly(false); resetVisible(); }}>{savedOnly && favoriteProgressFilter !== "ALL" ? "전체 관심청약 보기" : "전체 청약 보기"}</button>
               </div>
             )}
