@@ -161,6 +161,14 @@ a { color: inherit; text-decoration: none; }
 .filter-button .icon { width: 15px; }
 .filter-button:disabled { opacity: .55; cursor: wait; }
 .filter-button span { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: 5px; border-radius: 50%; background: var(--blue); color: white; font-size: 9px; }
+.favorite-preparation-summary { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 13px; padding: 15px 17px; border: 1px solid #dbe5fa; border-radius: 13px; background: linear-gradient(115deg, #f7faff, #fbfcff); }
+.favorite-summary-heading { display: grid; gap: 3px; }
+.favorite-summary-heading span { color: var(--blue); font-size: 12px; font-weight: 850; letter-spacing: .06em; }
+.favorite-summary-heading strong { color: #42516a; font-size: 13px; font-weight: 700; }
+.favorite-summary-stats { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.favorite-summary-stats span, .favorite-summary-stats em { padding: 7px 9px; border-radius: 8px; background: white; color: #637087; font-size: 12px; font-style: normal; white-space: nowrap; }
+.favorite-summary-stats b { margin-right: 3px; color: var(--navy); font-size: 14px; }
+.favorite-summary-stats em { color: #c94b43; background: #fff1ef; font-weight: 750; }
 .application-list { display: flex; flex-direction: column; gap: 13px; }
 .application-card { border: 1px solid var(--line); border-radius: 16px; padding: 21px 23px 18px; background: white; transition: .2s ease; }
 .application-card:hover { transform: translateY(-2px); border-color: #cad4e5; box-shadow: 0 14px 32px rgba(28,50,83,.08); }
@@ -727,6 +735,9 @@ footer { background: var(--navy); color: white; }
   .filter-button { width: 40px; padding: 0; justify-content: center; font-size: 0; }
   .filter-button .icon { width: 17px; }
   .filter-button span { display: none; }
+  .favorite-preparation-summary { align-items: flex-start; flex-direction: column; gap: 11px; padding: 14px; }
+  .favorite-summary-heading strong { font-size: 12px; line-height: 1.45; }
+  .favorite-summary-stats { justify-content: flex-start; }
   .card-main { align-items: start; }
   .card-main h3 { font-size: 19px; }
   .card-facts { flex-wrap: wrap; gap: 6px; }
