@@ -86,6 +86,13 @@ const FAVORITE_PROGRESS_LABELS: Record<FavoriteProgress, string> = {
   APPLIED: "신청 완료",
 };
 
+const FAVORITE_PROGRESS_PRIORITY: Record<FavoriteProgress, number> = {
+  CHECKING: 0,
+  READY: 1,
+  SAVED: 2,
+  APPLIED: 3,
+};
+
 type Application = NoticeSummary & {
   state: string;
   stateTone: StateTone;
@@ -790,7 +797,31 @@ export default function Home() {
     .map((id) => knownApplications.find((item) => item.id === id))
     .filter((item): item is Application => Boolean(item)), [knownApplications, recentNoticeIds]);
 
-  const visible = filtered;
+  const favoritePreparation = useMemo(() => {
+    const counts: Record<FavoriteProgress, number> = { SAVED: 0, CHECKING: 0, READY: 0, APPLIED: 0 };
+    let urgent = 0;
+    const today = koreaToday();
+
+    savedNotices.forEach((item) => {
+      const progress = favoriteTrackers.get(item.id)?.progress ?? "SAVED";
+      counts[progress] += 1;
+      const remaining = daysBetween(today, item.applyEndDate);
+      if (progress !== "APPLIED" && remaining !== undefined && remaining >= 0 && remaining <= 3) urgent += 1;
+    });
+
+    return { counts, urgent };
+  }, [favoriteTrackers, savedNotices]);
+  const visible = useMemo(() => {
+    if (!savedOnly) return filtered;
+
+    return [...filtered].sort((left, right) => {
+      const leftProgress = favoriteTrackers.get(left.id)?.progress ?? "SAVED";
+      const rightProgress = favoriteTrackers.get(right.id)?.progress ?? "SAVED";
+      const progressOrder = FAVORITE_PROGRESS_PRIORITY[leftProgress] - FAVORITE_PROGRESS_PRIORITY[rightProgress];
+      if (progressOrder !== 0) return progressOrder;
+      return (dateValue(left.applyEndDate) ?? Number.MAX_SAFE_INTEGER) - (dateValue(right.applyEndDate) ?? Number.MAX_SAFE_INTEGER);
+    });
+  }, [favoriteTrackers, filtered, savedOnly]);
   const activeFilterCount = Number(region !== "전체") + Number(category !== "전체") + Number(Boolean(minPriceManwon || maxPriceManwon));
   const todayCount = noticeFacets.endingToday;
   const openCount = noticeFacets.open;
@@ -1433,6 +1464,20 @@ export default function Home() {
               </div>
             ) : visible.length > 0 ? (
               <>
+                {savedOnly && member && (
+                  <section className="favorite-preparation-summary" aria-label="관심청약 준비 현황">
+                    <div className="favorite-summary-heading">
+                      <span>준비 현황</span>
+                      <strong>신청 완료 건은 아래로, 마감이 가까운 공고는 먼저 확인하세요.</strong>
+                    </div>
+                    <div className="favorite-summary-stats">
+                      <span><b>{favoritePreparation.counts.CHECKING}</b> 조건 확인 중</span>
+                      <span><b>{favoritePreparation.counts.READY}</b> 신청 준비 완료</span>
+                      <span><b>{favoritePreparation.counts.APPLIED}</b> 신청 완료</span>
+                      {favoritePreparation.urgent > 0 && <em>마감 3일 이내 {favoritePreparation.urgent}건</em>}
+                    </div>
+                  </section>
+                )}
                 <div className="application-list">
                   {visible.map((item) => (
                     <article className="application-card" key={item.id}>
