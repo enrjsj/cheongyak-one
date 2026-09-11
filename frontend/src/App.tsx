@@ -804,15 +804,17 @@ export default function Home() {
     let urgent = 0;
     const today = koreaToday();
 
-    savedNotices.forEach((item) => {
-      const progress = favoriteTrackers.get(item.id)?.progress ?? "SAVED";
+    savedIds.forEach((noticeId) => {
+      const progress = favoriteTrackers.get(noticeId)?.progress ?? "SAVED";
       counts[progress] += 1;
+      const item = knownApplications.find((application) => application.id === noticeId);
+      if (!item) return;
       const remaining = daysBetween(today, item.applyEndDate);
       if (progress !== "APPLIED" && remaining !== undefined && remaining >= 0 && remaining <= 3) urgent += 1;
     });
 
     return { counts, urgent };
-  }, [favoriteTrackers, savedNotices]);
+  }, [favoriteTrackers, knownApplications, savedIds]);
   const visible = useMemo(() => {
     if (!savedOnly) return filtered;
 
@@ -1192,6 +1194,14 @@ export default function Home() {
     scrollToResults();
   };
 
+  const openReadyFavorites = () => {
+    setSavedOnly(true);
+    setFavoriteProgressFilter("READY");
+    setActiveStatus("all");
+    resetVisible();
+    scrollToResults();
+  };
+
   const openDetail = async (item: Application) => {
     const targetUrl = noticeUrl(window.location.href, item.id);
     if (noticeIdFromSearch(window.location.search) !== item.id) {
@@ -1359,6 +1369,7 @@ export default function Home() {
             >
               <Icon name="bookmark" /> <span>관심청약</span> <b>{savedIds.size}</b>
             </button>
+            {member && favoritePreparation.counts.READY > 0 && <button className="ready-favorites-button" type="button" onClick={openReadyFavorites}><Icon name="check" /> <span>신청 준비</span> <b>{favoritePreparation.counts.READY}</b></button>}
             {member && (
               <button className="notification-button" type="button" onClick={() => { setMemberDialog(null); setNotificationsOpen(true); }} aria-label={`알림 ${unreadNotificationCount}개`}>
                 <Icon name="bell" />
@@ -1481,7 +1492,7 @@ export default function Home() {
                     <div className="favorite-progress-filters" role="group" aria-label="관심청약 준비 상태 필터">
                       {(["ALL", "CHECKING", "READY", "APPLIED"] as FavoriteProgressFilter[]).map((progress) => (
                         <button className={favoriteProgressFilter === progress ? "active" : ""} type="button" key={progress} onClick={() => setFavoriteProgressFilter(progress)}>
-                          {progress === "ALL" ? `전체 ${savedNotices.length}` : `${FAVORITE_PROGRESS_LABELS[progress]} ${favoritePreparation.counts[progress]}`}
+                          {progress === "ALL" ? `전체 ${savedIds.size}` : `${FAVORITE_PROGRESS_LABELS[progress]} ${favoritePreparation.counts[progress]}`}
                         </button>
                       ))}
                     </div>
@@ -1509,6 +1520,15 @@ export default function Home() {
                           <label>내 메모
                             <input key={`${item.id}-${favoriteTrackers.get(item.id)?.updatedAt ?? "new"}`} defaultValue={favoriteTrackers.get(item.id)?.memo ?? ""} maxLength={500} placeholder="예: 모집공고문 소득 기준 확인" onBlur={(event) => void saveFavoriteTracker(item.id, favoriteTrackers.get(item.id)?.progress ?? "SAVED", event.target.value)} />
                           </label>
+                        </div>
+                      )}
+                      {savedOnly && member && (favoriteTrackers.get(item.id)?.progress ?? "SAVED") === "READY" && (
+                        <div className="ready-application-actions">
+                          <span><Icon name="check" /> 신청 준비 완료</span>
+                          <div>
+                            {item.officialUrl ? <a href={item.officialUrl} target="_blank" rel="noreferrer">공식 공고 열기 <Icon name="arrow" /></a> : <button type="button" disabled>공식 링크 확인 중</button>}
+                            <button type="button" onClick={() => void saveFavoriteTracker(item.id, "APPLIED", favoriteTrackers.get(item.id)?.memo ?? "")} disabled={favoriteTrackerPendingId === item.id}>신청 완료로 표시</button>
+                          </div>
                         </div>
                       )}
                       <div className="card-actions">
@@ -1692,6 +1712,15 @@ export default function Home() {
                   </label>
                 </div>
               </section>
+            )}
+            {member && savedIds.has(detailApplication.id) && (favoriteTrackers.get(detailApplication.id)?.progress ?? "SAVED") === "READY" && (
+              <div className="ready-application-actions detail-ready-actions">
+                <span><Icon name="check" /> 신청 준비 완료</span>
+                <div>
+                  {detailApplication.officialUrl ? <a href={detailApplication.officialUrl} target="_blank" rel="noreferrer">공식 공고 열기 <Icon name="arrow" /></a> : <button type="button" disabled>공식 링크 확인 중</button>}
+                  <button type="button" onClick={() => void saveFavoriteTracker(detailApplication.id, "APPLIED", favoriteTrackers.get(detailApplication.id)?.memo ?? "")} disabled={favoriteTrackerPendingId === detailApplication.id}>신청 완료로 표시</button>
+                </div>
+              </div>
             )}
             <div className="detail-actions"><button type="button" className="secondary-button" onClick={() => void toggleSaved(detailApplication.id)} disabled={favoritePendingId === detailApplication.id}><Icon name="bookmark" /> {savedIds.has(detailApplication.id) ? "관심 해제" : "관심 저장"}</button><button type="button" className="secondary-button" onClick={() => void copyNoticeLink(detailApplication.id)}>링크 복사</button>{detailApplication.officialUrl ? <a className="primary-button" href={detailApplication.officialUrl} target="_blank" rel="noreferrer">공식 공고 보기 <Icon name="arrow" /></a> : <button type="button" className="primary-button" disabled>공식 링크 확인 중</button>}</div>
           </section>
