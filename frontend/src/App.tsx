@@ -1669,6 +1669,21 @@ export default function Home() {
               </section>
             )}
             <div className="eligibility-box"><span className="check-round"><Icon name="check" /></span><div><span>데이터 출처</span><h3>{detailApplication.fit}</h3><p>{detailApplication.deposit} · 본 서비스 정보보다 공식 공고문을 우선합니다.</p></div></div>
+            {member && savedIds.has(detailApplication.id) && (
+              <section className="favorite-tracker detail-favorite-tracker" aria-label="관심청약 준비 상태">
+                <div className="detail-tracker-head"><span>관심청약 준비</span><strong>이 공고의 확인·신청 상태를 바로 기록하세요.</strong></div>
+                <div className="detail-tracker-fields">
+                  <label>준비 상태
+                    <select value={favoriteTrackers.get(detailApplication.id)?.progress ?? "SAVED"} disabled={favoriteTrackerPendingId === detailApplication.id} onChange={(event) => void saveFavoriteTracker(detailApplication.id, event.target.value as FavoriteProgress, favoriteTrackers.get(detailApplication.id)?.memo ?? "")}>
+                      {Object.entries(FAVORITE_PROGRESS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                  </label>
+                  <label>내 메모
+                    <input key={`${detailApplication.id}-${favoriteTrackers.get(detailApplication.id)?.updatedAt ?? "new"}`} defaultValue={favoriteTrackers.get(detailApplication.id)?.memo ?? ""} maxLength={500} placeholder="예: 모집공고문 소득 기준 확인" onBlur={(event) => void saveFavoriteTracker(detailApplication.id, favoriteTrackers.get(detailApplication.id)?.progress ?? "SAVED", event.target.value)} />
+                  </label>
+                </div>
+              </section>
+            )}
             <div className="detail-actions"><button type="button" className="secondary-button" onClick={() => void toggleSaved(detailApplication.id)} disabled={favoritePendingId === detailApplication.id}><Icon name="bookmark" /> {savedIds.has(detailApplication.id) ? "관심 해제" : "관심 저장"}</button><button type="button" className="secondary-button" onClick={() => void copyNoticeLink(detailApplication.id)}>링크 복사</button>{detailApplication.officialUrl ? <a className="primary-button" href={detailApplication.officialUrl} target="_blank" rel="noreferrer">공식 공고 보기 <Icon name="arrow" /></a> : <button type="button" className="primary-button" disabled>공식 링크 확인 중</button>}</div>
           </section>
         </div>
