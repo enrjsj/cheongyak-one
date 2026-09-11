@@ -5,6 +5,7 @@ import com.cheongyakone.api.member.MemberResponse;
 import com.cheongyakone.api.member.MemberSessionResponse;
 import com.cheongyakone.api.member.EligibilityProfileResponse;
 import com.cheongyakone.api.member.SearchPreferenceResponse;
+import com.cheongyakone.api.member.FavoriteTrackerResponse;
 import com.cheongyakone.config.AuthProperties;
 import com.cheongyakone.domain.member.Member;
 import com.cheongyakone.domain.member.MemberActionTokenRepository;
@@ -360,6 +361,31 @@ public class MemberService {
         return favoriteRepository.findAllByMemberIdOrderByCreatedAtAsc(member.getId()).stream()
                 .map(MemberFavorite::getNoticeId)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<FavoriteTrackerResponse> favoriteTrackers(String rawToken) {
+        Member member = requireMember(rawToken);
+        return favoriteRepository.findAllByMemberIdOrderByCreatedAtAsc(member.getId()).stream()
+                .map(FavoriteTrackerResponse::from)
+                .toList();
+    }
+
+    @Transactional
+    public FavoriteTrackerResponse updateFavoriteTracker(
+            String rawToken,
+            Long noticeId,
+            MemberRequests.FavoriteTracker request
+    ) {
+        Member member = requireMember(rawToken);
+        MemberFavorite favorite = favoriteRepository.findByMemberIdAndNotice_Id(member.getId(), noticeId)
+                .orElseThrow(() -> new MemberApiException(
+                        HttpStatus.NOT_FOUND,
+                        "FAVORITE_NOT_FOUND",
+                        "관심청약으로 저장한 공고만 준비 상태를 관리할 수 있습니다."
+                ));
+        favorite.updateTracker(request.progress(), request.memo(), clock.instant());
+        return FavoriteTrackerResponse.from(favorite);
     }
 
     @Transactional

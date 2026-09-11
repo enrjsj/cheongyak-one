@@ -11,6 +11,7 @@ import {
   fetchCurrentMember,
   fetchComparisonIds,
   fetchFavoriteIds,
+  fetchFavoriteTrackers,
   fetchMemberSessions,
   fetchMemberRecommendations,
   fetchNotice,
@@ -19,6 +20,8 @@ import {
   fetchSearchPreference,
   fetchEligibilityProfile,
   HousingCategory,
+  FavoriteProgress,
+  FavoriteTracker,
   EligibilityProfile,
   loginMember,
   logoutMember,
@@ -46,6 +49,7 @@ import {
   signupMember,
   deleteMemberPersonalProfile,
   updateMemberProfile,
+  updateFavoriteTracker,
   withdrawMember,
 } from "./api";
 import MemberDialogs, { MemberDialogMode } from "./MemberDialogs";
@@ -74,6 +78,13 @@ type StatusKey = "all" | "today" | "open" | "upcoming";
 type StateTone = "mint" | "coral" | "blue" | "purple" | "gray";
 type PresentationStatus = Exclude<StatusKey, "all"> | "announcement" | "closed";
 type IconName = "search" | "pin" | "home" | "calendar" | "bookmark" | "arrow" | "check" | "bell" | "grid" | "close" | "filter" | "user";
+
+const FAVORITE_PROGRESS_LABELS: Record<FavoriteProgress, string> = {
+  SAVED: "저장만 함",
+  CHECKING: "조건 확인 중",
+  READY: "신청 준비 완료",
+  APPLIED: "신청 완료",
+};
 
 type Application = NoticeSummary & {
   state: string;
@@ -376,6 +387,8 @@ export default function Home() {
   const [minPriceManwon, setMinPriceManwon] = useState(initialSearch.minPriceManwon ? String(initialSearch.minPriceManwon) : "");
   const [maxPriceManwon, setMaxPriceManwon] = useState(initialSearch.maxPriceManwon ? String(initialSearch.maxPriceManwon) : "");
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
+  const [favoriteTrackers, setFavoriteTrackers] = useState<Map<number, FavoriteTracker>>(new Map());
+  const [favoriteTrackerPendingId, setFavoriteTrackerPendingId] = useState<number>();
   const [favoritePendingId, setFavoritePendingId] = useState<number>();
   const [savedOnly, setSavedOnly] = useState(false);
   const [comparisonIds, setComparisonIds] = useState<number[]>(initialComparisonIds);
@@ -573,6 +586,7 @@ export default function Home() {
             : await fetchFavoriteIds();
           if (cancelled) return;
           setSavedIds(new Set(accountIds));
+          setFavoriteTrackers(new Map((await fetchFavoriteTrackers()).map((tracker) => [tracker.noticeId, tracker])));
           // 로그인 계정의 목록이 로그아웃 뒤 다른 사용자에게 보이지 않게 브라우저 복사본을 지운다.
           window.localStorage.removeItem("cheongyak-one-saved");
         } catch (error) {
@@ -828,12 +842,31 @@ export default function Home() {
     setFavoritePendingId(id);
     try {
       setSavedIds(new Set(await setFavorite(id, isSaving)));
+      if (!isSaving) setFavoriteTrackers((current) => {
+        const nextTrackers = new Map(current);
+        nextTrackers.delete(id);
+        return nextTrackers;
+      });
       setToast(isSaving ? "계정 관심청약에 저장했어요." : "관심청약에서 삭제했어요.");
     } catch (error) {
       setSavedIds(new Set(savedIds));
       setToast(error instanceof Error ? error.message : "관심청약을 변경하지 못했습니다.");
     } finally {
       setFavoritePendingId(undefined);
+    }
+  };
+
+  const saveFavoriteTracker = async (noticeId: number, progress: FavoriteProgress, memo: string) => {
+    if (!member || favoriteTrackerPendingId !== undefined) return;
+    setFavoriteTrackerPendingId(noticeId);
+    try {
+      const tracker = await updateFavoriteTracker(noticeId, { progress, memo: memo.trim() || undefined });
+      setFavoriteTrackers((current) => new Map(current).set(noticeId, tracker));
+      setToast("관심청약 준비 상태를 저장했습니다.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "준비 상태를 저장하지 못했습니다.");
+    } finally {
+      setFavoriteTrackerPendingId(undefined);
     }
   };
 
@@ -844,6 +877,7 @@ export default function Home() {
       const guestIds = [...savedIds];
       const accountIds = guestIds.length > 0 ? await mergeFavoriteIds(guestIds) : await fetchFavoriteIds();
       setSavedIds(new Set(accountIds));
+      setFavoriteTrackers(new Map((await fetchFavoriteTrackers()).map((tracker) => [tracker.noticeId, tracker])));
       window.localStorage.removeItem("cheongyak-one-saved");
     } catch {
       synchronized = false;
@@ -916,6 +950,7 @@ export default function Home() {
   const handleLogout = async () => {
     await logoutMember();
     setMember(undefined);
+    setFavoriteTrackers(new Map());
     setNotificationsOpen(false);
     setAdminSyncOpen(false);
     setSearchPreference(undefined);
@@ -938,6 +973,7 @@ export default function Home() {
   const handleChangePassword = async (currentPassword: string, newPassword: string) => {
     await changeMemberPassword(currentPassword, newPassword);
     setMember(undefined);
+    setFavoriteTrackers(new Map());
     setNotificationsOpen(false);
     setAdminSyncOpen(false);
     setSearchPreference(undefined);
@@ -952,6 +988,7 @@ export default function Home() {
   const handleWithdraw = async (password: string) => {
     await withdrawMember(password);
     setMember(undefined);
+    setFavoriteTrackers(new Map());
     setNotificationsOpen(false);
     setAdminSyncOpen(false);
     setSearchPreference(undefined);
@@ -1408,6 +1445,18 @@ export default function Home() {
                         <div className="deadline"><strong>{item.dday}</strong><span>{item.period}</span></div>
                       </div>
                       <div className="card-facts"><span>{item.price}</span><i></i><span>{item.scale}</span><i></i><span>{item.region}</span></div>
+                      {savedOnly && member && (
+                        <div className="favorite-tracker">
+                          <label>준비 상태
+                            <select value={favoriteTrackers.get(item.id)?.progress ?? "SAVED"} disabled={favoriteTrackerPendingId === item.id} onChange={(event) => void saveFavoriteTracker(item.id, event.target.value as FavoriteProgress, favoriteTrackers.get(item.id)?.memo ?? "")}>
+                              {Object.entries(FAVORITE_PROGRESS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                            </select>
+                          </label>
+                          <label>내 메모
+                            <input key={`${item.id}-${favoriteTrackers.get(item.id)?.updatedAt ?? "new"}`} defaultValue={favoriteTrackers.get(item.id)?.memo ?? ""} maxLength={500} placeholder="예: 모집공고문 소득 기준 확인" onBlur={(event) => void saveFavoriteTracker(item.id, favoriteTrackers.get(item.id)?.progress ?? "SAVED", event.target.value)} />
+                          </label>
+                        </div>
+                      )}
                       <div className="card-actions">
                         <button className="detail-link" type="button" onClick={() => openDetail(item)}>공고 핵심만 보기 <Icon name="arrow" /></button>
                         <button className={`compare-button ${comparisonIds.includes(item.id) ? "selected" : ""}`} type="button" onClick={() => void toggleComparison(item.id)} disabled={comparisonPendingId !== undefined || comparisonResetPending} aria-pressed={comparisonIds.includes(item.id)}><Icon name="grid" /> {comparisonIds.includes(item.id) ? "비교 해제" : "비교 담기"}</button>

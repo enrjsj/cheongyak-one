@@ -188,6 +188,9 @@ a { color: inherit; text-decoration: none; }
 .deadline span { color: #707b8c; font-size: 12px; }
 .card-facts { display: flex; align-items: center; gap: 10px; padding: 13px 14px; border-radius: 9px; background: #f6f8fb; color: #4f5c70; font-size: 13px; }
 .card-facts i { width: 1px; height: 11px; background: #dce1e8; }
+.favorite-tracker { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px; margin-top: 13px; padding: 11px; border: 1px solid #dce5f6; border-radius: 10px; background: #f8faff; }
+.favorite-tracker label { display: grid; gap: 5px; color: #68758a; font-size: 10px; font-weight: 700; }
+.favorite-tracker select, .favorite-tracker input { min-width: 0; height: 34px; box-sizing: border-box; padding: 0 9px; border: 1px solid #dbe2ec; border-radius: 8px; background: white; color: #435168; font: inherit; font-size: 11px; }
 .card-actions { margin-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .detail-link { width: fit-content; padding: 7px 0; border: 0; background: transparent; display: flex; align-items: center; gap: 5px; color: var(--blue); font-size: 13px; font-weight: 750; cursor: pointer; }
 .detail-link .icon { width: 14px; }
@@ -729,6 +732,7 @@ footer { background: var(--navy); color: white; }
   .card-facts { flex-wrap: wrap; gap: 6px; }
   .card-facts i { display: none; }
   .card-facts span { width: 100%; }
+  .favorite-tracker { grid-template-columns: 1fr; }
   .card-actions { align-items: stretch; }
   .detail-link { flex: 1; }
   .compare-button { height: 38px; }

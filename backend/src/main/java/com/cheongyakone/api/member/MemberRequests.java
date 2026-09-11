@@ -5,6 +5,7 @@ import com.cheongyakone.domain.member.MemberGender;
 import com.cheongyakone.domain.member.MemberMaritalStatus;
 import com.cheongyakone.domain.member.SearchPreferenceSort;
 import com.cheongyakone.domain.member.SearchPreferenceStatus;
+import com.cheongyakone.domain.member.FavoriteProgress;
 import com.cheongyakone.domain.notice.HousingCategory;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
@@ -88,6 +89,12 @@ public final class MemberRequests {
 
     public record MergeFavorites(
             @NotEmpty @Size(max = 200) Set<@Valid @Positive Long> noticeIds
+    ) {
+    }
+
+    public record FavoriteTracker(
+            @NotNull FavoriteProgress progress,
+            @Size(max = 500) String memo
     ) {
     }
 
