@@ -96,6 +96,7 @@ public final class MemberRequests {
     public record FavoriteTracker(
             @NotNull FavoriteProgress progress,
             FavoriteApplicationResult applicationResult,
+            @Size(max = 500) String applicationResultMemo,
             @Size(max = 500) String memo,
             boolean noticeDocumentChecked,
             boolean eligibilityChecked,
