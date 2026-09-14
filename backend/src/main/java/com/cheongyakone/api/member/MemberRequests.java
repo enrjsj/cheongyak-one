@@ -5,6 +5,7 @@ import com.cheongyakone.domain.member.MemberGender;
 import com.cheongyakone.domain.member.MemberMaritalStatus;
 import com.cheongyakone.domain.member.SearchPreferenceSort;
 import com.cheongyakone.domain.member.SearchPreferenceStatus;
+import com.cheongyakone.domain.member.FavoriteApplicationResult;
 import com.cheongyakone.domain.member.FavoriteProgress;
 import com.cheongyakone.domain.notice.HousingCategory;
 import jakarta.validation.Valid;
