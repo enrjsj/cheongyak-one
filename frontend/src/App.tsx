@@ -103,6 +103,13 @@ const FAVORITE_APPLICATION_RESULT_LABELS: Record<FavoriteApplicationResult, stri
   NOT_SELECTED: "미당첨",
 };
 
+const FAVORITE_APPLICATION_RESULT_PRIORITY: Record<FavoriteApplicationResult, number> = {
+  PENDING: 0,
+  WAITLISTED: 1,
+  SELECTED: 2,
+  NOT_SELECTED: 3,
+};
+
 const FAVORITE_CHECKLIST_ITEMS: { key: FavoriteChecklistKey; label: string }[] = [
   { key: "noticeDocumentChecked", label: "공고문 확인" },
   { key: "eligibilityChecked", label: "자격 조건 확인" },
@@ -846,7 +853,7 @@ export default function Home() {
       if (progress !== "APPLIED" && remaining !== undefined && remaining >= 0 && remaining <= 3) urgent += 1;
     });
 
-    return { counts, applicationResults, urgent, checklistIncomplete };
+    return { counts, applicationResults, recordedResults: applicationResults.SELECTED + applicationResults.WAITLISTED + applicationResults.NOT_SELECTED, urgent, checklistIncomplete };
   }, [favoriteTrackers, knownApplications, savedIds]);
   const visible = useMemo(() => {
     if (!savedOnly) return filtered;
@@ -863,6 +870,10 @@ export default function Home() {
       const rightProgress = favoriteTrackers.get(right.id)?.progress ?? "SAVED";
       const progressOrder = FAVORITE_PROGRESS_PRIORITY[leftProgress] - FAVORITE_PROGRESS_PRIORITY[rightProgress];
       if (progressOrder !== 0) return progressOrder;
+      if (leftProgress === "APPLIED" && rightProgress === "APPLIED") {
+        const resultOrder = FAVORITE_APPLICATION_RESULT_PRIORITY[favoriteTrackers.get(left.id)?.applicationResult ?? "PENDING"] - FAVORITE_APPLICATION_RESULT_PRIORITY[favoriteTrackers.get(right.id)?.applicationResult ?? "PENDING"];
+        if (resultOrder !== 0) return resultOrder;
+      }
       return (dateValue(left.applyEndDate) ?? Number.MAX_SAFE_INTEGER) - (dateValue(right.applyEndDate) ?? Number.MAX_SAFE_INTEGER);
     });
   }, [favoriteProgressFilter, favoriteTrackers, filtered, savedOnly]);
@@ -946,7 +957,7 @@ export default function Home() {
       const tracker = await updateFavoriteTracker(noticeId, {
         progress,
         applicationResult: applicationResult ?? current?.applicationResult ?? "PENDING",
-        applicationResultMemo: applicationResultMemo?.trim() || current?.applicationResultMemo?.trim() || undefined,
+        applicationResultMemo: applicationResultMemo === undefined ? current?.applicationResultMemo?.trim() || undefined : applicationResultMemo.trim(),
         memo: memo.trim() || undefined,
         noticeDocumentChecked: checklist.noticeDocumentChecked ?? current?.noticeDocumentChecked ?? false,
         eligibilityChecked: checklist.eligibilityChecked ?? current?.eligibilityChecked ?? false,
@@ -1197,6 +1208,17 @@ export default function Home() {
     anchor.remove();
     URL.revokeObjectURL(url);
     setToast("캘린더 파일을 저장했어요.");
+  };
+
+  const downloadFavoriteResults = () => {
+    const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
+    const rows = savedNotices.map((item) => {
+      const tracker = favoriteTrackers.get(item.id);
+      return [item.title, item.region, FAVORITE_PROGRESS_LABELS[tracker?.progress ?? "SAVED"], tracker?.progress === "APPLIED" ? FAVORITE_APPLICATION_RESULT_LABELS[tracker.applicationResult ?? "PENDING"] : "", tracker?.applicationResultRecordedAt ?? "", tracker?.applicationResultMemo ?? ""];
+    });
+    const content = ["공고명,지역,준비상태,신청결과,결과기록시각,결과메모", ...rows.map((row) => row.map(escape).join(","))].join("\n");
+    const url = URL.createObjectURL(new Blob([`\uFEFF${content}`], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a"); anchor.href = url; anchor.download = "cheongyak-favorite-results.csv"; anchor.click(); URL.revokeObjectURL(url);
   };
 
   const copyComparisonLink = async () => {
@@ -1518,6 +1540,7 @@ export default function Home() {
                   </select>
                 </label>
                 {savedOnly && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={() => downloadCalendar(savedNotices, "cheongyak-saved.ics")}><Icon name="calendar" /> 관심 일정 저장</button>}
+                {savedOnly && member && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={downloadFavoriteResults}>내 기록 CSV</button>}
                 <button className="search-share-button" type="button" onClick={() => void copySearchLink()}><Icon name="arrow" /> 검색 공유</button>
                 <button className="filter-button" type="button" onClick={() => setFilterOpen(true)} disabled={loading}><Icon name="filter" /> 지역·유형·예산 필터 {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button>
               </div>
@@ -1545,6 +1568,7 @@ export default function Home() {
                       <span><b>{favoritePreparation.counts.READY}</b> 신청 준비 완료</span>
                       <span><b>{favoritePreparation.counts.APPLIED}</b> 신청 완료</span>
                       {favoritePreparation.counts.APPLIED > 0 && <em>당첨 {favoritePreparation.applicationResults.SELECTED} · 예비 {favoritePreparation.applicationResults.WAITLISTED} · 발표 대기 {favoritePreparation.applicationResults.PENDING}</em>}
+                      {favoritePreparation.recordedResults > 0 && <em>결과 기록 완료 {favoritePreparation.recordedResults}건</em>}
                       {favoritePreparation.checklistIncomplete > 0 && <em>확인 항목 남음 {favoritePreparation.checklistIncomplete}건</em>}
                       {favoritePreparation.urgent > 0 && <em>마감 3일 이내 {favoritePreparation.urgent}건</em>}
                     </div>
@@ -1608,6 +1632,7 @@ export default function Home() {
                           {(favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING") !== "PENDING" && <input key={`${item.id}-${favoriteTrackers.get(item.id)?.applicationResultRecordedAt ?? "result"}`} defaultValue={favoriteTrackers.get(item.id)?.applicationResultMemo ?? ""} maxLength={500} placeholder="결과 메모 (예: 계약 일정 확인)" onBlur={(event) => void saveFavoriteTracker(item.id, "APPLIED", favoriteTrackers.get(item.id)?.memo ?? "", {}, favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING", event.target.value)} />}
                         </div>
                       )}
+                      {savedOnly && member && (favoriteTrackers.get(item.id)?.progress ?? "SAVED") === "APPLIED" && <span className={`application-result-badge result-${favoriteTrackers.get(item.id)?.applicationResult?.toLowerCase() ?? "pending"}`}>{FAVORITE_APPLICATION_RESULT_LABELS[favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING"]}</span>}
                       <div className="card-actions">
                         <button className="detail-link" type="button" onClick={() => openDetail(item)}>공고 핵심만 보기 <Icon name="arrow" /></button>
                         <button className={`compare-button ${comparisonIds.includes(item.id) ? "selected" : ""}`} type="button" onClick={() => void toggleComparison(item.id)} disabled={comparisonPendingId !== undefined || comparisonResetPending} aria-pressed={comparisonIds.includes(item.id)}><Icon name="grid" /> {comparisonIds.includes(item.id) ? "비교 해제" : "비교 담기"}</button>
