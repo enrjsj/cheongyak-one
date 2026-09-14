@@ -21,6 +21,7 @@ import {
   fetchEligibilityProfile,
   HousingCategory,
   FavoriteProgress,
+  FavoriteApplicationResult,
   FavoriteTracker,
   EligibilityProfile,
   loginMember,
@@ -93,6 +94,13 @@ const FAVORITE_PROGRESS_PRIORITY: Record<FavoriteProgress, number> = {
   READY: 1,
   SAVED: 2,
   APPLIED: 3,
+};
+
+const FAVORITE_APPLICATION_RESULT_LABELS: Record<FavoriteApplicationResult, string> = {
+  PENDING: "발표 대기",
+  SELECTED: "당첨",
+  WAITLISTED: "예비 당첨",
+  NOT_SELECTED: "미당첨",
 };
 
 const FAVORITE_CHECKLIST_ITEMS: { key: FavoriteChecklistKey; label: string }[] = [
@@ -817,6 +825,7 @@ export default function Home() {
 
   const favoritePreparation = useMemo(() => {
     const counts: Record<FavoriteProgress, number> = { SAVED: 0, CHECKING: 0, READY: 0, APPLIED: 0 };
+    const applicationResults: Record<FavoriteApplicationResult, number> = { PENDING: 0, SELECTED: 0, WAITLISTED: 0, NOT_SELECTED: 0 };
     let urgent = 0;
     let checklistIncomplete = 0;
     const today = koreaToday();
@@ -824,6 +833,7 @@ export default function Home() {
     savedIds.forEach((noticeId) => {
       const progress = favoriteTrackers.get(noticeId)?.progress ?? "SAVED";
       counts[progress] += 1;
+      if (progress === "APPLIED") applicationResults[favoriteTrackers.get(noticeId)?.applicationResult ?? "PENDING"] += 1;
       if (progress !== "APPLIED" && completedChecklistCount(favoriteTrackers.get(noticeId)) < FAVORITE_CHECKLIST_ITEMS.length) checklistIncomplete += 1;
       const item = knownApplications.find((application) => application.id === noticeId);
       if (!item) return;
@@ -831,7 +841,7 @@ export default function Home() {
       if (progress !== "APPLIED" && remaining !== undefined && remaining >= 0 && remaining <= 3) urgent += 1;
     });
 
-    return { counts, urgent, checklistIncomplete };
+    return { counts, applicationResults, urgent, checklistIncomplete };
   }, [favoriteTrackers, knownApplications, savedIds]);
   const visible = useMemo(() => {
     if (!savedOnly) return filtered;
@@ -919,6 +929,7 @@ export default function Home() {
     progress: FavoriteProgress,
     memo: string,
     checklist: Partial<Pick<FavoriteTracker, FavoriteChecklistKey>> = {},
+    applicationResult?: FavoriteApplicationResult,
   ) => {
     if (!member || favoriteTrackerPendingId !== undefined) return;
     const current = favoriteTrackers.get(noticeId);
@@ -926,6 +937,7 @@ export default function Home() {
     try {
       const tracker = await updateFavoriteTracker(noticeId, {
         progress,
+        applicationResult: applicationResult ?? current?.applicationResult ?? "PENDING",
         memo: memo.trim() || undefined,
         noticeDocumentChecked: checklist.noticeDocumentChecked ?? current?.noticeDocumentChecked ?? false,
         eligibilityChecked: checklist.eligibilityChecked ?? current?.eligibilityChecked ?? false,
@@ -933,7 +945,7 @@ export default function Home() {
         fundsChecked: checklist.fundsChecked ?? current?.fundsChecked ?? false,
       });
       setFavoriteTrackers((current) => new Map(current).set(noticeId, tracker));
-      setToast("관심청약 준비 상태를 저장했습니다.");
+      setToast(progress === "APPLIED" && applicationResult ? "신청 결과를 저장했습니다." : "관심청약 준비 상태를 저장했습니다.");
     } catch (error) {
       setToast(error instanceof Error ? error.message : "준비 상태를 저장하지 못했습니다.");
     } finally {
@@ -1523,6 +1535,7 @@ export default function Home() {
                       <span><b>{favoritePreparation.counts.CHECKING}</b> 조건 확인 중</span>
                       <span><b>{favoritePreparation.counts.READY}</b> 신청 준비 완료</span>
                       <span><b>{favoritePreparation.counts.APPLIED}</b> 신청 완료</span>
+                      {favoritePreparation.counts.APPLIED > 0 && <em>당첨 {favoritePreparation.applicationResults.SELECTED} · 예비 {favoritePreparation.applicationResults.WAITLISTED} · 발표 대기 {favoritePreparation.applicationResults.PENDING}</em>}
                       {favoritePreparation.checklistIncomplete > 0 && <em>확인 항목 남음 {favoritePreparation.checklistIncomplete}건</em>}
                       {favoritePreparation.urgent > 0 && <em>마감 3일 이내 {favoritePreparation.urgent}건</em>}
                     </div>
@@ -1568,6 +1581,15 @@ export default function Home() {
                             {item.officialUrl ? <a href={item.officialUrl} target="_blank" rel="noreferrer">공식 공고 열기 <Icon name="arrow" /></a> : <button type="button" disabled>공식 링크 확인 중</button>}
                             <button type="button" onClick={() => void saveFavoriteTracker(item.id, "APPLIED", favoriteTrackers.get(item.id)?.memo ?? "")} disabled={favoriteTrackerPendingId === item.id}>신청 완료로 표시</button>
                           </div>
+                        </div>
+                      )}
+                      {savedOnly && member && (favoriteTrackers.get(item.id)?.progress ?? "SAVED") === "APPLIED" && (
+                        <div className="application-result-tracker">
+                          <span>신청 결과</span>
+                          <select value={favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING"} disabled={favoriteTrackerPendingId === item.id} onChange={(event) => void saveFavoriteTracker(item.id, "APPLIED", favoriteTrackers.get(item.id)?.memo ?? "", {}, event.target.value as FavoriteApplicationResult)} aria-label={`${item.title} 신청 결과`}>
+                            {Object.entries(FAVORITE_APPLICATION_RESULT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                          </select>
+                          <small>{(favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING") === "PENDING" ? `당첨 발표일 ${formatShortDate(item.winnerAnnounceDate)}에 결과를 확인하세요.` : "공식 당첨자 발표를 기준으로 직접 기록한 결과입니다."}</small>
                         </div>
                       )}
                       <div className="card-actions">
@@ -1771,6 +1793,15 @@ export default function Home() {
                   {detailApplication.officialUrl ? <a href={detailApplication.officialUrl} target="_blank" rel="noreferrer">공식 공고 열기 <Icon name="arrow" /></a> : <button type="button" disabled>공식 링크 확인 중</button>}
                   <button type="button" onClick={() => void saveFavoriteTracker(detailApplication.id, "APPLIED", favoriteTrackers.get(detailApplication.id)?.memo ?? "")} disabled={favoriteTrackerPendingId === detailApplication.id}>신청 완료로 표시</button>
                 </div>
+              </div>
+            )}
+            {member && savedIds.has(detailApplication.id) && (favoriteTrackers.get(detailApplication.id)?.progress ?? "SAVED") === "APPLIED" && (
+              <div className="application-result-tracker detail-application-result" aria-label="신청 결과 기록">
+                <div><span>신청 결과</span><strong>{FAVORITE_APPLICATION_RESULT_LABELS[favoriteTrackers.get(detailApplication.id)?.applicationResult ?? "PENDING"]}</strong></div>
+                <select value={favoriteTrackers.get(detailApplication.id)?.applicationResult ?? "PENDING"} disabled={favoriteTrackerPendingId === detailApplication.id} onChange={(event) => void saveFavoriteTracker(detailApplication.id, "APPLIED", favoriteTrackers.get(detailApplication.id)?.memo ?? "", {}, event.target.value as FavoriteApplicationResult)} aria-label="신청 결과">
+                  {Object.entries(FAVORITE_APPLICATION_RESULT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+                <small>{(favoriteTrackers.get(detailApplication.id)?.applicationResult ?? "PENDING") === "PENDING" ? `당첨 발표일은 ${formatShortDate(detailApplication.winnerAnnounceDate)}입니다.` : "공식 당첨자 발표를 기준으로 직접 기록한 결과입니다."}</small>
               </div>
             )}
             <div className="detail-actions"><button type="button" className="secondary-button" onClick={() => void toggleSaved(detailApplication.id)} disabled={favoritePendingId === detailApplication.id}><Icon name="bookmark" /> {savedIds.has(detailApplication.id) ? "관심 해제" : "관심 저장"}</button><button type="button" className="secondary-button" onClick={() => void copyNoticeLink(detailApplication.id)}>링크 복사</button>{detailApplication.officialUrl ? <a className="primary-button" href={detailApplication.officialUrl} target="_blank" rel="noreferrer">공식 공고 보기 <Icon name="arrow" /></a> : <button type="button" className="primary-button" disabled>공식 링크 확인 중</button>}</div>

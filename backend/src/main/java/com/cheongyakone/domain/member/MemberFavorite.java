@@ -48,6 +48,10 @@ public class MemberFavorite {
     @Column(name = "PROGRESS", nullable = false, length = 20)
     private FavoriteProgress progress = FavoriteProgress.SAVED;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "APPLICATION_RESULT", nullable = false, length = 20)
+    private FavoriteApplicationResult applicationResult = FavoriteApplicationResult.PENDING;
+
     @Column(name = "MEMO", length = 500)
     private String memo;
 
@@ -90,6 +94,8 @@ public class MemberFavorite {
 
     public FavoriteProgress getProgress() { return progress; }
 
+    public FavoriteApplicationResult getApplicationResult() { return applicationResult; }
+
     public String getMemo() { return memo; }
 
     public Instant getUpdatedAt() { return updatedAt; }
@@ -104,6 +110,7 @@ public class MemberFavorite {
 
     public void updateTracker(
             FavoriteProgress progress,
+            FavoriteApplicationResult applicationResult,
             String memo,
             boolean noticeDocumentChecked,
             boolean eligibilityChecked,
@@ -112,6 +119,9 @@ public class MemberFavorite {
             Instant updatedAt
     ) {
         this.progress = Objects.requireNonNull(progress);
+        this.applicationResult = progress == FavoriteProgress.APPLIED
+                ? Objects.requireNonNull(applicationResult)
+                : FavoriteApplicationResult.PENDING;
         this.memo = memo == null || memo.isBlank() ? null : memo.trim();
         this.noticeDocumentChecked = noticeDocumentChecked;
         this.eligibilityChecked = eligibilityChecked;

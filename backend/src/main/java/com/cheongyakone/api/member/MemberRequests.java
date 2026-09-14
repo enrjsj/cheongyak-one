@@ -5,6 +5,7 @@ import com.cheongyakone.domain.member.MemberGender;
 import com.cheongyakone.domain.member.MemberMaritalStatus;
 import com.cheongyakone.domain.member.SearchPreferenceSort;
 import com.cheongyakone.domain.member.SearchPreferenceStatus;
+import com.cheongyakone.domain.member.FavoriteApplicationResult;
 import com.cheongyakone.domain.member.FavoriteProgress;
 import com.cheongyakone.domain.notice.HousingCategory;
 import jakarta.validation.Valid;
@@ -94,6 +95,7 @@ public final class MemberRequests {
 
     public record FavoriteTracker(
             @NotNull FavoriteProgress progress,
+            FavoriteApplicationResult applicationResult,
             @Size(max = 500) String memo,
             boolean noticeDocumentChecked,
             boolean eligibilityChecked,
