@@ -234,9 +234,11 @@ a { color: inherit; text-decoration: none; }
 .application-result-tracker > span, .application-result-tracker > div > span { color: #52708a; font-size: 12px; font-weight: 700; }
 .application-result-tracker select { min-width: 110px; margin-left: auto; }
 .application-result-tracker small { color: #6c7e90; font-size: 12px; }
+.application-result-tracker input { min-width: 190px; flex: 1; }
 .detail-application-result { display: grid; grid-template-columns: 1fr auto; margin-top: 16px; }
 .detail-application-result > div { display: grid; gap: 3px; }
 .detail-application-result small { grid-column: 1 / -1; }
+.detail-application-result input { grid-column: 1 / -1; width: 100%; }
 .card-actions { margin-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .detail-link { width: fit-content; padding: 7px 0; border: 0; background: transparent; display: flex; align-items: center; gap: 5px; color: var(--blue); font-size: 13px; font-weight: 750; cursor: pointer; }
 .detail-link .icon { width: 14px; }
