@@ -1,6 +1,7 @@
 package com.cheongyakone.api.member;
 
 import com.cheongyakone.domain.member.FavoriteProgress;
+import com.cheongyakone.domain.member.FavoriteApplicationResult;
 import com.cheongyakone.domain.member.MemberFavorite;
 
 import java.time.Instant;
@@ -8,6 +9,7 @@ import java.time.Instant;
 public record FavoriteTrackerResponse(
         Long noticeId,
         FavoriteProgress progress,
+        FavoriteApplicationResult applicationResult,
         String memo,
         boolean noticeDocumentChecked,
         boolean eligibilityChecked,
@@ -19,6 +21,7 @@ public record FavoriteTrackerResponse(
         return new FavoriteTrackerResponse(
                 favorite.getNoticeId(),
                 favorite.getProgress(),
+                favorite.getApplicationResult(),
                 favorite.getMemo(),
                 favorite.isNoticeDocumentChecked(),
                 favorite.isEligibilityChecked(),
