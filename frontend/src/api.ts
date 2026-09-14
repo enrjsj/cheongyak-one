@@ -248,6 +248,8 @@ export interface FavoriteTracker {
   noticeId: number;
   progress: FavoriteProgress;
   applicationResult: FavoriteApplicationResult;
+  applicationResultMemo?: string;
+  applicationResultRecordedAt?: string;
   memo?: string;
   noticeDocumentChecked: boolean;
   eligibilityChecked: boolean;
@@ -259,6 +261,7 @@ export interface FavoriteTracker {
 export interface FavoriteTrackerInput {
   progress: FavoriteProgress;
   applicationResult?: FavoriteApplicationResult;
+  applicationResultMemo?: string;
   memo?: string;
   noticeDocumentChecked: boolean;
   eligibilityChecked: boolean;

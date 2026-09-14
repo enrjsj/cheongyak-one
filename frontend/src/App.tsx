@@ -937,6 +937,7 @@ export default function Home() {
     memo: string,
     checklist: Partial<Pick<FavoriteTracker, FavoriteChecklistKey>> = {},
     applicationResult?: FavoriteApplicationResult,
+    applicationResultMemo?: string,
   ) => {
     if (!member || favoriteTrackerPendingId !== undefined) return;
     const current = favoriteTrackers.get(noticeId);
@@ -945,6 +946,7 @@ export default function Home() {
       const tracker = await updateFavoriteTracker(noticeId, {
         progress,
         applicationResult: applicationResult ?? current?.applicationResult ?? "PENDING",
+        applicationResultMemo: applicationResultMemo?.trim() || current?.applicationResultMemo?.trim() || undefined,
         memo: memo.trim() || undefined,
         noticeDocumentChecked: checklist.noticeDocumentChecked ?? current?.noticeDocumentChecked ?? false,
         eligibilityChecked: checklist.eligibilityChecked ?? current?.eligibilityChecked ?? false,
@@ -1602,7 +1604,8 @@ export default function Home() {
                           <select value={favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING"} disabled={favoriteTrackerPendingId === item.id} onChange={(event) => void saveFavoriteTracker(item.id, "APPLIED", favoriteTrackers.get(item.id)?.memo ?? "", {}, event.target.value as FavoriteApplicationResult)} aria-label={`${item.title} 신청 결과`}>
                             {Object.entries(FAVORITE_APPLICATION_RESULT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                           </select>
-                          <small>{(favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING") === "PENDING" ? `당첨 발표일 ${formatShortDate(item.winnerAnnounceDate)}에 결과를 확인하세요.` : "공식 당첨자 발표를 기준으로 직접 기록한 결과입니다."}</small>
+                          <small>{(favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING") === "PENDING" ? `당첨 발표일 ${formatShortDate(item.winnerAnnounceDate)}에 결과를 확인하세요.` : `${favoriteTrackers.get(item.id)?.applicationResultRecordedAt ? `${formatChangedAt(favoriteTrackers.get(item.id)?.applicationResultRecordedAt ?? "")} 기록` : "공식 당첨자 발표를 기준으로 직접 기록한 결과입니다."}`}</small>
+                          {(favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING") !== "PENDING" && <input key={`${item.id}-${favoriteTrackers.get(item.id)?.applicationResultRecordedAt ?? "result"}`} defaultValue={favoriteTrackers.get(item.id)?.applicationResultMemo ?? ""} maxLength={500} placeholder="결과 메모 (예: 계약 일정 확인)" onBlur={(event) => void saveFavoriteTracker(item.id, "APPLIED", favoriteTrackers.get(item.id)?.memo ?? "", {}, favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING", event.target.value)} />}
                         </div>
                       )}
                       <div className="card-actions">
@@ -1814,7 +1817,8 @@ export default function Home() {
                 <select value={favoriteTrackers.get(detailApplication.id)?.applicationResult ?? "PENDING"} disabled={favoriteTrackerPendingId === detailApplication.id} onChange={(event) => void saveFavoriteTracker(detailApplication.id, "APPLIED", favoriteTrackers.get(detailApplication.id)?.memo ?? "", {}, event.target.value as FavoriteApplicationResult)} aria-label="신청 결과">
                   {Object.entries(FAVORITE_APPLICATION_RESULT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
-                <small>{(favoriteTrackers.get(detailApplication.id)?.applicationResult ?? "PENDING") === "PENDING" ? `당첨 발표일은 ${formatShortDate(detailApplication.winnerAnnounceDate)}입니다.` : "공식 당첨자 발표를 기준으로 직접 기록한 결과입니다."}</small>
+                <small>{(favoriteTrackers.get(detailApplication.id)?.applicationResult ?? "PENDING") === "PENDING" ? `당첨 발표일은 ${formatShortDate(detailApplication.winnerAnnounceDate)}입니다.` : `${favoriteTrackers.get(detailApplication.id)?.applicationResultRecordedAt ? `${formatChangedAt(favoriteTrackers.get(detailApplication.id)?.applicationResultRecordedAt ?? "")} 기록` : "공식 당첨자 발표를 기준으로 직접 기록한 결과입니다."}`}</small>
+                {(favoriteTrackers.get(detailApplication.id)?.applicationResult ?? "PENDING") !== "PENDING" && <input key={`${detailApplication.id}-${favoriteTrackers.get(detailApplication.id)?.applicationResultRecordedAt ?? "result"}`} defaultValue={favoriteTrackers.get(detailApplication.id)?.applicationResultMemo ?? ""} maxLength={500} placeholder="결과 메모 (예: 계약 일정 확인)" onBlur={(event) => void saveFavoriteTracker(detailApplication.id, "APPLIED", favoriteTrackers.get(detailApplication.id)?.memo ?? "", {}, favoriteTrackers.get(detailApplication.id)?.applicationResult ?? "PENDING", event.target.value)} />}
               </div>
             )}
             <div className="detail-actions"><button type="button" className="secondary-button" onClick={() => void toggleSaved(detailApplication.id)} disabled={favoritePendingId === detailApplication.id}><Icon name="bookmark" /> {savedIds.has(detailApplication.id) ? "관심 해제" : "관심 저장"}</button><button type="button" className="secondary-button" onClick={() => void copyNoticeLink(detailApplication.id)}>링크 복사</button>{detailApplication.officialUrl ? <a className="primary-button" href={detailApplication.officialUrl} target="_blank" rel="noreferrer">공식 공고 보기 <Icon name="arrow" /></a> : <button type="button" className="primary-button" disabled>공식 링크 확인 중</button>}</div>

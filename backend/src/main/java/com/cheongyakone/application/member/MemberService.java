@@ -388,6 +388,7 @@ public class MemberService {
         favorite.updateTracker(
                 request.progress(),
                 request.applicationResult() == null ? FavoriteApplicationResult.PENDING : request.applicationResult(),
+                request.applicationResultMemo(),
                 request.memo(),
                 request.noticeDocumentChecked(),
                 request.eligibilityChecked(),
