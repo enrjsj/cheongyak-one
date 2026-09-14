@@ -52,6 +52,12 @@ public class MemberFavorite {
     @Column(name = "APPLICATION_RESULT", nullable = false, length = 20)
     private FavoriteApplicationResult applicationResult = FavoriteApplicationResult.PENDING;
 
+    @Column(name = "APPLICATION_RESULT_MEMO", length = 500)
+    private String applicationResultMemo;
+
+    @Column(name = "APPLICATION_RESULT_RECORDED_AT")
+    private Instant applicationResultRecordedAt;
+
     @Column(name = "MEMO", length = 500)
     private String memo;
 
@@ -96,6 +102,10 @@ public class MemberFavorite {
 
     public FavoriteApplicationResult getApplicationResult() { return applicationResult; }
 
+    public String getApplicationResultMemo() { return applicationResultMemo; }
+
+    public Instant getApplicationResultRecordedAt() { return applicationResultRecordedAt; }
+
     public String getMemo() { return memo; }
 
     public Instant getUpdatedAt() { return updatedAt; }
@@ -111,6 +121,7 @@ public class MemberFavorite {
     public void updateTracker(
             FavoriteProgress progress,
             FavoriteApplicationResult applicationResult,
+            String applicationResultMemo,
             String memo,
             boolean noticeDocumentChecked,
             boolean eligibilityChecked,
@@ -119,9 +130,13 @@ public class MemberFavorite {
             Instant updatedAt
     ) {
         this.progress = Objects.requireNonNull(progress);
-        this.applicationResult = progress == FavoriteProgress.APPLIED
-                ? Objects.requireNonNull(applicationResult)
-                : FavoriteApplicationResult.PENDING;
+        FavoriteApplicationResult nextResult = progress == FavoriteProgress.APPLIED
+                ? Objects.requireNonNull(applicationResult) : FavoriteApplicationResult.PENDING;
+        this.applicationResultRecordedAt = nextResult == FavoriteApplicationResult.PENDING
+                ? null : nextResult != this.applicationResult || this.applicationResultRecordedAt == null ? updatedAt : this.applicationResultRecordedAt;
+        this.applicationResult = nextResult;
+        this.applicationResultMemo = nextResult == FavoriteApplicationResult.PENDING || applicationResultMemo == null || applicationResultMemo.isBlank()
+                ? null : applicationResultMemo.trim();
         this.memo = memo == null || memo.isBlank() ? null : memo.trim();
         this.noticeDocumentChecked = noticeDocumentChecked;
         this.eligibilityChecked = eligibilityChecked;
