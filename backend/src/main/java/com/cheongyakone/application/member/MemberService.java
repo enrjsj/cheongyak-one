@@ -6,6 +6,7 @@ import com.cheongyakone.api.member.MemberSessionResponse;
 import com.cheongyakone.api.member.EligibilityProfileResponse;
 import com.cheongyakone.api.member.SearchPreferenceResponse;
 import com.cheongyakone.api.member.FavoriteTrackerResponse;
+import com.cheongyakone.domain.member.FavoriteApplicationResult;
 import com.cheongyakone.config.AuthProperties;
 import com.cheongyakone.domain.member.Member;
 import com.cheongyakone.domain.member.MemberActionTokenRepository;
@@ -386,6 +387,7 @@ public class MemberService {
                 ));
         favorite.updateTracker(
                 request.progress(),
+                request.applicationResult() == null ? FavoriteApplicationResult.PENDING : request.applicationResult(),
                 request.memo(),
                 request.noticeDocumentChecked(),
                 request.eligibilityChecked(),
