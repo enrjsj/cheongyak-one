@@ -242,10 +242,12 @@ export interface MemberRecommendationList {
 export type SearchPreferenceStatus = "ALL" | "TODAY" | "OPEN" | "UPCOMING";
 export type SearchPreferenceSort = "LATEST" | "DEADLINE";
 export type FavoriteProgress = "SAVED" | "CHECKING" | "READY" | "APPLIED";
+export type FavoriteApplicationResult = "PENDING" | "SELECTED" | "WAITLISTED" | "NOT_SELECTED";
 
 export interface FavoriteTracker {
   noticeId: number;
   progress: FavoriteProgress;
+  applicationResult: FavoriteApplicationResult;
   memo?: string;
   noticeDocumentChecked: boolean;
   eligibilityChecked: boolean;
@@ -256,6 +258,7 @@ export interface FavoriteTracker {
 
 export interface FavoriteTrackerInput {
   progress: FavoriteProgress;
+  applicationResult?: FavoriteApplicationResult;
   memo?: string;
   noticeDocumentChecked: boolean;
   eligibilityChecked: boolean;
