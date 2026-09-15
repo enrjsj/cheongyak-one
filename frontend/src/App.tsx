@@ -1701,6 +1701,11 @@ export default function Home() {
                         <span><b>{item.title}</b><small>{item.region} · {item.type}</small></span>
                         <Icon name="arrow" />
                       </button>
+                      <div className="recent-actions">
+                        <button type="button" onClick={() => void toggleSaved(item.id)} aria-label={`${item.title} 관심청약 ${savedIds.has(item.id) ? "해제" : "저장"}`}><Icon name="bookmark" /> {savedIds.has(item.id) ? "저장됨" : "관심"}</button>
+                        <button type="button" onClick={() => void toggleComparison(item.id)} disabled={comparisonPendingId !== undefined || comparisonResetPending} aria-label={`${item.title} ${comparisonIds.includes(item.id) ? "비교 해제" : "비교 담기"}`}><Icon name="grid" /> {comparisonIds.includes(item.id) ? "비교 해제" : "비교"}</button>
+                        <button type="button" onClick={() => setRecentNoticeIds((ids) => ids.filter((id) => id !== item.id))} aria-label={`${item.title} 최근 본 공고에서 삭제`}><Icon name="close" /></button>
+                      </div>
                     </li>
                   ))}
                 </ol>
