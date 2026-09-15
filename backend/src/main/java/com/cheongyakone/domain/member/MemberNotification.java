@@ -161,6 +161,14 @@ public class MemberNotification {
         pushLastError = safeError.substring(0, Math.min(safeError.length(), 500));
     }
 
+    public boolean retryFailedPush(Instant now, int maximumAttempts) {
+        if (!pushDeliveryRequested || pushSentAt != null || pushAttempts < maximumAttempts) return false;
+        pushAttempts = 0;
+        pushNextAttemptAt = Objects.requireNonNull(now);
+        pushLastError = null;
+        return true;
+    }
+
     public Long getId() {
         return id;
     }

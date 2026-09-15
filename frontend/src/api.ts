@@ -748,6 +748,14 @@ export function fetchAdminPushNotificationDashboard(): Promise<AdminPushNotifica
   return requestJson<AdminPushNotificationDashboard>("/api/v1/admin/notifications/push");
 }
 
+export function dispatchAdminPushNotifications(): Promise<{ sentCount: number }> {
+  return requestJson<{ sentCount: number }>("/api/v1/admin/notifications/push/dispatch", { method: "POST" });
+}
+
+export function retryAdminPushNotification(notificationId: number): Promise<void> {
+  return requestJson<void>(`/api/v1/admin/notifications/push/${notificationId}/retry`, { method: "POST" });
+}
+
 export function fetchAdminAuditLogs(): Promise<AdminAuditLog[]> {
   return requestJson<AdminAuditLog[]>("/api/v1/admin/audit-logs");
 }
