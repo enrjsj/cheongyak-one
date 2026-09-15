@@ -831,6 +831,11 @@ export default function Home() {
     .map((id) => knownApplications.find((item) => item.id === id))
     .filter((item): item is Application => Boolean(item)), [knownApplications, comparisonIds]);
   const savedNotices = useMemo(() => knownApplications.filter((item) => savedIds.has(item.id)), [knownApplications, savedIds]);
+  const upcomingFavoriteEvents = useMemo(() => savedNotices.flatMap((item) => [
+    item.applyStartDate ? { date: item.applyStartDate, label: "접수 시작", item } : undefined,
+    item.applyEndDate ? { date: item.applyEndDate, label: "접수 마감", item } : undefined,
+    item.winnerAnnounceDate ? { date: item.winnerAnnounceDate, label: "당첨 발표", item } : undefined,
+  ]).filter((event): event is { date: string; label: string; item: Application } => Boolean(event && event.date >= koreaToday())).sort((left, right) => left.date.localeCompare(right.date)).slice(0, 5), [savedNotices]);
   const recentNotices = useMemo(() => recentNoticeIds
     .map((id) => knownApplications.find((item) => item.id === id))
     .filter((item): item is Application => Boolean(item)), [knownApplications, recentNoticeIds]);
@@ -1585,6 +1590,12 @@ export default function Home() {
                         </button>;
                       })}
                     </div>
+                    {upcomingFavoriteEvents.length > 0 && (
+                      <div className="favorite-upcoming-events" aria-label="다가오는 관심청약 일정">
+                        <div><span>다가오는 내 일정</span><small>관심청약의 접수·당첨 발표 일정입니다.</small></div>
+                        <ol>{upcomingFavoriteEvents.map((event) => <li key={`${event.item.id}-${event.label}-${event.date}`}><time>{formatShortDate(event.date)}</time><span>{event.label}</span><button type="button" onClick={() => openDetail(event.item)}>{event.item.title}</button></li>)}</ol>
+                      </div>
+                    )}
                   </section>
                 )}
                 <div className="application-list">
