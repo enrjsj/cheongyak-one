@@ -26,7 +26,7 @@ public class MemberNotificationPushDispatcher {
         this.clock = clock;
     }
 
-    @Scheduled(cron = "${app.member-notification.push-cron}", zone = "${app.member-notification.zone}")
+    @Scheduled(cron = "${app.member-notification.push-cron:0 */5 * * * *}", zone = "${app.member-notification.zone}")
     public void deliverScheduledPushes() {
         var candidateIds = notificationRepository.findPushDeliveryCandidateIds(
                 clock.instant(), MAXIMUM_ATTEMPTS, PageRequest.of(0, BATCH_SIZE)
