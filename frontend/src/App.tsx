@@ -1580,6 +1580,13 @@ export default function Home() {
                       {favoritePreparation.checklistIncomplete > 0 && <em>확인 항목 남음 {favoritePreparation.checklistIncomplete}건</em>}
                       {favoritePreparation.urgent > 0 && <em>마감 3일 이내 {favoritePreparation.urgent}건</em>}
                     </div>
+                    <div className="favorite-eligibility-status">
+                      <div>
+                        <span>내 청약 조건 사전점검</span>
+                        <strong>{eligibilityProfile ? "저장된 내 조건을 기준으로 공고문을 확인하세요" : "사전점검을 저장하면 준비 항목을 더 빠르게 확인할 수 있어요"}</strong>
+                      </div>
+                      <button type="button" onClick={() => openQualification(Boolean(eligibilityProfile))}>{eligibilityProfile ? "조회·수정" : "사전점검 시작"}</button>
+                    </div>
                     <div className="favorite-progress-filters" role="group" aria-label="관심청약 준비 상태 필터">
                       {(["ALL", "INCOMPLETE", "CHECKING", "READY", "APPLIED"] as const).map((progress) => (
                         <button className={favoriteProgressFilter === progress ? "active" : ""} type="button" key={progress} onClick={() => setFavoriteProgressFilter(progress)}>
