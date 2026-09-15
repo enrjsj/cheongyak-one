@@ -82,6 +82,7 @@ type PresentationStatus = Exclude<StatusKey, "all"> | "announcement" | "closed";
 type IconName = "search" | "pin" | "home" | "calendar" | "bookmark" | "arrow" | "check" | "bell" | "grid" | "close" | "filter" | "user";
 type FavoriteProgressFilter = FavoriteProgress | "ALL" | "INCOMPLETE" | "RESULT_PENDING" | "RESULT_SELECTED" | "RESULT_WAITLISTED" | "RESULT_NOT_SELECTED";
 type FavoriteChecklistKey = "noticeDocumentChecked" | "eligibilityChecked" | "scheduleChecked" | "fundsChecked";
+type FavoriteSortKey = "PREPARATION" | "DEADLINE" | "RESULT";
 
 const FAVORITE_PROGRESS_LABELS: Record<FavoriteProgress, string> = {
   SAVED: "저장만 함",
@@ -437,6 +438,7 @@ export default function Home() {
   const [favoritePendingId, setFavoritePendingId] = useState<number>();
   const [savedOnly, setSavedOnly] = useState(false);
   const [favoriteProgressFilter, setFavoriteProgressFilter] = useState<FavoriteProgressFilter>("ALL");
+  const [favoriteSortKey, setFavoriteSortKey] = useState<FavoriteSortKey>("PREPARATION");
   const [comparisonIds, setComparisonIds] = useState<number[]>(initialComparisonIds);
   const [comparisonPendingId, setComparisonPendingId] = useState<number>();
   const [comparisonResetPending, setComparisonResetPending] = useState(false);
@@ -875,15 +877,23 @@ export default function Home() {
     }).sort((left, right) => {
       const leftProgress = favoriteTrackers.get(left.id)?.progress ?? "SAVED";
       const rightProgress = favoriteTrackers.get(right.id)?.progress ?? "SAVED";
+      const deadlineOrder = (dateValue(left.applyEndDate) ?? Number.MAX_SAFE_INTEGER) - (dateValue(right.applyEndDate) ?? Number.MAX_SAFE_INTEGER);
+      if (favoriteSortKey === "DEADLINE") return deadlineOrder;
+      if (favoriteSortKey === "RESULT") {
+        const leftResult = leftProgress === "APPLIED" ? favoriteTrackers.get(left.id)?.applicationResult ?? "PENDING" : undefined;
+        const rightResult = rightProgress === "APPLIED" ? favoriteTrackers.get(right.id)?.applicationResult ?? "PENDING" : undefined;
+        const resultOrder = (leftResult ? FAVORITE_APPLICATION_RESULT_PRIORITY[leftResult] : Number.MAX_SAFE_INTEGER) - (rightResult ? FAVORITE_APPLICATION_RESULT_PRIORITY[rightResult] : Number.MAX_SAFE_INTEGER);
+        return resultOrder !== 0 ? resultOrder : deadlineOrder;
+      }
       const progressOrder = FAVORITE_PROGRESS_PRIORITY[leftProgress] - FAVORITE_PROGRESS_PRIORITY[rightProgress];
       if (progressOrder !== 0) return progressOrder;
       if (leftProgress === "APPLIED" && rightProgress === "APPLIED") {
         const resultOrder = FAVORITE_APPLICATION_RESULT_PRIORITY[favoriteTrackers.get(left.id)?.applicationResult ?? "PENDING"] - FAVORITE_APPLICATION_RESULT_PRIORITY[favoriteTrackers.get(right.id)?.applicationResult ?? "PENDING"];
         if (resultOrder !== 0) return resultOrder;
       }
-      return (dateValue(left.applyEndDate) ?? Number.MAX_SAFE_INTEGER) - (dateValue(right.applyEndDate) ?? Number.MAX_SAFE_INTEGER);
+      return deadlineOrder;
     });
-  }, [favoriteProgressFilter, favoriteTrackers, filtered, savedOnly]);
+  }, [favoriteProgressFilter, favoriteSortKey, favoriteTrackers, filtered, savedOnly]);
   const activeFilterCount = Number(region !== "전체") + Number(category !== "전체") + Number(Boolean(minPriceManwon || maxPriceManwon));
   const todayCount = noticeFacets.endingToday;
   const openCount = noticeFacets.open;
@@ -1541,10 +1551,18 @@ export default function Home() {
               <div className="section-actions">
                 <label className="sort-control">
                   <span>정렬</span>
-                  <select value={sortKey} onChange={(event) => { setSortKey(event.target.value as NoticeSortKey); resetVisible(); }} aria-label="청약 공고 정렬">
-                    <option value="LATEST">최신 공고순</option>
-                    <option value="DEADLINE">마감 임박순</option>
-                  </select>
+                  {savedOnly ? (
+                    <select value={favoriteSortKey} onChange={(event) => setFavoriteSortKey(event.target.value as FavoriteSortKey)} aria-label="관심청약 정렬">
+                      <option value="PREPARATION">준비 상태순</option>
+                      <option value="DEADLINE">마감 임박순</option>
+                      <option value="RESULT">신청 결과순</option>
+                    </select>
+                  ) : (
+                    <select value={sortKey} onChange={(event) => { setSortKey(event.target.value as NoticeSortKey); resetVisible(); }} aria-label="청약 공고 정렬">
+                      <option value="LATEST">최신 공고순</option>
+                      <option value="DEADLINE">마감 임박순</option>
+                    </select>
+                  )}
                 </label>
                 {savedOnly && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={() => downloadCalendar(savedNotices, "cheongyak-saved.ics")}><Icon name="calendar" /> 관심 일정 저장</button>}
                 {savedOnly && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={() => setFavoriteCalendarOpen(true)}><Icon name="calendar" /> 전체 일정 보기</button>}
