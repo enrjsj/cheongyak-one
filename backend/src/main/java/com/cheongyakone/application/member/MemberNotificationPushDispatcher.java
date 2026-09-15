@@ -28,11 +28,17 @@ public class MemberNotificationPushDispatcher {
 
     @Scheduled(cron = "${app.member-notification.push-cron:0 */5 * * * *}", zone = "${app.member-notification.zone}")
     public void deliverScheduledPushes() {
+        deliverPendingPushes();
+    }
+
+    public int deliverPendingPushes() {
         var candidateIds = notificationRepository.findPushDeliveryCandidateIds(
                 clock.instant(), MAXIMUM_ATTEMPTS, PageRequest.of(0, BATCH_SIZE)
         );
+        int sentCount = 0;
         for (Long notificationId : candidateIds) {
-            pushDelivery.deliver(notificationId);
+            if (pushDelivery.deliver(notificationId)) sentCount += 1;
         }
+        return sentCount;
     }
 }
