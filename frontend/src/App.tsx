@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 27348)
-Total output lines: 1962
-
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   changeMemberPassword,
@@ -913,7 +910,672 @@ export default function Home() {
   const today = koreaToday();
   const [, thisMonth, thisDay] = today.split("-").map(Number);
 
-  const scrollToResult…7348 tokens truncated…NG}</em>}
+  const scrollToResults = () => document.querySelector("#applications")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const resetVisible = () => setVisibleCount(6);
+  const submitSearch = (event: FormEvent) => {
+    event.preventDefault();
+    setActiveStatus("all");
+    setSavedOnly(false);
+    resetVisible();
+    scrollToResults();
+  };
+
+  const toggleSaved = async (id: number) => {
+    if (favoritePendingId !== undefined) return;
+    const next = new Set(savedIds);
+    const isSaving = !next.has(id);
+    if (isSaving) next.add(id); else next.delete(id);
+    setSavedIds(next);
+    if (!member) {
+      window.localStorage.setItem("cheongyak-one-saved", JSON.stringify([...next]));
+      setToast(isSaving ? "관심청약에 저장했어요." : "관심청약에서 삭제했어요.");
+      return;
+    }
+
+    setFavoritePendingId(id);
+    try {
+      setSavedIds(new Set(await setFavorite(id, isSaving)));
+      if (!isSaving) setFavoriteTrackers((current) => {
+        const nextTrackers = new Map(current);
+        nextTrackers.delete(id);
+        return nextTrackers;
+      });
+      setToast(isSaving ? "계정 관심청약에 저장했어요." : "관심청약에서 삭제했어요.");
+    } catch (error) {
+      setSavedIds(new Set(savedIds));
+      setToast(error instanceof Error ? error.message : "관심청약을 변경하지 못했습니다.");
+    } finally {
+      setFavoritePendingId(undefined);
+    }
+  };
+
+  const saveFavoriteTracker = async (
+    noticeId: number,
+    progress: FavoriteProgress,
+    memo: string,
+    checklist: Partial<Pick<FavoriteTracker, FavoriteChecklistKey>> = {},
+    applicationResult?: FavoriteApplicationResult,
+    applicationResultMemo?: string,
+  ) => {
+    if (!member || favoriteTrackerPendingId !== undefined) return;
+    const current = favoriteTrackers.get(noticeId);
+    setFavoriteTrackerPendingId(noticeId);
+    try {
+      const tracker = await updateFavoriteTracker(noticeId, {
+        progress,
+        applicationResult: applicationResult ?? current?.applicationResult ?? "PENDING",
+        applicationResultMemo: applicationResultMemo === undefined ? current?.applicationResultMemo?.trim() || undefined : applicationResultMemo.trim(),
+        memo: memo.trim() || undefined,
+        noticeDocumentChecked: checklist.noticeDocumentChecked ?? current?.noticeDocumentChecked ?? false,
+        eligibilityChecked: checklist.eligibilityChecked ?? current?.eligibilityChecked ?? false,
+        scheduleChecked: checklist.scheduleChecked ?? current?.scheduleChecked ?? false,
+        fundsChecked: checklist.fundsChecked ?? current?.fundsChecked ?? false,
+      });
+      setFavoriteTrackers((current) => new Map(current).set(noticeId, tracker));
+      setToast(progress === "APPLIED" && applicationResult ? "신청 결과를 저장했습니다." : "관심청약 준비 상태를 저장했습니다.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "준비 상태를 저장하지 못했습니다.");
+    } finally {
+      setFavoriteTrackerPendingId(undefined);
+    }
+  };
+
+  const synchronizeMemberLists = async (profile: MemberProfile) => {
+    setMember(profile);
+    let synchronized = true;
+    try {
+      const guestIds = [...savedIds];
+      const accountIds = guestIds.length > 0 ? await mergeFavoriteIds(guestIds) : await fetchFavoriteIds();
+      setSavedIds(new Set(accountIds));
+      setFavoriteTrackers(new Map((await fetchFavoriteTrackers()).map((tracker) => [tracker.noticeId, tracker])));
+      window.localStorage.removeItem("cheongyak-one-saved");
+    } catch {
+      synchronized = false;
+    }
+    try {
+      const browserIds = comparisonIds;
+      const accountIds = browserIds.length > 0
+        ? await mergeComparisonIds(browserIds)
+        : await fetchComparisonIds();
+      setComparisonIds(accountIds);
+      window.localStorage.removeItem("cheongyak-one-comparison");
+    } catch {
+      synchronized = false;
+    }
+    return synchronized;
+  };
+
+  const handleLogin = async (email: string, password: string) => {
+    const synchronized = await synchronizeMemberLists(await loginMember(email, password));
+    let preferenceApplied = false;
+    try {
+      const preference = await fetchSearchPreference();
+      setSearchPreference(preference);
+      if (preference) {
+        applySearchPreference(preference);
+        preferenceApplied = true;
+      }
+    } catch {
+      // 로그인은 유지하고 검색조건만 사용자가 다시 불러올 수 있게 한다.
+    }
+    try {
+      setEligibilityProfile(await fetchEligibilityProfile());
+    } catch {
+      // 로그인은 유지하고 사전점검은 사용자가 다시 시작할 수 있게 한다.
+    }
+    setMemberDialog(null);
+    setToast(synchronized
+      ? preferenceApplied
+        ? "로그인하고 저장된 맞춤 검색조건을 적용했어요."
+        : "로그인했습니다. 관심·비교 목록을 계정과 동기화했어요."
+      : "로그인은 완료됐지만 목록 동기화는 다시 시도해야 합니다.");
+  };
+
+  const handleSignup = async (email: string, password: string, profileInput: MemberProfileInput) => {
+    const profile = await signupMember(email, password, profileInput);
+    if (profile.emailVerified) {
+      await handleLogin(email, password);
+      return;
+    }
+    setMemberDialog("verify-email");
+    setToast("가입했습니다. 이메일의 인증 링크를 확인해주세요.");
+  };
+
+  const handleRequestEmailVerification = async (email: string) => {
+    await requestEmailVerification(email);
+  };
+
+  const handleRequestPasswordReset = async (email: string) => {
+    await requestPasswordReset(email);
+  };
+
+  const handleResetPassword = async (newPassword: string) => {
+    if (!passwordResetToken) throw new Error("비밀번호 재설정 링크를 다시 열어주세요.");
+    await resetPasswordWithToken(passwordResetToken, newPassword);
+    setPasswordResetToken("");
+    setMemberDialog("login");
+    setToast("비밀번호를 변경했습니다. 새 비밀번호로 로그인해주세요.");
+  };
+
+  const handleLogout = async () => {
+    await logoutMember();
+    setMember(undefined);
+    setFavoriteTrackers(new Map());
+    setNotificationsOpen(false);
+    setAdminSyncOpen(false);
+    setSearchPreference(undefined);
+    setEligibilityProfile(undefined);
+    setSavedIds(readGuestSavedIds());
+    setSavedOnly(false);
+    setComparisonIds([]);
+    setMemberDialog(null);
+    setToast("로그아웃했습니다.");
+  };
+
+  const handleUpdateProfile = async (profileInput: MemberProfileInput) => {
+    setMember(await updateMemberProfile(profileInput));
+  };
+
+  const handleDeletePersonalProfile = async () => {
+    setMember(await deleteMemberPersonalProfile());
+  };
+
+  const handleChangePassword = async (currentPassword: string, newPassword: string) => {
+    await changeMemberPassword(currentPassword, newPassword);
+    setMember(undefined);
+    setFavoriteTrackers(new Map());
+    setNotificationsOpen(false);
+    setAdminSyncOpen(false);
+    setSearchPreference(undefined);
+    setEligibilityProfile(undefined);
+    setSavedIds(new Set());
+    setSavedOnly(false);
+    setComparisonIds([]);
+    setMemberDialog(null);
+    setToast("비밀번호를 변경했습니다. 새 비밀번호로 다시 로그인해주세요.");
+  };
+
+  const handleWithdraw = async (password: string) => {
+    await withdrawMember(password);
+    setMember(undefined);
+    setFavoriteTrackers(new Map());
+    setNotificationsOpen(false);
+    setAdminSyncOpen(false);
+    setSearchPreference(undefined);
+    setEligibilityProfile(undefined);
+    setSavedIds(new Set());
+    setSavedOnly(false);
+    setComparisonIds([]);
+    setMemberDialog(null);
+    setToast("회원 탈퇴가 완료됐습니다.");
+  };
+
+  const handleSaveSearchPreference = async () => {
+    if (!member) {
+      setFilterOpen(false);
+      setMemberDialog("login");
+      setToast("맞춤 검색조건을 저장하려면 로그인해주세요.");
+      return;
+    }
+    setPreferenceBusy(true);
+    try {
+      const preference = await saveSearchPreference({
+        region: region === "전체" ? undefined : region,
+        housingCategory: category === "전체" ? undefined : categoryValue(category),
+        status: activeStatus.toUpperCase() as MemberSearchPreference["status"],
+        sort: sortKey,
+        minPriceManwon: priceInManwon(minPriceManwon),
+        maxPriceManwon: priceInManwon(maxPriceManwon),
+      });
+      setSearchPreference(preference);
+      setToast("현재 검색조건을 계정에 저장했습니다.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "검색조건을 저장하지 못했습니다.");
+    } finally {
+      setPreferenceBusy(false);
+    }
+  };
+
+  const handleDeleteSearchPreference = async () => {
+    setPreferenceBusy(true);
+    try {
+      await deleteSearchPreference();
+      setSearchPreference(undefined);
+      setToast("저장된 맞춤 검색조건을 삭제했습니다.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "검색조건을 삭제하지 못했습니다.");
+    } finally {
+      setPreferenceBusy(false);
+    }
+  };
+
+  const toggleComparison = async (id: number) => {
+    if (comparisonPendingId !== undefined || comparisonResetPending) return;
+    const update = updateComparison(comparisonIds, id);
+    if (update.limitReached) {
+      setToast("공고는 최대 3개까지 비교할 수 있어요.");
+      return;
+    }
+    setComparisonIds(update.ids);
+    if (!member) {
+      setToast(update.added ? "비교 목록에 담았어요." : "비교 목록에서 뺐어요.");
+      return;
+    }
+    setComparisonPendingId(id);
+    try {
+      setComparisonIds(await setComparison(id, update.added));
+      setToast(update.added ? "계정 비교 목록에 담았어요." : "비교 목록에서 뺐어요.");
+    } catch (error) {
+      setComparisonIds(comparisonIds);
+      setToast(error instanceof Error ? error.message : "비교 목록을 변경하지 못했습니다.");
+    } finally {
+      setComparisonPendingId(undefined);
+    }
+  };
+
+  const resetComparisons = async () => {
+    if (comparisonResetPending || comparisonPendingId !== undefined) return;
+    const previousIds = comparisonIds;
+    setComparisonIds([]);
+    if (!member) return;
+    setComparisonResetPending(true);
+    try {
+      setComparisonIds(await clearComparisons());
+      setToast("계정 비교 목록을 모두 비웠어요.");
+    } catch (error) {
+      setComparisonIds(previousIds);
+      setToast(error instanceof Error ? error.message : "비교 목록을 비우지 못했습니다.");
+    } finally {
+      setComparisonResetPending(false);
+    }
+  };
+
+  const openComparison = () => {
+    if (comparisonNotices.length < 2) {
+      setToast("비교할 공고를 2개 이상 담아주세요.");
+      return;
+    }
+    setComparisonOpen(true);
+  };
+
+  const downloadCalendar = (items: NoticeSummary[], filename: string) => {
+    const hasSchedule = items.some((item) => item.applyStartDate || item.applyEndDate || item.winnerAnnounceDate);
+    if (!hasSchedule) {
+      setToast("저장할 청약 일정이 아직 없어요.");
+      return;
+    }
+
+    // 브라우저에서 표준 ICS 파일을 생성해 별도 개인정보 전송 없이 저장한다.
+    const url = URL.createObjectURL(new Blob([buildNoticeCalendar(items)], { type: "text/calendar;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    setToast("캘린더 파일을 저장했어요.");
+  };
+
+  const downloadFavoriteResults = () => {
+    const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
+    const rows = savedNotices.map((item) => {
+      const tracker = favoriteTrackers.get(item.id);
+      return [item.title, item.region, FAVORITE_PROGRESS_LABELS[tracker?.progress ?? "SAVED"], tracker?.progress === "APPLIED" ? FAVORITE_APPLICATION_RESULT_LABELS[tracker.applicationResult ?? "PENDING"] : "", tracker?.applicationResultRecordedAt ?? "", tracker?.applicationResultMemo ?? ""];
+    });
+    const content = ["공고명,지역,준비상태,신청결과,결과기록시각,결과메모", ...rows.map((row) => row.map(escape).join(","))].join("\n");
+    const url = URL.createObjectURL(new Blob([`\uFEFF${content}`], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a"); anchor.href = url; anchor.download = "cheongyak-favorite-results.csv"; anchor.click(); URL.revokeObjectURL(url);
+  };
+
+  const copyComparisonLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setToast("비교 링크를 복사했어요.");
+    } catch {
+      setToast("주소창의 링크를 직접 복사해주세요.");
+    }
+  };
+
+  const copyNoticeLink = async (noticeId: number) => {
+    try {
+      await navigator.clipboard.writeText(noticeUrl(window.location.href, noticeId));
+      setToast("공고 링크를 복사했어요.");
+    } catch {
+      setToast("주소창의 링크를 직접 복사해주세요.");
+    }
+  };
+
+  const copySearchLink = async () => {
+    const sharedUrl = new URL(noticeSearchUrl(window.location.href, {
+      query,
+      status: activeStatus,
+      region: region === "전체" ? undefined : region,
+      category: categoryValue(category),
+      minPriceManwon: priceInManwon(minPriceManwon),
+      maxPriceManwon: priceInManwon(maxPriceManwon),
+      sort: sortKey,
+    }));
+    sharedUrl.searchParams.delete("notice");
+    sharedUrl.searchParams.delete("compare");
+    try {
+      await navigator.clipboard.writeText(sharedUrl.toString());
+      setToast("현재 검색조건 링크를 복사했어요.");
+    } catch {
+      setToast("주소창의 링크를 직접 복사해주세요.");
+    }
+  };
+
+  const applyQuickFilter = (value: string) => {
+    setSavedOnly(false);
+    setActiveStatus("all");
+    resetVisible();
+    if (REGION_ORDER.includes(value)) {
+      setRegion(value);
+      setCategory("전체");
+    } else {
+      setCategory(value);
+      setRegion("전체");
+    }
+    scrollToResults();
+  };
+
+  const openReadyFavorites = () => {
+    setSavedOnly(true);
+    setFavoriteProgressFilter("READY");
+    setActiveStatus("all");
+    resetVisible();
+    scrollToResults();
+  };
+
+  const openDetail = async (item: Application) => {
+    const targetUrl = noticeUrl(window.location.href, item.id);
+    if (noticeIdFromSearch(window.location.search) !== item.id) {
+      window.history.pushState({ ...window.history.state, cheongyakNoticeModal: true }, "", targetUrl);
+    }
+    setSelected(item);
+    setSelectedDetail(null);
+    setDetailLoading(true);
+    try {
+      const detail = await fetchNotice(item.id);
+      setSelectedDetail(detail);
+      rememberNotice(detail.id);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "상세 정보를 불러오지 못했습니다.");
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const openNotificationNotice = async (noticeId: number) => {
+    setNotificationsOpen(false);
+    const application = applications.find((item) => item.id === noticeId);
+    if (application) {
+      await openDetail(application);
+      return;
+    }
+    try {
+      window.history.pushState(
+        { ...window.history.state, cheongyakNoticeModal: true },
+        "",
+        noticeUrl(window.location.href, noticeId),
+      );
+      const detail = await fetchNotice(noticeId);
+      setSelected(toApplication(detail));
+      setSelectedDetail(detail);
+      rememberNotice(detail.id);
+    } catch (error) {
+      window.history.replaceState(window.history.state, "", noticeUrl(window.location.href));
+      clearDetail();
+      setToast(error instanceof Error ? error.message : "알림의 공고를 불러오지 못했습니다.");
+    }
+  };
+
+  const dismissRecommendation = async (noticeId: number) => {
+    setRecommendationsBusy(true);
+    try {
+      await dismissMemberRecommendation(noticeId);
+      setRecommendations((current) => current ? {
+        ...current,
+        dismissedCount: current.dismissedCount + 1,
+        recommendations: current.recommendations.filter((item) => item.notice.id !== noticeId),
+      } : current);
+      setToast("이 공고를 맞춤 추천에서 제외했습니다.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "추천 공고를 제외하지 못했습니다.");
+    } finally {
+      setRecommendationsBusy(false);
+    }
+  };
+
+  const resetRecommendationDismissals = async () => {
+    setRecommendationsBusy(true);
+    try {
+      await resetDismissedRecommendations();
+      setRecommendationsVersion((version) => version + 1);
+      setToast("숨긴 추천 공고를 다시 표시합니다.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "숨긴 추천 공고를 복구하지 못했습니다.");
+    } finally {
+      setRecommendationsBusy(false);
+    }
+  };
+
+  const answerQuestion = (answer: EligibilityAnswer) => {
+    setAnswers((items) => [...items, answer]);
+    setQualStep((step) => step + 1);
+  };
+
+  const openQualification = (saved = false) => {
+    if (!member) {
+      setMemberDialog("login");
+      setToast("청약 조건 사전점검은 로그인 후 저장하고 관리할 수 있어요.");
+      return;
+    }
+    if (saved && eligibilityProfile) {
+      setAnswers([
+        eligibilityProfile.homeless,
+        eligibilityProfile.subscriptionAccount,
+        eligibilityProfile.newlywed,
+        eligibilityProfile.firstHome,
+      ]);
+      setQualStep(eligibilityQuestions.length);
+    } else {
+      setAnswers([]);
+      setQualStep(0);
+    }
+    setQualOpen(true);
+  };
+
+  const handleSaveEligibilityProfile = async () => {
+    if (answers.length !== eligibilityQuestions.length) return;
+    setEligibilityBusy(true);
+    try {
+      const saved = await saveEligibilityProfile({
+        homeless: answers[0],
+        subscriptionAccount: answers[1],
+        newlywed: answers[2],
+        firstHome: answers[3],
+      });
+      setEligibilityProfile(saved);
+      setToast(eligibilityProfile ? "사전점검 답변을 수정했습니다." : "사전점검 답변을 저장했습니다.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "사전점검을 저장하지 못했습니다.");
+    } finally {
+      setEligibilityBusy(false);
+    }
+  };
+
+  const handleDeleteEligibilityProfile = async () => {
+    setEligibilityBusy(true);
+    try {
+      await deleteEligibilityProfile();
+      setEligibilityProfile(undefined);
+      closeQualification();
+      setToast("저장된 사전점검을 삭제했습니다.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "사전점검을 삭제하지 못했습니다.");
+    } finally {
+      setEligibilityBusy(false);
+    }
+  };
+
+  const closeQualification = () => {
+    setQualOpen(false);
+    window.setTimeout(() => { setQualStep(0); setAnswers([]); }, 200);
+  };
+
+  const detailApplication = selected ? (selectedDetail ? toApplication(selectedDetail) : selected) : null;
+  const filterDialogRef = useDialogAccessibility<HTMLElement>(filterOpen, () => setFilterOpen(false));
+  const detailDialogRef = useDialogAccessibility<HTMLElement>(Boolean(detailApplication), closeDetail);
+  const comparisonDialogRef = useDialogAccessibility<HTMLElement>(comparisonOpen, () => setComparisonOpen(false));
+  const qualificationDialogRef = useDialogAccessibility<HTMLElement>(qualOpen, closeQualification);
+  const eligibilityResult = buildEligibilityCheckResult(answers);
+
+  return (
+    <main>
+      <header className="site-header">
+        <div className="header-inner">
+          <a className="brand" href="#top" aria-label="청약한눈 홈">
+            <span className="brand-mark"><span></span><span></span><span></span></span>
+            <span>청약한눈</span>
+          </a>
+          <nav className="main-nav" aria-label="주요 메뉴">
+            <a className="active" href="#applications">청약 찾기</a>
+            <a href="#schedule">청약 일정</a>
+            <a href="#guide">자격 가이드</a>
+          </nav>
+          <div className="header-actions">
+            <span className="demo-chip live-chip">LIVE DATA</span>
+            <button
+              className={`saved-button ${savedOnly ? "active" : ""}`}
+              type="button"
+              onClick={() => { setSavedOnly((value) => !value); setFavoriteProgressFilter("ALL"); setActiveStatus("all"); resetVisible(); scrollToResults(); }}
+              aria-pressed={savedOnly}
+            >
+              <Icon name="bookmark" /> <span>관심청약</span> <b>{savedIds.size}</b>
+            </button>
+            {member && favoritePreparation.counts.READY > 0 && <button className="ready-favorites-button" type="button" onClick={openReadyFavorites}><Icon name="check" /> <span>신청 준비</span> <b>{favoritePreparation.counts.READY}</b></button>}
+            {member && (
+              <button className="notification-button" type="button" onClick={() => { setMemberDialog(null); setNotificationsOpen(true); }} aria-label={`알림 ${unreadNotificationCount}개`}>
+                <Icon name="bell" />
+                {unreadNotificationCount > 0 && <b>{Math.min(unreadNotificationCount, 99)}</b>}
+              </button>
+            )}
+            {member?.role === "ADMIN" && (
+              <button className="admin-button" type="button" onClick={() => { setMemberDialog(null); setNotificationsOpen(false); setAdminSyncOpen(true); }}>
+                <Icon name="grid" /> <span>운영 관리</span>
+              </button>
+            )}
+            <button
+              className={`account-button ${member ? "signed-in" : ""}`}
+              type="button"
+              onClick={() => { setNotificationsOpen(false); setMemberDialog(member ? "account" : "login"); }}
+              disabled={authLoading}
+            >
+              <Icon name="user" /> <span>{authLoading ? "확인 중" : member ? member.nickname : "로그인"}</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <section className="hero" id="top">
+        <div className="hero-copy">
+          <div className="eyebrow"><span></span> 매일 업데이트되는 청약 정보</div>
+          <h1>내 조건에 맞는 청약만,<br/><em>한눈에.</em></h1>
+          <p>흩어진 모집공고를 일일이 찾지 마세요.<br/>청약홈 공고를 지역과 일정별로 보기 쉽게 정리해드려요.</p>
+          <form className="search-box" role="search" onSubmit={submitSearch}>
+            <label className="search-field">
+              <Icon name="search" />
+              <input value={query} maxLength={100} onChange={(event) => { setQuery(event.target.value); resetVisible(); }} placeholder="지역 또는 단지명을 검색해보세요" aria-label="청약 검색어" />
+              {query && <button className="clear-search" type="button" onClick={() => setQuery("")} aria-label="검색어 지우기"><Icon name="close" /></button>}
+            </label>
+            <button className="search-submit" type="submit">청약 찾기 <Icon name="arrow" /></button>
+          </form>
+          <div className="quick-filters">
+            <span>빠른 검색</span>
+            {["서울", "경기", "아파트", "오피스텔"].map((item) => <button type="button" key={item} onClick={() => applyQuickFilter(item)}>{item}</button>)}
+          </div>
+        </div>
+
+        <aside className="week-card" aria-label="이번 주 청약 요약">
+          <div className="week-card-head">
+            <div><span className="mini-label">{thisMonth}월 {Math.ceil(thisDay / 7)}주차</span><h2>이번 주 청약</h2></div>
+            <span className="live-dot">LIVE</span>
+          </div>
+          <div className="week-stats">
+            <div><strong>{openCount}</strong><span>접수중</span></div>
+            <div><strong>{todayCount}</strong><span>오늘 마감</span></div>
+            <div><strong>{upcomingCount}</strong><span>오픈 예정</span></div>
+          </div>
+          {highlight && highlightEvent ? (
+            <button className="next-event" type="button" onClick={() => openDetail(highlight)}>
+              <span className="date-box"><strong>{Number(highlightEvent.date.slice(8))}</strong><span>{weekday(highlightEvent.date)}</span></span>
+              <span><small>{highlightEvent.label}</small><b>{highlight.title}</b></span>
+              <Icon name="arrow" />
+            </button>
+          ) : (
+            <div className="next-event no-event"><span>새로운 접수 일정을 확인 중입니다.</span></div>
+          )}
+          <p className="data-note">청약홈 실데이터 · {syncedLabel} 기준</p>
+        </aside>
+      </section>
+
+      <section className="dashboard" id="applications">
+        <div className="status-tabs" role="tablist" aria-label="청약 상태">
+          {statuses.map((status) => (
+            <button className={activeStatus === status.key ? "selected" : ""} type="button" role="tab" aria-selected={activeStatus === status.key} key={status.key} onClick={() => { setActiveStatus(status.key); setSavedOnly(false); setFavoriteProgressFilter("ALL"); resetVisible(); }}>
+              <span className={`tab-icon ${status.tone}`}><Icon name={status.icon} /></span><span>{status.label}<b>{loading ? "–" : status.count}</b></span>
+            </button>
+          ))}
+        </div>
+
+        <div className="content-grid">
+          <div className="list-panel">
+            <div className="section-head">
+              <div>
+                <span className="section-kicker">{savedOnly ? "MY SAVED" : "REAL-TIME NOTICES"}</span>
+                <h2>{savedOnly ? "관심 청약" : "지금 확인할 청약"}</h2>
+                <p className="result-summary" aria-live="polite">{loading ? "실제 공고를 불러오는 중" : `조건에 맞는 공고 ${savedOnly && favoriteProgressFilter !== "ALL" ? visible.length : noticeTotal}건`}</p>
+              </div>
+              <div className="section-actions">
+                <label className="sort-control">
+                  <span>정렬</span>
+                  <select value={sortKey} onChange={(event) => { setSortKey(event.target.value as NoticeSortKey); resetVisible(); }} aria-label="청약 공고 정렬">
+                    <option value="LATEST">최신 공고순</option>
+                    <option value="DEADLINE">마감 임박순</option>
+                  </select>
+                </label>
+                {savedOnly && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={() => downloadCalendar(savedNotices, "cheongyak-saved.ics")}><Icon name="calendar" /> 관심 일정 저장</button>}
+                {savedOnly && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={() => setFavoriteCalendarOpen(true)}><Icon name="calendar" /> 전체 일정 보기</button>}
+                {savedOnly && member && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={downloadFavoriteResults}>내 기록 CSV</button>}
+                <button className="search-share-button" type="button" onClick={() => void copySearchLink()}><Icon name="arrow" /> 검색 공유</button>
+                <button className="filter-button" type="button" onClick={() => setFilterOpen(true)} disabled={loading}><Icon name="filter" /> 지역·유형·예산 필터 {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="list-loading" role="status" aria-label="청약 공고 불러오는 중">
+                {[0, 1, 2].map((item) => <div className="list-skeleton" key={item}><i></i><strong></strong><span></span><small></small></div>)}
+              </div>
+            ) : loadError ? (
+              <div className="inline-error" role="alert">
+                <span>!</span><h3>공고를 불러오지 못했어요</h3><p>{loadError}</p>
+                <button type="button" onClick={() => setLoadVersion((version) => version + 1)}>다시 불러오기</button>
+              </div>
+            ) : visible.length > 0 ? (
+              <>
+                {savedOnly && member && (
+                  <section className="favorite-preparation-summary" aria-label="관심청약 준비 현황">
+                    <div className="favorite-summary-heading">
+                      <span>준비 현황</span>
+                      <strong>신청 완료 건은 아래로, 마감이 가까운 공고는 먼저 확인하세요.</strong>
+                    </div>
+                    <div className="favorite-summary-stats">
+                      <span><b>{favoritePreparation.counts.CHECKING}</b> 조건 확인 중</span>
+                      <span><b>{favoritePreparation.counts.READY}</b> 신청 준비 완료</span>
+                      <span><b>{favoritePreparation.counts.APPLIED}</b> 신청 완료</span>
+                      {favoritePreparation.counts.APPLIED > 0 && <em>당첨 {favoritePreparation.applicationResults.SELECTED} · 예비 {favoritePreparation.applicationResults.WAITLISTED} · 발표 대기 {favoritePreparation.applicationResults.PENDING}</em>}
                       {favoritePreparation.recordedResults > 0 && <em>결과 기록 완료 {favoritePreparation.recordedResults}건</em>}
                       {favoritePreparation.checklistIncomplete > 0 && <em>확인 항목 남음 {favoritePreparation.checklistIncomplete}건</em>}
                       {favoritePreparation.urgent > 0 && <em>마감 3일 이내 {favoritePreparation.urgent}건</em>}
