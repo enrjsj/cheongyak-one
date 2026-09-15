@@ -423,6 +423,7 @@ test("notification inbox and preferences use authenticated CSRF requests", async
         newMatchingNoticeEnabled: true,
         noticeUpdatedEnabled: true,
         emailEnabled: false,
+        appPushEnabled: true,
       }), { status: 200, headers: { "Content-Type": "application/json" } });
     }
     if (String(url).endsWith("/9/read")) {
@@ -451,6 +452,7 @@ test("notification inbox and preferences use authenticated CSRF requests", async
       newMatchingNoticeEnabled: true,
       noticeUpdatedEnabled: true,
       emailEnabled: true,
+      appPushEnabled: false,
     });
   } finally {
     globalThis.fetch = originalFetch;
@@ -465,6 +467,7 @@ test("notification inbox and preferences use authenticated CSRF requests", async
   assert.equal(JSON.parse(requests[4].init.body).emailEnabled, true);
   assert.equal(JSON.parse(requests[4].init.body).newMatchingNoticeEnabled, true);
   assert.equal(JSON.parse(requests[4].init.body).noticeUpdatedEnabled, true);
+  assert.equal(JSON.parse(requests[4].init.body).appPushEnabled, false);
 });
 
 test("member recommendations use the authenticated recommendation endpoint", async () => {

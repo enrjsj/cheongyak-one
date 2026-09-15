@@ -1,6 +1,7 @@
 package com.cheongyakone.api.member;
 
 import com.cheongyakone.application.member.MemberService;
+import com.cheongyakone.application.member.MemberDeviceTokenService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
@@ -26,16 +27,40 @@ import java.util.Optional;
 public class MemberController {
 
     private final MemberService memberService;
+    private final MemberDeviceTokenService deviceTokenService;
     private final SessionCookieSupport cookieSupport;
 
-    public MemberController(MemberService memberService, SessionCookieSupport cookieSupport) {
+    public MemberController(MemberService memberService, MemberDeviceTokenService deviceTokenService, SessionCookieSupport cookieSupport) {
         this.memberService = memberService;
+        this.deviceTokenService = deviceTokenService;
         this.cookieSupport = cookieSupport;
     }
 
     @GetMapping
     public MemberResponse me(HttpServletRequest request) {
         return memberService.me(token(request));
+    }
+
+    @GetMapping("/device-tokens")
+    public List<MemberDeviceTokenResponse> deviceTokens(HttpServletRequest request) {
+        return deviceTokenService.devices(token(request));
+    }
+
+    @PutMapping("/device-tokens")
+    public MemberDeviceTokenResponse registerDeviceToken(
+            HttpServletRequest servletRequest,
+            @Valid @RequestBody MemberRequests.DeviceToken request
+    ) {
+        return deviceTokenService.register(token(servletRequest), request);
+    }
+
+    @DeleteMapping("/device-tokens")
+    public ResponseEntity<Void> unregisterDeviceToken(
+            HttpServletRequest servletRequest,
+            @Valid @RequestBody MemberRequests.DeviceTokenRemoval request
+    ) {
+        deviceTokenService.unregister(token(servletRequest), request);
+        return ResponseEntity.noContent().build();
     }
 
     @PatchMapping

@@ -111,6 +111,29 @@ class MemberApiIntegrationTest {
     }
 
     @Test
+    void registersRefreshesAndRemovesHybridAppDeviceTokens() throws Exception {
+        signup("device@example.com", "기기회원");
+        AuthenticatedSession session = authenticatedSession(login("device@example.com", PASSWORD).andReturn());
+        String body = "{\"pushToken\":\"fcm-token-123\",\"platform\":\"ANDROID\"}";
+
+        mockMvc.perform(authenticated(put("/api/v1/members/me/device-tokens"), session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.platform").value("ANDROID"));
+        mockMvc.perform(get("/api/v1/members/me/device-tokens").cookie(session.cookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+        mockMvc.perform(authenticated(delete("/api/v1/members/me/device-tokens"), session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"pushToken\":\"fcm-token-123\"}"))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get("/api/v1/members/me/device-tokens").cookie(session.cookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
     void requiresConsentForPersonalProfileAndAllowsDeletingItSeparately() throws Exception {
         mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -631,7 +654,8 @@ class MemberApiIntegrationTest {
                 .andExpect(jsonPath("$.deadline7dEnabled").value(true))
                 .andExpect(jsonPath("$.newMatchingNoticeEnabled").value(true))
                 .andExpect(jsonPath("$.noticeUpdatedEnabled").value(true))
-                .andExpect(jsonPath("$.emailEnabled").value(false));
+                .andExpect(jsonPath("$.emailEnabled").value(false))
+                .andExpect(jsonPath("$.appPushEnabled").value(true));
         mockMvc.perform(authenticated(put("/api/v1/members/me/notifications/preference"), session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -643,7 +667,8 @@ class MemberApiIntegrationTest {
                                   "winnerEnabled": false,
                                   "newMatchingNoticeEnabled": true,
                                   "noticeUpdatedEnabled": true,
-                                  "emailEnabled": true
+                                  "emailEnabled": true,
+                                  "appPushEnabled": false
                                 }
                                 """))
                 .andExpect(status().isOk())
@@ -651,7 +676,8 @@ class MemberApiIntegrationTest {
                 .andExpect(jsonPath("$.winnerEnabled").value(false))
                 .andExpect(jsonPath("$.newMatchingNoticeEnabled").value(true))
                 .andExpect(jsonPath("$.noticeUpdatedEnabled").value(true))
-                .andExpect(jsonPath("$.emailEnabled").value(true));
+                .andExpect(jsonPath("$.emailEnabled").value(true))
+                .andExpect(jsonPath("$.appPushEnabled").value(false));
 
         SubscriptionNotice oneDayNotice = noticeRepository.save(noticeWithDates(
                 "notification-one-day", "내일 마감 공고", null, today.plusDays(1), null

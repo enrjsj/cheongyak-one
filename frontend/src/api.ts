@@ -223,6 +223,7 @@ export interface NotificationPreference {
   newMatchingNoticeEnabled: boolean;
   noticeUpdatedEnabled: boolean;
   emailEnabled: boolean;
+  appPushEnabled: boolean;
   updatedAt?: string | null;
 }
 
@@ -649,6 +650,34 @@ export function saveNotificationPreference(
   return requestJson<NotificationPreference>("/api/v1/members/me/notifications/preference", {
     method: "PUT",
     body: JSON.stringify(preference),
+  });
+}
+
+export type DevicePlatform = "ANDROID" | "IOS";
+
+export interface MemberDeviceToken {
+  id: number;
+  platform: DevicePlatform;
+  createdAt: string;
+  updatedAt: string;
+  lastSeenAt: string;
+}
+
+export function fetchDeviceTokens(): Promise<MemberDeviceToken[]> {
+  return requestJson<MemberDeviceToken[]>("/api/v1/members/me/device-tokens");
+}
+
+export function registerDeviceToken(pushToken: string, platform: DevicePlatform): Promise<MemberDeviceToken> {
+  return requestJson<MemberDeviceToken>("/api/v1/members/me/device-tokens", {
+    method: "PUT",
+    body: JSON.stringify({ pushToken, platform }),
+  });
+}
+
+export function unregisterDeviceToken(pushToken: string): Promise<void> {
+  return requestJson<void>("/api/v1/members/me/device-tokens", {
+    method: "DELETE",
+    body: JSON.stringify({ pushToken }),
   });
 }
 

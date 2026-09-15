@@ -92,6 +92,7 @@ public class MemberNotificationService {
                 request.newMatchingNoticeEnabled(),
                 request.noticeUpdatedEnabled() == null || request.noticeUpdatedEnabled(),
                 request.emailEnabled(),
+                request.appPushEnabled() == null || request.appPushEnabled(),
                 clock.instant()
         );
         if (!request.emailEnabled()) {

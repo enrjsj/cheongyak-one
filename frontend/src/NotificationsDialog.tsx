@@ -27,6 +27,7 @@ const DEFAULT_PREFERENCE: NotificationPreference = {
   newMatchingNoticeEnabled: true,
   noticeUpdatedEnabled: true,
   emailEnabled: false,
+  appPushEnabled: true,
 };
 
 const PREFERENCE_OPTIONS: Array<{ key: Exclude<keyof Omit<NotificationPreference, "updatedAt">, "emailEnabled">; label: string }> = [
@@ -181,6 +182,7 @@ export default function NotificationsDialog({
         newMatchingNoticeEnabled: preference.newMatchingNoticeEnabled,
         noticeUpdatedEnabled: preference.noticeUpdatedEnabled,
         emailEnabled: preference.emailEnabled,
+        appPushEnabled: preference.appPushEnabled,
       }));
       setNotice("알림 설정을 저장했습니다.");
     } catch (requestError) {
@@ -232,6 +234,10 @@ export default function NotificationsDialog({
             <label className="email-notification-option">
               <span><b>이메일로도 받기</b><small>인증한 회원 이메일로 선택한 일정을 보내드려요.</small></span>
               <input type="checkbox" checked={preference.emailEnabled} onChange={(event) => setPreference((current) => ({ ...current, emailEnabled: event.target.checked }))} />
+            </label>
+            <label className="email-notification-option">
+              <span><b>앱 푸시로 받기</b><small>하이브리드 앱에서 알림 권한과 기기를 등록한 경우에만 발송돼요.</small></span>
+              <input type="checkbox" checked={preference.appPushEnabled} onChange={(event) => setPreference((current) => ({ ...current, appPushEnabled: event.target.checked }))} />
             </label>
             <button className="primary-button" type="submit" disabled={saving}>{saving ? "저장 중…" : "알림 설정 저장"}</button>
           </form>

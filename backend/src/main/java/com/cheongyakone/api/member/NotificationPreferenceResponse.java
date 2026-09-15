@@ -13,11 +13,12 @@ public record NotificationPreferenceResponse(
         boolean newMatchingNoticeEnabled,
         boolean noticeUpdatedEnabled,
         boolean emailEnabled,
+        boolean appPushEnabled,
         Instant updatedAt
 ) {
 
     public static NotificationPreferenceResponse defaults() {
-        return new NotificationPreferenceResponse(true, true, true, true, true, true, true, false, null);
+        return new NotificationPreferenceResponse(true, true, true, true, true, true, true, false, true, null);
     }
 
     public static NotificationPreferenceResponse from(MemberNotificationPreference preference) {
@@ -30,6 +31,7 @@ public record NotificationPreferenceResponse(
                 preference.isNewMatchingNoticeEnabled(),
                 preference.isNoticeUpdatedEnabled(),
                 preference.isEmailEnabled(),
+                preference.isAppPushEnabled(),
                 preference.getUpdatedAt()
         );
     }
