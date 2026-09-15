@@ -1,6 +1,8 @@
 package com.cheongyakone.application.member;
 
 import com.cheongyakone.domain.member.MemberNotification;
+import com.cheongyakone.domain.member.MemberDeviceTokenRepository;
+import com.cheongyakone.domain.member.MemberNotificationPreferenceRepository;
 import com.cheongyakone.domain.member.MemberNotificationRepository;
 import com.cheongyakone.domain.member.MemberRepository;
 import com.cheongyakone.domain.member.NotificationType;
@@ -18,15 +20,24 @@ public class MemberNotificationWriter {
     private final MemberNotificationRepository notificationRepository;
     private final MemberRepository memberRepository;
     private final SubscriptionNoticeRepository noticeRepository;
+    private final MemberNotificationPreferenceRepository preferenceRepository;
+    private final MemberDeviceTokenRepository deviceTokenRepository;
+    private final MemberPushSender pushSender;
 
     public MemberNotificationWriter(
             MemberNotificationRepository notificationRepository,
             MemberRepository memberRepository,
-            SubscriptionNoticeRepository noticeRepository
+            SubscriptionNoticeRepository noticeRepository,
+            MemberNotificationPreferenceRepository preferenceRepository,
+            MemberDeviceTokenRepository deviceTokenRepository,
+            MemberPushSender pushSender
     ) {
         this.notificationRepository = notificationRepository;
         this.memberRepository = memberRepository;
         this.noticeRepository = noticeRepository;
+        this.preferenceRepository = preferenceRepository;
+        this.deviceTokenRepository = deviceTokenRepository;
+        this.pushSender = pushSender;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -46,7 +57,7 @@ public class MemberNotificationWriter {
         )) {
             return false;
         }
-        notificationRepository.saveAndFlush(new MemberNotification(
+        MemberNotification notification = notificationRepository.saveAndFlush(new MemberNotification(
                 memberRepository.getReferenceById(memberId),
                 noticeRepository.getReferenceById(noticeId),
                 type,
@@ -54,6 +65,21 @@ public class MemberNotificationWriter {
                 now,
                 emailDeliveryRequested
         ));
+        deliverAppPush(memberId, notification);
         return true;
+    }
+
+    private void deliverAppPush(Long memberId, MemberNotification notification) {
+        boolean enabled = preferenceRepository.findByMember_Id(memberId)
+                .map(preference -> preference.isAppPushEnabled())
+                .orElse(true);
+        if (!enabled) return;
+        var tokens = deviceTokenRepository.findAllByMember_IdOrderByUpdatedAtDesc(memberId).stream()
+                .map(token -> token.getPushToken())
+                .toList();
+        var result = pushSender.send(notification, tokens);
+        if (!result.invalidTokens().isEmpty()) {
+            deviceTokenRepository.deleteByPushTokenIn(result.invalidTokens());
+        }
     }
 }

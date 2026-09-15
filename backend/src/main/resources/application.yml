@@ -94,5 +94,8 @@ app:
     email-cron: "${MEMBER_NOTIFICATION_EMAIL_CRON:0 */5 * * * *}"
     cleanup-cron: "${MEMBER_NOTIFICATION_CLEANUP_CRON:0 45 4 * * *}"
     zone: Asia/Seoul
+  member-push:
+    delivery: ${MEMBER_PUSH_DELIVERY:disabled}
+    fcm-service-account-base64: ${MEMBER_PUSH_FCM_SERVICE_ACCOUNT_BASE64:}
 
 spring.lifecycle.timeout-per-shutdown-phase: 30s

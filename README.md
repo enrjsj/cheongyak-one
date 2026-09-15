@@ -109,7 +109,7 @@ GitHub Actions의 `CI / real-data` 작업은 Repository Secret인 `REB_API_KEY`�
 - 회원이 직접 동의하면 인증한 이메일로도 선택한 일정·신규 공고 알림을 발송합니다. 기본값은 수신 안 함입니다.
 - 이메일 발송 상태는 DB에 저장하며 실패 시 1·2·4·8·16분 간격으로 최대 5회 재시도합니다.
 - 하이브리드 앱은 로그인 후 FCM 기기 토큰을 `PUT /api/v1/members/me/device-tokens`로 등록하고, 로그아웃·알림 권한 해제 시 `DELETE /api/v1/members/me/device-tokens`로 해제합니다. iOS/Android 토큰과 앱 푸시 수신 동의는 회원별로 분리해 저장합니다.
-- 실제 FCM 발송은 앱 패키징과 Firebase 서비스 계정 설정 후 연결합니다. 현재는 기기 등록·수신 설정 API만 제공하며, 웹 브라우저 푸시는 사용하지 않습니다.
+- FCM 발송은 `MEMBER_PUSH_DELIVERY=fcm`, `MEMBER_PUSH_FCM_SERVICE_ACCOUNT_BASE64=<서비스 계정 JSON의 Base64>`로 활성화합니다. 앱은 `notificationId`, `noticeId`, `type`, `deepLink`(`cheongyakone://notices/{noticeId}`) 데이터를 받아 해당 공고 상세로 이동합니다. 실패한 만료·해제 토큰은 자동 삭제합니다. 웹 브라우저 푸시는 사용하지 않습니다.
 - 읽은 지 90일이 지난 알림은 자동 삭제합니다.
 - 로그인 중에는 헤더의 미읽음 개수를 1분마다 갱신하고, 열린 알림함은 30초마다 자동 갱신합니다.
 - 알림함에서 마지막 확인 시각과 수동 새로고침을 제공합니다.

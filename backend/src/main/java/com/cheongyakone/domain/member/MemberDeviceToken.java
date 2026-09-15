@@ -70,6 +70,7 @@ public class MemberDeviceToken {
 
     public Long getId() { return id; }
     public Long getMemberId() { return member.getId(); }
+    public String getPushToken() { return pushToken; }
     public DevicePlatform getPlatform() { return platform; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
