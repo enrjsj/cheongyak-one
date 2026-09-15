@@ -8,6 +8,7 @@ import java.util.Optional;
 public interface MemberDeviceTokenRepository extends JpaRepository<MemberDeviceToken, Long> {
     Optional<MemberDeviceToken> findByPushToken(String pushToken);
     List<MemberDeviceToken> findAllByMember_IdOrderByUpdatedAtDesc(Long memberId);
+    boolean existsByMember_Id(Long memberId);
     long deleteByMember_IdAndPushToken(Long memberId, String pushToken);
     long deleteByPushTokenIn(java.util.Collection<String> pushTokens);
 }
