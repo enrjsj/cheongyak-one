@@ -9,4 +9,5 @@ public interface MemberDeviceTokenRepository extends JpaRepository<MemberDeviceT
     Optional<MemberDeviceToken> findByPushToken(String pushToken);
     List<MemberDeviceToken> findAllByMember_IdOrderByUpdatedAtDesc(Long memberId);
     long deleteByMember_IdAndPushToken(Long memberId, String pushToken);
+    long deleteByPushTokenIn(java.util.Collection<String> pushTokens);
 }
