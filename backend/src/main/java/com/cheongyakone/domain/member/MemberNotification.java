@@ -75,6 +75,21 @@ public class MemberNotification {
     @Column(name = "EMAIL_LAST_ERROR", length = 500)
     private String emailLastError;
 
+    @Column(name = "PUSH_DELIVERY_REQUESTED", nullable = false)
+    private boolean pushDeliveryRequested;
+
+    @Column(name = "PUSH_ATTEMPTS", nullable = false)
+    private int pushAttempts;
+
+    @Column(name = "PUSH_NEXT_ATTEMPT_AT")
+    private Instant pushNextAttemptAt;
+
+    @Column(name = "PUSH_SENT_AT")
+    private Instant pushSentAt;
+
+    @Column(name = "PUSH_LAST_ERROR", length = 500)
+    private String pushLastError;
+
     protected MemberNotification() {
     }
 
@@ -84,7 +99,8 @@ public class MemberNotification {
             NotificationType type,
             LocalDate eventDate,
             Instant createdAt,
-            boolean emailDeliveryRequested
+            boolean emailDeliveryRequested,
+            boolean pushDeliveryRequested
     ) {
         this.member = Objects.requireNonNull(member);
         this.notice = Objects.requireNonNull(notice);
@@ -93,6 +109,8 @@ public class MemberNotification {
         this.createdAt = Objects.requireNonNull(createdAt);
         this.emailDeliveryRequested = emailDeliveryRequested;
         this.emailNextAttemptAt = emailDeliveryRequested ? createdAt : null;
+        this.pushDeliveryRequested = pushDeliveryRequested;
+        this.pushNextAttemptAt = pushDeliveryRequested ? createdAt : null;
     }
 
     public void markRead(Instant now) {
@@ -122,6 +140,27 @@ public class MemberNotification {
         emailLastError = safeError.substring(0, Math.min(safeError.length(), 500));
     }
 
+    public boolean isPushDeliveryDue(Instant now, int maximumAttempts) {
+        return pushDeliveryRequested
+                && pushSentAt == null
+                && pushAttempts < maximumAttempts
+                && pushNextAttemptAt != null
+                && !pushNextAttemptAt.isAfter(now);
+    }
+
+    public void markPushSent(Instant now) {
+        pushSentAt = Objects.requireNonNull(now);
+        pushNextAttemptAt = null;
+        pushLastError = null;
+    }
+
+    public void markPushFailed(String error, Instant nextAttemptAt) {
+        pushAttempts += 1;
+        pushNextAttemptAt = Objects.requireNonNull(nextAttemptAt);
+        String safeError = error == null || error.isBlank() ? "Unknown push delivery error" : error;
+        pushLastError = safeError.substring(0, Math.min(safeError.length(), 500));
+    }
+
     public Long getId() {
         return id;
     }
@@ -129,6 +168,8 @@ public class MemberNotification {
     public Long getNoticeId() {
         return notice.getId();
     }
+
+    public Long getMemberId() { return member.getId(); }
 
     public String getNoticeTitle() {
         return notice.getTitle();
@@ -161,4 +202,6 @@ public class MemberNotification {
     public int getEmailAttempts() {
         return emailAttempts;
     }
+
+    public int getPushAttempts() { return pushAttempts; }
 }

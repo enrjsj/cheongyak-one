@@ -74,10 +74,16 @@ public class FcmMemberPushSender implements MemberPushSender {
             if (response.getFailureCount() > 0) {
                 log.warn("FCM member push partially failed: notificationId={}, failures={}", notification.getId(), response.getFailureCount());
             }
-            return new PushDeliveryResult(invalidTokens);
+            boolean retryableFailure = response.getResponses().stream()
+                    .filter(sendResponse -> !sendResponse.isSuccessful())
+                    .anyMatch(sendResponse -> !isInvalidToken(sendResponse.getException()));
+            return new PushDeliveryResult(retryableFailure, invalidTokens,
+                    retryableFailure ? "FCM partial delivery failure" : null);
         } catch (FirebaseMessagingException exception) {
             log.error("FCM member push failed: notificationId={}", notification.getId(), exception);
-            return PushDeliveryResult.none();
+            return PushDeliveryResult.retryableFailure(
+                    exception.getClass().getSimpleName() + ": " + exception.getMessage()
+            );
         }
     }
 

@@ -92,6 +92,7 @@ app:
   member-notification:
     cron: "${MEMBER_NOTIFICATION_CRON:0 5 * * * *}"
     email-cron: "${MEMBER_NOTIFICATION_EMAIL_CRON:0 */5 * * * *}"
+    push-cron: "${MEMBER_NOTIFICATION_PUSH_CRON:0 */5 * * * *}"
     cleanup-cron: "${MEMBER_NOTIFICATION_CLEANUP_CRON:0 45 4 * * *}"
     zone: Asia/Seoul
   member-push:

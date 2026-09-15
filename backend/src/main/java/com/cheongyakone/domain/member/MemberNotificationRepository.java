@@ -74,4 +74,39 @@ public interface MemberNotificationRepository extends JpaRepository<MemberNotifi
               and notification.emailSentAt is null
             """)
     int cancelPendingEmailDeliveries(@Param("memberId") Long memberId);
+
+    @Query("""
+            select notification.id
+            from MemberNotification notification
+            where notification.pushDeliveryRequested = true
+              and notification.pushSentAt is null
+              and notification.pushAttempts < :maximumAttempts
+              and notification.pushNextAttemptAt <= :now
+            order by notification.pushNextAttemptAt, notification.id
+            """)
+    List<Long> findPushDeliveryCandidateIds(
+            @Param("now") Instant now,
+            @Param("maximumAttempts") int maximumAttempts,
+            Pageable pageable
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select notification
+            from MemberNotification notification
+            join fetch notification.member
+            join fetch notification.notice
+            where notification.id = :id
+            """)
+    Optional<MemberNotification> findForPushDelivery(@Param("id") Long id);
+
+    @Modifying
+    @Query("""
+            update MemberNotification notification
+            set notification.pushDeliveryRequested = false,
+                notification.pushNextAttemptAt = null
+            where notification.member.id = :memberId
+              and notification.pushSentAt is null
+            """)
+    int cancelPendingPushDeliveries(@Param("memberId") Long memberId);
 }

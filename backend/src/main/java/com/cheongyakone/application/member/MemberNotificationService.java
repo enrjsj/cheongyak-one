@@ -98,6 +98,9 @@ public class MemberNotificationService {
         if (!request.emailEnabled()) {
             notificationRepository.cancelPendingEmailDeliveries(member.getId());
         }
+        if (request.appPushEnabled() != null && !request.appPushEnabled()) {
+            notificationRepository.cancelPendingPushDeliveries(member.getId());
+        }
         return NotificationPreferenceResponse.from(preferenceRepository.save(preference));
     }
 }

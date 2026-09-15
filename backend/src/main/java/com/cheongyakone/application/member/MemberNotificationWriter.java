@@ -22,22 +22,19 @@ public class MemberNotificationWriter {
     private final SubscriptionNoticeRepository noticeRepository;
     private final MemberNotificationPreferenceRepository preferenceRepository;
     private final MemberDeviceTokenRepository deviceTokenRepository;
-    private final MemberPushSender pushSender;
 
     public MemberNotificationWriter(
             MemberNotificationRepository notificationRepository,
             MemberRepository memberRepository,
             SubscriptionNoticeRepository noticeRepository,
             MemberNotificationPreferenceRepository preferenceRepository,
-            MemberDeviceTokenRepository deviceTokenRepository,
-            MemberPushSender pushSender
+            MemberDeviceTokenRepository deviceTokenRepository
     ) {
         this.notificationRepository = notificationRepository;
         this.memberRepository = memberRepository;
         this.noticeRepository = noticeRepository;
         this.preferenceRepository = preferenceRepository;
         this.deviceTokenRepository = deviceTokenRepository;
-        this.pushSender = pushSender;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -57,29 +54,19 @@ public class MemberNotificationWriter {
         )) {
             return false;
         }
-        MemberNotification notification = notificationRepository.saveAndFlush(new MemberNotification(
+        boolean pushDeliveryRequested = preferenceRepository.findByMember_Id(memberId)
+                .map(preference -> preference.isAppPushEnabled())
+                .orElse(true)
+                && deviceTokenRepository.existsByMember_Id(memberId);
+        notificationRepository.saveAndFlush(new MemberNotification(
                 memberRepository.getReferenceById(memberId),
                 noticeRepository.getReferenceById(noticeId),
                 type,
                 eventDate,
                 now,
-                emailDeliveryRequested
+                emailDeliveryRequested,
+                pushDeliveryRequested
         ));
-        deliverAppPush(memberId, notification);
         return true;
-    }
-
-    private void deliverAppPush(Long memberId, MemberNotification notification) {
-        boolean enabled = preferenceRepository.findByMember_Id(memberId)
-                .map(preference -> preference.isAppPushEnabled())
-                .orElse(true);
-        if (!enabled) return;
-        var tokens = deviceTokenRepository.findAllByMember_IdOrderByUpdatedAtDesc(memberId).stream()
-                .map(token -> token.getPushToken())
-                .toList();
-        var result = pushSender.send(notification, tokens);
-        if (!result.invalidTokens().isEmpty()) {
-            deviceTokenRepository.deleteByPushTokenIn(result.invalidTokens());
-        }
     }
 }
