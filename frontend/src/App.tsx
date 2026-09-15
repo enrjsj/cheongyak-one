@@ -1632,6 +1632,14 @@ export default function Home() {
                           </label>
                           <span className="favorite-checklist-progress">사전 확인 {completedChecklistCount(favoriteTrackers.get(item.id))}/4</span>
                           {completedChecklistCount(favoriteTrackers.get(item.id)) < FAVORITE_CHECKLIST_ITEMS.length && <span className="favorite-checklist-missing">남은 확인: {incompleteChecklistLabels(favoriteTrackers.get(item.id))}</span>}
+                          <div className="favorite-checklist-options favorite-checklist-quick" aria-label={`${item.title} 신청 전 확인 항목`}>
+                            {FAVORITE_CHECKLIST_ITEMS.map(({ key, label }) => (
+                              <label key={key}>
+                                <input type="checkbox" checked={favoriteTrackers.get(item.id)?.[key] ?? false} disabled={favoriteTrackerPendingId === item.id} onChange={(event) => void saveFavoriteTracker(item.id, favoriteTrackers.get(item.id)?.progress ?? "SAVED", favoriteTrackers.get(item.id)?.memo ?? "", { [key]: event.target.checked })} />
+                                {label}
+                              </label>
+                            ))}
+                          </div>
                         </div>
                       )}
                       {savedOnly && member && (favoriteTrackers.get(item.id)?.progress ?? "SAVED") === "READY" && (
