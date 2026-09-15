@@ -169,7 +169,7 @@ public class MemberNotification {
         return notice.getId();
     }
 
-    public Long getMemberId() { return member.getId(); }
+    public Long memberId() { return member.getId(); }
 
     public String getNoticeTitle() {
         return notice.getTitle();

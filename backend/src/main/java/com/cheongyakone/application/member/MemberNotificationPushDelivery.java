@@ -36,7 +36,7 @@ public class MemberNotificationPushDelivery {
         var notification = notificationRepository.findForPushDelivery(notificationId).orElse(null);
         if (notification == null || !notification.isPushDeliveryDue(now, MAXIMUM_ATTEMPTS)) return false;
 
-        var tokens = deviceTokenRepository.findAllByMember_IdOrderByUpdatedAtDesc(notification.getMemberId()).stream()
+        var tokens = deviceTokenRepository.findAllByMember_IdOrderByUpdatedAtDesc(notification.memberId()).stream()
                 .map(token -> token.getPushToken())
                 .toList();
         if (tokens.isEmpty()) {
