@@ -3,6 +3,7 @@ package com.cheongyakone.api.member;
 import com.cheongyakone.domain.member.EligibilityAnswer;
 import com.cheongyakone.domain.member.MemberGender;
 import com.cheongyakone.domain.member.MemberMaritalStatus;
+import com.cheongyakone.domain.member.DevicePlatform;
 import com.cheongyakone.domain.member.SearchPreferenceSort;
 import com.cheongyakone.domain.member.SearchPreferenceStatus;
 import com.cheongyakone.domain.member.FavoriteApplicationResult;
@@ -136,7 +137,19 @@ public final class MemberRequests {
             @NotNull Boolean winnerEnabled,
             @NotNull Boolean newMatchingNoticeEnabled,
             Boolean noticeUpdatedEnabled,
-            @NotNull Boolean emailEnabled
+            @NotNull Boolean emailEnabled,
+            Boolean appPushEnabled
+    ) {
+    }
+
+    public record DeviceToken(
+            @NotBlank @Size(max = 512) String pushToken,
+            @NotNull DevicePlatform platform
+    ) {
+    }
+
+    public record DeviceTokenRemoval(
+            @NotBlank @Size(max = 512) String pushToken
     ) {
     }
 }

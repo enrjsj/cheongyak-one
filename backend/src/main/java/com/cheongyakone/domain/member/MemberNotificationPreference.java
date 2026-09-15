@@ -55,6 +55,9 @@ public class MemberNotificationPreference {
     @Column(name = "EMAIL_ENABLED", nullable = false)
     private boolean emailEnabled;
 
+    @Column(name = "APP_PUSH_ENABLED", nullable = false)
+    private boolean appPushEnabled;
+
     @Column(name = "CREATED_AT", nullable = false)
     private Instant createdAt;
 
@@ -74,6 +77,7 @@ public class MemberNotificationPreference {
         this.newMatchingNoticeEnabled = true;
         this.noticeUpdatedEnabled = true;
         this.emailEnabled = false;
+        this.appPushEnabled = true;
         this.createdAt = Objects.requireNonNull(now);
         this.updatedAt = now;
     }
@@ -87,6 +91,7 @@ public class MemberNotificationPreference {
             boolean newMatchingNoticeEnabled,
             boolean noticeUpdatedEnabled,
             boolean emailEnabled,
+            boolean appPushEnabled,
             Instant now
     ) {
         this.applyStartEnabled = applyStartEnabled;
@@ -97,6 +102,7 @@ public class MemberNotificationPreference {
         this.newMatchingNoticeEnabled = newMatchingNoticeEnabled;
         this.noticeUpdatedEnabled = noticeUpdatedEnabled;
         this.emailEnabled = emailEnabled;
+        this.appPushEnabled = appPushEnabled;
         this.updatedAt = Objects.requireNonNull(now);
     }
 
@@ -135,6 +141,8 @@ public class MemberNotificationPreference {
     public boolean isEmailEnabled() {
         return emailEnabled;
     }
+
+    public boolean isAppPushEnabled() { return appPushEnabled; }
 
     public Instant getUpdatedAt() {
         return updatedAt;
