@@ -735,6 +735,19 @@ export function reactivateAdminMember(memberId: number): Promise<AdminMember> {
   return requestJson<AdminMember>(`/api/v1/admin/members/${memberId}/reactivate`, { method: "POST" });
 }
 
+export interface AdminPushNotificationDashboard {
+  registeredDeviceCount: number;
+  pendingCount: number;
+  permanentlyFailedCount: number;
+  sentLast24Hours: number;
+  recentFailures: Array<{ notificationId: number; noticeTitle: string; type: string; attempts: number; error?: string; nextAttemptAt?: string }>;
+  generatedAt: string;
+}
+
+export function fetchAdminPushNotificationDashboard(): Promise<AdminPushNotificationDashboard> {
+  return requestJson<AdminPushNotificationDashboard>("/api/v1/admin/notifications/push");
+}
+
 export function fetchAdminAuditLogs(): Promise<AdminAuditLog[]> {
   return requestJson<AdminAuditLog[]>("/api/v1/admin/audit-logs");
 }

@@ -204,4 +204,6 @@ public class MemberNotification {
     }
 
     public int getPushAttempts() { return pushAttempts; }
+    public Instant getPushNextAttemptAt() { return pushNextAttemptAt; }
+    public String getPushLastError() { return pushLastError; }
 }

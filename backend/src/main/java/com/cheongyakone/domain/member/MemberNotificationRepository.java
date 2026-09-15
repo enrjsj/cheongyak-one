@@ -109,4 +109,16 @@ public interface MemberNotificationRepository extends JpaRepository<MemberNotifi
               and notification.pushSentAt is null
             """)
     int cancelPendingPushDeliveries(@Param("memberId") Long memberId);
+
+    @Query("select count(notification) from MemberNotification notification where notification.pushDeliveryRequested = true and notification.pushSentAt is null and notification.pushAttempts < :maximumAttempts")
+    long countPendingPushDeliveries(@Param("maximumAttempts") int maximumAttempts);
+
+    @Query("select count(notification) from MemberNotification notification where notification.pushDeliveryRequested = true and notification.pushSentAt is null and notification.pushAttempts >= :maximumAttempts")
+    long countFailedPushDeliveries(@Param("maximumAttempts") int maximumAttempts);
+
+    long countByPushSentAtAfter(Instant since);
+
+    @EntityGraph(attributePaths = "notice")
+    @Query("select notification from MemberNotification notification where notification.pushDeliveryRequested = true and notification.pushSentAt is null and notification.pushAttempts >= :maximumAttempts order by notification.id desc")
+    List<MemberNotification> findRecentFailedPushDeliveries(@Param("maximumAttempts") int maximumAttempts, Pageable pageable);
 }
