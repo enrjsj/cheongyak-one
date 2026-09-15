@@ -56,6 +56,7 @@ import {
 import MemberDialogs, { MemberDialogMode } from "./MemberDialogs";
 import AdminSyncDialog from "./AdminSyncDialog";
 import NotificationsDialog from "./NotificationsDialog";
+import FavoriteCalendarDialog from "./FavoriteCalendarDialog";
 import RecommendationPanel from "./RecommendationPanel";
 import {
   buildEligibilityCheckResult,
@@ -466,6 +467,7 @@ export default function Home() {
   const [recommendationsBusy, setRecommendationsBusy] = useState(false);
   const [recommendationsVersion, setRecommendationsVersion] = useState(0);
   const [adminSyncOpen, setAdminSyncOpen] = useState(false);
+  const [favoriteCalendarOpen, setFavoriteCalendarOpen] = useState(false);
   const [detailRouteVersion, setDetailRouteVersion] = useState(0);
   const [recentNoticeIds, setRecentNoticeIds] = useState<number[]>(initialRecentNoticeIds);
 
@@ -1545,6 +1547,7 @@ export default function Home() {
                   </select>
                 </label>
                 {savedOnly && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={() => downloadCalendar(savedNotices, "cheongyak-saved.ics")}><Icon name="calendar" /> 관심 일정 저장</button>}
+                {savedOnly && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={() => setFavoriteCalendarOpen(true)}><Icon name="calendar" /> 전체 일정 보기</button>}
                 {savedOnly && member && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={downloadFavoriteResults}>내 기록 CSV</button>}
                 <button className="search-share-button" type="button" onClick={() => void copySearchLink()}><Icon name="arrow" /> 검색 공유</button>
                 <button className="filter-button" type="button" onClick={() => setFilterOpen(true)} disabled={loading}><Icon name="filter" /> 지역·유형·예산 필터 {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button>
@@ -1951,6 +1954,7 @@ export default function Home() {
       />
 
       <AdminSyncDialog open={adminSyncOpen && member?.role === "ADMIN"} currentMemberId={member?.id ?? 0} onClose={() => setAdminSyncOpen(false)} />
+      <FavoriteCalendarDialog open={favoriteCalendarOpen} notices={savedNotices} onClose={() => setFavoriteCalendarOpen(false)} onOpenNotice={(noticeId) => { void openNotificationNotice(noticeId); }} />
 
       {toast && <div className="toast" role="status"><Icon name="check" /> {toast}</div>}
     </main>
