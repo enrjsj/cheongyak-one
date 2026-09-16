@@ -44,14 +44,14 @@ async function mockApi(page: Page) {
 }
 
 async function signup(page: Page) {
-  await page.getByRole("button", { name: "로그인" }).click();
+  await page.getByRole("button", { name: "로그인", exact: true }).click();
   await page.getByRole("tab", { name: "회원가입" }).click();
   await page.getByLabel("닉네임").fill("테스트 회원");
   await page.getByLabel("이메일").fill("e2e@example.com");
   await page.getByLabel("비밀번호", { exact: true }).fill("password-1234");
   await page.getByLabel("비밀번호 확인").fill("password-1234");
   await page.getByRole("button", { name: "맞춤 정보 입력하기" }).click();
-  await page.getByLabel(/생년월일/).fill("1991-01-01");
+  await page.locator('input[type="date"]').fill("1991-01-01");
   await page.getByLabel(/성별/).selectOption("FEMALE");
   await page.getByRole("checkbox", { name: /개인정보 수집·이용/ }).check();
   await page.getByRole("button", { name: "가입 완료하기" }).click();
@@ -61,10 +61,10 @@ async function signup(page: Page) {
 test("비회원도 관심청약 저장과 공고 비교를 할 수 있다", async ({ page }) => {
   await mockApi(page);
   await page.goto("/");
-  await expect(page.getByText("E2E 서울 공공분양")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
   await page.locator("article").filter({ hasText: "E2E 서울 공공분양" }).getByLabel(/관심청약 저장/).click();
   await page.getByRole("button", { name: /관심청약/ }).click();
-  await expect(page.getByText("E2E 서울 공공분양")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
   await page.getByRole("button", { name: "전체 청약" }).click();
   await page.getByRole("button", { name: "비교 담기" }).nth(0).click();
   await page.getByRole("button", { name: "비교 담기" }).nth(0).click();
