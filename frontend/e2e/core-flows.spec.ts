@@ -19,9 +19,10 @@ async function mockApi(page: Page) {
     }
     if (path === "/api/v1/auth/signup") {
       const input = request.postDataJSON();
-      member = { id: 1, email: input.email, nickname: input.nickname, role: "MEMBER", ...input, createdAt: "2026-09-01T00:00:00Z" };
+      member = { id: 1, email: input.email, nickname: input.nickname, role: "MEMBER", emailVerified: true, ...input, createdAt: "2026-09-01T00:00:00Z" };
       return json(member);
     }
+    if (path === "/api/v1/auth/login") return json(member);
     if (path === "/api/v1/notices/facets") return json({ total: notices.length, endingToday: 0, open: 1, upcoming: 1 });
     if (path === "/api/v1/notices") return json({ content: notices, number: 0, size: 24, totalElements: notices.length, totalPages: 1 });
     const detail = path.match(/^\/api\/v1\/notices\/(\d+)$/);
@@ -65,7 +66,7 @@ test("비회원도 관심청약 저장과 공고 비교를 할 수 있다", asyn
   await page.locator("article").filter({ hasText: "E2E 서울 공공분양" }).getByLabel(/관심청약 저장/).click();
   await page.locator(".saved-button").click();
   await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
-  await page.getByRole("button", { name: "전체 청약" }).click();
+  await page.locator(".saved-button").click();
   await page.getByRole("button", { name: "비교 담기" }).nth(0).click();
   await page.getByRole("button", { name: "비교 담기" }).nth(0).click();
   await page.getByRole("button", { name: "비교하기" }).click();
