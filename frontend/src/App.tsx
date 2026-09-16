@@ -81,7 +81,7 @@ type StatusKey = "all" | "today" | "open" | "upcoming";
 type StateTone = "mint" | "coral" | "blue" | "purple" | "gray";
 type PresentationStatus = Exclude<StatusKey, "all"> | "announcement" | "closed";
 type IconName = "search" | "pin" | "home" | "calendar" | "bookmark" | "arrow" | "check" | "bell" | "grid" | "close" | "filter" | "user";
-type FavoriteProgressFilter = FavoriteProgress | "ALL" | "INCOMPLETE" | "URGENT" | "RESULT_PENDING" | "RESULT_SELECTED" | "RESULT_WAITLISTED" | "RESULT_NOT_SELECTED";
+type FavoriteProgressFilter = FavoriteProgress | "ALL" | "INCOMPLETE" | "URGENT" | "RESULT_DUE" | "RESULT_PENDING" | "RESULT_SELECTED" | "RESULT_WAITLISTED" | "RESULT_NOT_SELECTED";
 type FavoriteChecklistKey = "noticeDocumentChecked" | "eligibilityChecked" | "scheduleChecked" | "fundsChecked";
 type FavoriteSortKey = "PREPARATION" | "DEADLINE" | "RESULT";
 
@@ -131,6 +131,14 @@ function incompleteChecklistLabels(tracker?: FavoriteTracker): string {
 function applicationResultFromFilter(filter: FavoriteProgressFilter): FavoriteApplicationResult | undefined {
   if (!filter.startsWith("RESULT_")) return undefined;
   return filter.slice("RESULT_".length) as FavoriteApplicationResult;
+}
+
+function resultDueLabel(winnerAnnounceDate?: string): string {
+  if (!winnerAnnounceDate) return "발표일 확인 필요";
+  const remaining = daysBetween(koreaToday(), winnerAnnounceDate);
+  if (remaining === undefined) return "발표일 확인 필요";
+  if (remaining === 0) return "오늘 발표";
+  return remaining < 0 ? `${Math.abs(remaining)}일 전 발표` : `D-${remaining} 발표`;
 }
 
 type Application = NoticeSummary & {
@@ -842,6 +850,13 @@ export default function Home() {
     item.applyEndDate ? { date: item.applyEndDate, label: "접수 마감", item } : undefined,
     item.winnerAnnounceDate ? { date: item.winnerAnnounceDate, label: "당첨 발표", item } : undefined,
   ]).filter((event): event is { date: string; label: string; item: Application } => Boolean(event && event.date >= koreaToday())).sort((left, right) => left.date.localeCompare(right.date)).slice(0, 5), [savedNotices]);
+  const resultDueFavoriteEvents = useMemo(() => savedNotices
+    .filter((item) => {
+      const tracker = favoriteTrackers.get(item.id);
+      return tracker?.progress === "APPLIED" && (tracker.applicationResult ?? "PENDING") === "PENDING" && Boolean(item.winnerAnnounceDate) && item.winnerAnnounceDate! <= koreaToday();
+    })
+    .map((item) => ({ item, date: item.winnerAnnounceDate! }))
+    .sort((left, right) => left.date.localeCompare(right.date)), [favoriteTrackers, savedNotices]);
   const recentNotices = useMemo(() => recentNoticeIds
     .map((id) => knownApplications.find((item) => item.id === id))
     .filter((item): item is Application => Boolean(item)), [knownApplications, recentNoticeIds]);
@@ -864,8 +879,8 @@ export default function Home() {
       if (progress !== "APPLIED" && remaining !== undefined && remaining >= 0 && remaining <= 3) urgent += 1;
     });
 
-    return { counts, applicationResults, recordedResults: applicationResults.SELECTED + applicationResults.WAITLISTED + applicationResults.NOT_SELECTED, urgent, checklistIncomplete };
-  }, [favoriteTrackers, knownApplications, savedIds]);
+    return { counts, applicationResults, recordedResults: applicationResults.SELECTED + applicationResults.WAITLISTED + applicationResults.NOT_SELECTED, urgent, checklistIncomplete, resultDue: resultDueFavoriteEvents.length };
+  }, [favoriteTrackers, knownApplications, resultDueFavoriteEvents.length, savedIds]);
   const visible = useMemo(() => {
     if (!savedOnly) return filtered;
 
@@ -879,6 +894,7 @@ export default function Home() {
         const remaining = daysBetween(koreaToday(), item.applyEndDate);
         return (tracker?.progress ?? "SAVED") !== "APPLIED" && remaining !== undefined && remaining >= 0 && remaining <= 3;
       }
+      if (favoriteProgressFilter === "RESULT_DUE") return tracker?.progress === "APPLIED" && (tracker.applicationResult ?? "PENDING") === "PENDING" && Boolean(item.winnerAnnounceDate) && item.winnerAnnounceDate! <= koreaToday();
       const applicationResult = applicationResultFromFilter(favoriteProgressFilter);
       if (applicationResult) return tracker?.progress === "APPLIED" && (tracker.applicationResult ?? "PENDING") === applicationResult;
       return (tracker?.progress ?? "SAVED") === favoriteProgressFilter;
@@ -1239,9 +1255,9 @@ export default function Home() {
     const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
     const rows = savedNotices.map((item) => {
       const tracker = favoriteTrackers.get(item.id);
-      return [item.title, item.region, FAVORITE_PROGRESS_LABELS[tracker?.progress ?? "SAVED"], tracker?.progress === "APPLIED" ? FAVORITE_APPLICATION_RESULT_LABELS[tracker.applicationResult ?? "PENDING"] : "", tracker?.applicationResultRecordedAt ?? "", tracker?.applicationResultMemo ?? ""];
+      return [item.title, item.region, item.applyEndDate ?? "", item.winnerAnnounceDate ?? "", FAVORITE_PROGRESS_LABELS[tracker?.progress ?? "SAVED"], `${completedChecklistCount(tracker)}/4`, tracker?.memo ?? "", tracker?.progress === "APPLIED" ? FAVORITE_APPLICATION_RESULT_LABELS[tracker.applicationResult ?? "PENDING"] : "", tracker?.applicationResultRecordedAt ?? "", tracker?.applicationResultMemo ?? "", item.officialUrl ?? ""];
     });
-    const content = ["공고명,지역,준비상태,신청결과,결과기록시각,결과메모", ...rows.map((row) => row.map(escape).join(","))].join("\n");
+    const content = ["공고명,지역,접수마감일,당첨발표일,준비상태,체크리스트,관심메모,신청결과,결과기록시각,결과메모,공식공고URL", ...rows.map((row) => row.map(escape).join(","))].join("\n");
     const url = URL.createObjectURL(new Blob([`\uFEFF${content}`], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a"); anchor.href = url; anchor.download = "cheongyak-favorite-results.csv"; anchor.click(); URL.revokeObjectURL(url);
   };
@@ -1602,6 +1618,7 @@ export default function Home() {
                       <span><b>{favoritePreparation.counts.READY}</b> 신청 준비 완료</span>
                       <span><b>{favoritePreparation.counts.APPLIED}</b> 신청 완료</span>
                       {favoritePreparation.counts.APPLIED > 0 && <em>당첨 {favoritePreparation.applicationResults.SELECTED} · 예비 {favoritePreparation.applicationResults.WAITLISTED} · 발표 대기 {favoritePreparation.applicationResults.PENDING}</em>}
+                      {favoritePreparation.resultDue > 0 && <em className="result-due-stat">발표 확인 필요 {favoritePreparation.resultDue}건</em>}
                       {favoritePreparation.recordedResults > 0 && <em>결과 기록 완료 {favoritePreparation.recordedResults}건</em>}
                       {favoritePreparation.checklistIncomplete > 0 && <em>확인 항목 남음 {favoritePreparation.checklistIncomplete}건</em>}
                       {favoritePreparation.urgent > 0 && <em>마감 3일 이내 {favoritePreparation.urgent}건</em>}
@@ -1620,6 +1637,7 @@ export default function Home() {
                         </button>
                       ))}
                       <button className={favoriteProgressFilter === "URGENT" ? "active urgent-filter" : "urgent-filter"} type="button" onClick={() => setFavoriteProgressFilter("URGENT")} disabled={favoritePreparation.urgent === 0}>마감 임박 {favoritePreparation.urgent}</button>
+                      <button className={favoriteProgressFilter === "RESULT_DUE" ? "active result-due-filter" : "result-due-filter"} type="button" onClick={() => setFavoriteProgressFilter("RESULT_DUE")} disabled={favoritePreparation.resultDue === 0}>발표 확인 {favoritePreparation.resultDue}</button>
                       {(["PENDING", "SELECTED", "WAITLISTED", "NOT_SELECTED"] as FavoriteApplicationResult[]).map((result) => {
                         const filter = `RESULT_${result}` as FavoriteProgressFilter;
                         return <button className={favoriteProgressFilter === filter ? "active result-filter" : "result-filter"} type="button" key={filter} onClick={() => setFavoriteProgressFilter(filter)} disabled={favoritePreparation.applicationResults[result] === 0}>
@@ -1636,6 +1654,12 @@ export default function Home() {
                       <div className="favorite-upcoming-events" aria-label="다가오는 관심청약 일정">
                         <div><span>다가오는 내 일정</span><small>관심청약의 접수·당첨 발표 일정입니다.</small></div>
                         <ol>{upcomingFavoriteEvents.map((event) => <li key={`${event.item.id}-${event.label}-${event.date}`}><time>{formatShortDate(event.date)}</time><span>{event.label}</span><button type="button" onClick={() => openDetail(event.item)}>{event.item.title}</button></li>)}</ol>
+                      </div>
+                    )}
+                    {resultDueFavoriteEvents.length > 0 && (
+                      <div className="favorite-result-due-events" aria-label="확인이 필요한 당첨 발표">
+                        <div><span>당첨 발표 확인</span><small>신청 결과가 아직 기록되지 않은 공고입니다.</small></div>
+                        <ol>{resultDueFavoriteEvents.map(({ item, date }) => <li key={item.id}><time>{formatShortDate(date)}</time><span>{resultDueLabel(date)}</span><button type="button" onClick={() => openDetail(item)}>{item.title}</button></li>)}</ol>
                       </div>
                     )}
                   </section>
@@ -1712,8 +1736,8 @@ export default function Home() {
             ) : (
               <div className="empty-state">
                 <span className="empty-icon"><Icon name={savedOnly ? "bookmark" : "search"} /></span>
-                <h3>{savedOnly ? favoriteKeyword ? "검색 조건에 맞는 관심청약이 없어요" : favoriteProgressFilter === "ALL" ? "저장한 관심청약이 없어요" : favoriteProgressFilter === "INCOMPLETE" ? "확인 항목이 남은 관심청약이 없어요" : favoriteProgressFilter === "URGENT" ? "마감이 임박한 관심청약이 없어요" : applicationResultFromFilter(favoriteProgressFilter) ? "선택한 신청 결과의 관심청약이 없어요" : "선택한 준비 상태의 관심청약이 없어요" : "조건에 맞는 공고가 없어요"}</h3>
-                <p>{savedOnly ? favoriteKeyword ? "공고명·지역 또는 작성한 메모를 바꿔 검색해 보세요." : favoriteProgressFilter === "ALL" ? "관심 있는 공고의 북마크를 눌러 모아보세요." : favoriteProgressFilter === "INCOMPLETE" ? "현재 보이는 관심청약의 체크리스트를 모두 완료했어요." : favoriteProgressFilter === "URGENT" ? "현재 접수 마감 3일 이내인 관심청약이 없습니다." : applicationResultFromFilter(favoriteProgressFilter) ? "신청 결과를 기록한 뒤 다시 확인해 보세요." : "다른 준비 상태를 선택하거나 전체 관심청약을 확인해 보세요." : "검색어나 지역·유형 필터를 조금 넓혀보세요."}</p>
+                <h3>{savedOnly ? favoriteKeyword ? "검색 조건에 맞는 관심청약이 없어요" : favoriteProgressFilter === "ALL" ? "저장한 관심청약이 없어요" : favoriteProgressFilter === "INCOMPLETE" ? "확인 항목이 남은 관심청약이 없어요" : favoriteProgressFilter === "URGENT" ? "마감이 임박한 관심청약이 없어요" : favoriteProgressFilter === "RESULT_DUE" ? "확인이 필요한 당첨 발표가 없어요" : applicationResultFromFilter(favoriteProgressFilter) ? "선택한 신청 결과의 관심청약이 없어요" : "선택한 준비 상태의 관심청약이 없어요" : "조건에 맞는 공고가 없어요"}</h3>
+                <p>{savedOnly ? favoriteKeyword ? "공고명·지역 또는 작성한 메모를 바꿔 검색해 보세요." : favoriteProgressFilter === "ALL" ? "관심 있는 공고의 북마크를 눌러 모아보세요." : favoriteProgressFilter === "INCOMPLETE" ? "현재 보이는 관심청약의 체크리스트를 모두 완료했어요." : favoriteProgressFilter === "URGENT" ? "현재 접수 마감 3일 이내인 관심청약이 없습니다." : favoriteProgressFilter === "RESULT_DUE" ? "당첨 발표일이 지난 신청 건의 결과를 모두 기록했어요." : applicationResultFromFilter(favoriteProgressFilter) ? "신청 결과를 기록한 뒤 다시 확인해 보세요." : "다른 준비 상태를 선택하거나 전체 관심청약을 확인해 보세요." : "검색어나 지역·유형 필터를 조금 넓혀보세요."}</p>
                 <button type="button" onClick={() => { if (savedOnly && (favoriteProgressFilter !== "ALL" || favoriteKeyword)) { setFavoriteProgressFilter("ALL"); setFavoriteKeyword(""); return; } setQuery(""); setRegion("전체"); setCategory("전체"); setActiveStatus("all"); setSavedOnly(false); resetVisible(); }}>{savedOnly && (favoriteProgressFilter !== "ALL" || favoriteKeyword) ? "전체 관심청약 보기" : "전체 청약 보기"}</button>
               </div>
             )}
