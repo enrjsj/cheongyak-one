@@ -908,3 +908,10 @@ footer { background: var(--navy); color: white; }
 .policy-consent-history { display: grid; gap: 8px; padding: 0; margin: 0; list-style: none; }
 .policy-consent-history li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
 .policy-consent-history span { color: #64706b; }
+
+.saved-search-profiles { display: grid; gap: 8px; border-top: 1px solid #e4e9f2; padding-top: 12px; }
+.saved-search-profiles > div, .saved-search-profiles article, .saved-search-profiles article > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.saved-search-profiles p, .saved-search-profiles small { color: #78869b; font-size: 11px; margin: 0; }
+.saved-search-profiles article { padding: 9px 0; border-top: 1px solid #edf0f6; }
+.saved-search-profiles article span { display: grid; gap: 2px; }
+.saved-search-profiles button { border: 0; border-radius: 6px; padding: 5px 7px; background: #edf3ff; color: #31598d; font-size: 11px; cursor: pointer; }
