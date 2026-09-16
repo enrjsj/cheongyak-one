@@ -19,6 +19,7 @@ import {
   fetchNoticeChanges,
   fetchNotificationInbox,
   fetchSearchPreference,
+  fetchSavedSearchProfiles,
   fetchPolicyConsents,
   fetchEligibilityProfile,
   HousingCategory,
@@ -32,6 +33,8 @@ import {
   MemberProfileInput,
   MemberRecommendationList,
   MemberSearchPreference,
+  SavedSearchProfile,
+  SearchPreferenceInput,
   mergeFavoriteIds,
   mergeComparisonIds,
   NoticeDetail,
@@ -40,6 +43,8 @@ import {
   NoticeStatus,
   NoticeSearchFacets,
   saveSearchPreference,
+  createSavedSearchProfile,
+  deleteSavedSearchProfile,
   saveEligibilityProfile,
   revokeMemberSession,
   revokeOtherMemberSessions,
@@ -469,6 +474,7 @@ export default function Home() {
   const [passwordResetToken, setPasswordResetToken] = useState("");
   const [authLoading, setAuthLoading] = useState(true);
   const [searchPreference, setSearchPreference] = useState<MemberSearchPreference>();
+  const [savedSearchProfiles, setSavedSearchProfiles] = useState<SavedSearchProfile[]>([]);
   const [eligibilityProfile, setEligibilityProfile] = useState<EligibilityProfile>();
   const [eligibilityBusy, setEligibilityBusy] = useState(false);
   const [preferenceBusy, setPreferenceBusy] = useState(false);
@@ -669,6 +675,11 @@ export default function Home() {
           applySearchPreference(preference);
         } catch (error) {
           if (!cancelled) setToast(error instanceof Error ? error.message : "저장한 검색조건을 불러오지 못했습니다.");
+        }
+        try {
+          if (!cancelled) setSavedSearchProfiles(await fetchSavedSearchProfiles());
+        } catch (error) {
+          if (!cancelled) setToast(error instanceof Error ? error.message : "저장 검색조건 목록을 불러오지 못했습니다.");
         }
         try {
           const profile = await fetchEligibilityProfile();
@@ -1182,6 +1193,34 @@ export default function Home() {
     } finally {
       setPreferenceBusy(false);
     }
+  };
+
+  const currentSearchInput = (): SearchPreferenceInput => ({
+    region: region === "전체" ? undefined : region,
+    housingCategory: category === "전체" ? undefined : categoryValue(category),
+    status: activeStatus.toUpperCase() as SearchPreferenceInput["status"],
+    sort: sortKey,
+    minPriceManwon: priceInManwon(minPriceManwon),
+    maxPriceManwon: priceInManwon(maxPriceManwon),
+  });
+
+  const handleCreateSavedSearchProfile = async () => {
+    const name = window.prompt("저장할 검색조건 이름을 입력해주세요.", "서울 신혼부부");
+    if (!name?.trim()) return;
+    setPreferenceBusy(true);
+    try {
+      const profile = await createSavedSearchProfile({ name: name.trim(), ...currentSearchInput() });
+      setSavedSearchProfiles((items) => [profile, ...items]);
+      setToast(`'${profile.name}' 조건을 저장했습니다.`);
+    } catch (error) { setToast(error instanceof Error ? error.message : "검색조건을 저장하지 못했습니다."); }
+    finally { setPreferenceBusy(false); }
+  };
+
+  const handleDeleteSavedSearchProfile = async (profile: SavedSearchProfile) => {
+    setPreferenceBusy(true);
+    try { await deleteSavedSearchProfile(profile.id); setSavedSearchProfiles((items) => items.filter((item) => item.id !== profile.id)); setToast(`'${profile.name}' 조건을 삭제했습니다.`); }
+    catch (error) { setToast(error instanceof Error ? error.message : "저장 조건을 삭제하지 못했습니다."); }
+    finally { setPreferenceBusy(false); }
   };
 
   const toggleComparison = async (id: number) => {
@@ -1846,6 +1885,12 @@ export default function Home() {
                     </div>
                   )}
                   <button className="save-preference-button" type="button" onClick={() => void handleSaveSearchPreference()} disabled={preferenceBusy}>{preferenceBusy ? "처리 중…" : "현재 조건 계정에 저장"}</button>
+                  <div className="saved-search-profiles">
+                    <div><b>내 저장 조건</b><button type="button" onClick={() => void handleCreateSavedSearchProfile()} disabled={preferenceBusy}>새 이름으로 저장</button></div>
+                    {savedSearchProfiles.length === 0 ? <p>여러 조건을 이름으로 저장해 빠르게 다시 적용할 수 있어요.</p> : savedSearchProfiles.map((profile) => (
+                      <article key={profile.id}><span><b>{profile.name}</b><small>{profile.region ?? "전국"} · {profile.housingCategory ? CATEGORY_LABELS[profile.housingCategory] : "전체 유형"} · {formatPricePreference(profile)}</small></span><div><button type="button" onClick={() => { applySearchPreference(profile); setToast(`'${profile.name}' 조건을 적용했습니다.`); }} disabled={preferenceBusy}>적용</button><button type="button" onClick={() => void handleDeleteSavedSearchProfile(profile)} disabled={preferenceBusy}>삭제</button></div></article>
+                    ))}
+                  </div>
                 </>
               ) : (
                 <button className="save-preference-button" type="button" onClick={() => void handleSaveSearchPreference()}>로그인하고 조건 저장</button>

@@ -298,6 +298,12 @@ export interface SearchPreferenceInput {
   maxPriceManwon?: number;
 }
 
+export interface SavedSearchProfile extends SearchPreferenceInput {
+  id: number;
+  name: string;
+  updatedAt: string;
+}
+
 export interface EligibilityProfile {
   homeless: "YES" | "NO" | "UNKNOWN";
   subscriptionAccount: "YES" | "NO" | "UNKNOWN";
@@ -610,6 +616,18 @@ export function saveSearchPreference(input: SearchPreferenceInput): Promise<Memb
 
 export function deleteSearchPreference(): Promise<void> {
   return requestJson<void>("/api/v1/members/me/search-preference", { method: "DELETE" });
+}
+
+export function fetchSavedSearchProfiles(): Promise<SavedSearchProfile[]> {
+  return requestJson<SavedSearchProfile[]>("/api/v1/members/me/saved-search-profiles");
+}
+
+export function createSavedSearchProfile(input: SearchPreferenceInput & { name: string }): Promise<SavedSearchProfile> {
+  return requestJson<SavedSearchProfile>("/api/v1/members/me/saved-search-profiles", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function deleteSavedSearchProfile(id: number): Promise<void> {
+  return requestJson<void>(`/api/v1/members/me/saved-search-profiles/${id}`, { method: "DELETE" });
 }
 
 export function fetchEligibilityProfile(): Promise<EligibilityProfile | undefined> {
