@@ -898,3 +898,13 @@ footer { background: var(--navy); color: white; }
   html { scroll-behavior: auto; }
   * { transition: none !important; }
 }
+
+.required-policy-consent { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center; padding: 14px; border: 1px solid var(--line, #d9dedc); border-radius: 10px; }
+.required-policy-consent label { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+.required-policy-consent button, .policy-document button { border: 0; background: transparent; color: var(--primary, #12705b); text-decoration: underline; cursor: pointer; }
+.policy-document { padding: 14px; border-radius: 10px; background: #f3f8f6; font-size: 13px; line-height: 1.6; }
+.policy-document > div { display: flex; justify-content: space-between; }
+.policy-document p { margin: 8px 0; }
+.policy-consent-history { display: grid; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.policy-consent-history li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.policy-consent-history span { color: #64706b; }

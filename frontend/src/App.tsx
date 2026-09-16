@@ -19,6 +19,7 @@ import {
   fetchNoticeChanges,
   fetchNotificationInbox,
   fetchSearchPreference,
+  fetchPolicyConsents,
   fetchEligibilityProfile,
   HousingCategory,
   FavoriteProgress,
@@ -2021,6 +2022,7 @@ export default function Home() {
         onLoadSessions={fetchMemberSessions}
         onRevokeSession={revokeMemberSession}
         onRevokeOtherSessions={revokeOtherMemberSessions}
+        onLoadPolicyConsents={fetchPolicyConsents}
       />
 
       <NotificationsDialog
