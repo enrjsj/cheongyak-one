@@ -7,6 +7,8 @@ const notices = [
 
 async function mockApi(page: Page) {
   let member: Record<string, unknown> | undefined;
+  let favoriteIds: number[] = [];
+  const trackers = new Map<number, Record<string, unknown>>();
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -28,8 +30,21 @@ async function mockApi(page: Page) {
     const detail = path.match(/^\/api\/v1\/notices\/(\d+)$/);
     if (detail) return json(notices.find((notice) => notice.id === Number(detail[1])));
     if (path.endsWith("/changes")) return json([]);
-    if (path.endsWith("/favorites")) return json({ noticeIds: [] });
-    if (path.endsWith("/favorites/tracker")) return json([]);
+    if (path.endsWith("/favorites/tracker")) return json([...trackers.values()]);
+    const favoriteTracker = path.match(/^\/api\/v1\/members\/me\/favorites\/(\d+)\/tracker$/);
+    if (favoriteTracker) {
+      const noticeId = Number(favoriteTracker[1]);
+      const tracker = { noticeId, ...request.postDataJSON(), updatedAt: "2026-09-01T00:00:00Z" };
+      trackers.set(noticeId, tracker);
+      return json(tracker);
+    }
+    const favorite = path.match(/^\/api\/v1\/members\/me\/favorites\/(\d+)$/);
+    if (favorite) {
+      const noticeId = Number(favorite[1]);
+      favoriteIds = request.method() === "PUT" ? [...new Set([...favoriteIds, noticeId])] : favoriteIds.filter((id) => id !== noticeId);
+      return json({ noticeIds: favoriteIds });
+    }
+    if (path.endsWith("/favorites")) return json({ noticeIds: favoriteIds });
     if (path.endsWith("/comparisons")) return json({ noticeIds: [] });
     if (path.endsWith("/search-preference")) return json(null);
     if (path.endsWith("/eligibility-profile")) {
