@@ -175,6 +175,7 @@ a { color: inherit; text-decoration: none; }
 .favorite-summary-stats span, .favorite-summary-stats em { padding: 7px 9px; border-radius: 8px; background: white; color: #637087; font-size: 12px; font-style: normal; white-space: nowrap; }
 .favorite-summary-stats b { margin-right: 3px; color: var(--navy); font-size: 14px; }
 .favorite-summary-stats em { color: #c94b43; background: #fff1ef; font-weight: 750; }
+.favorite-summary-stats em.result-due-stat { color: #7452a0; background: #f3edff; }
 .favorite-progress-filters { display: flex; flex-wrap: wrap; gap: 7px; width: 100%; padding-top: 2px; }
 .favorite-progress-filters button { height: 32px; padding: 0 10px; border: 1px solid #dce4ef; border-radius: 8px; background: white; color: #68758a; font-size: 12px; font-weight: 700; cursor: pointer; }
 .favorite-progress-filters button.active { border-color: #a9bff5; background: var(--blue-soft); color: var(--blue); }
@@ -268,6 +269,15 @@ a { color: inherit; text-decoration: none; }
 .favorite-upcoming-events li > span { color: #6b7f91; }
 .favorite-upcoming-events button { overflow: hidden; border: 0; background: transparent; color: #274e70; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .favorite-upcoming-events button:hover { text-decoration: underline; }
+.favorite-result-due-events { margin-top: 10px; padding: 13px; border: 1px solid #dfd3f2; border-radius: 12px; background: #fcfaff; }
+.favorite-result-due-events > div { display: flex; justify-content: space-between; gap: 12px; color: #684b92; font-size: 12px; font-weight: 800; }
+.favorite-result-due-events small { color: #7c7190; font-weight: 500; }
+.favorite-result-due-events ol { display: grid; gap: 7px; margin: 10px 0 0; padding: 0; list-style: none; }
+.favorite-result-due-events li { display: grid; grid-template-columns: 52px 72px minmax(0, 1fr); align-items: center; gap: 8px; font-size: 12px; }
+.favorite-result-due-events time { color: #7050a5; font-weight: 800; }
+.favorite-result-due-events li > span { color: #7a6c8e; }
+.favorite-result-due-events button { overflow: hidden; border: 0; background: transparent; color: #4d3971; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.favorite-result-due-events button:hover { text-decoration: underline; }
 .detail-application-result { display: grid; grid-template-columns: 1fr auto; margin-top: 16px; }
 .detail-application-result > div { display: grid; gap: 3px; }
 .detail-application-result small { grid-column: 1 / -1; }
