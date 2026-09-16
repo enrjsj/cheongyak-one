@@ -1193,7 +1193,7 @@ class MemberApiIntegrationTest {
 
     private String signupJson(String email, String nickname) {
         return "{\"email\":\"" + email + "\",\"password\":\"" + PASSWORD
-                + "\",\"nickname\":\"" + nickname + "\"}";
+                + "\",\"nickname\":\"" + nickname + "\",\"termsAgreed\":true,\"privacyPolicyAgreed\":true}";
     }
 
     private String searchPreferenceJson() {

@@ -41,8 +41,8 @@ public final class MemberRequests {
             @Min(0) @Max(20) Integer childCount,
             @Size(max = 20) String residenceRegion,
             Boolean personalProfileConsent,
-            @NotNull Boolean termsAgreed,
-            @NotNull Boolean privacyPolicyAgreed
+            Boolean termsAgreed,
+            Boolean privacyPolicyAgreed
     ) {
     }
 

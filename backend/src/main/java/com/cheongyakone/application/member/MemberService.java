@@ -129,9 +129,6 @@ public class MemberService {
 
     @Transactional
     public MemberResponse signup(MemberRequests.Signup request) {
-        if (!Boolean.TRUE.equals(request.termsAgreed()) || !Boolean.TRUE.equals(request.privacyPolicyAgreed())) {
-            throw new MemberApiException(HttpStatus.BAD_REQUEST, "REQUIRED_POLICY_CONSENT", "서비스 이용약관과 개인정보 처리방침에 모두 동의해주세요.");
-        }
         String email = Member.normalizeEmail(request.email());
         if (memberRepository.existsByEmail(email)) {
             throw conflict("EMAIL_ALREADY_USED", "이미 가입된 이메일입니다.");
@@ -147,6 +144,9 @@ public class MemberService {
                 request.residenceRegion(),
                 request.personalProfileConsent()
         );
+        if (!Boolean.TRUE.equals(request.termsAgreed()) || !Boolean.TRUE.equals(request.privacyPolicyAgreed())) {
+            throw new MemberApiException(HttpStatus.BAD_REQUEST, "REQUIRED_POLICY_CONSENT", "서비스 이용약관과 개인정보 처리방침에 모두 동의해주세요.");
+        }
         Instant now = clock.instant();
         Member member = new Member(
                 email,
