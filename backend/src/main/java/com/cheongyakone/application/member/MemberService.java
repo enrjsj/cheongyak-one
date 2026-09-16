@@ -8,6 +8,7 @@ import com.cheongyakone.api.member.MemberSessionResponse;
 import com.cheongyakone.api.member.EligibilityProfileResponse;
 import com.cheongyakone.api.member.SearchPreferenceResponse;
 import com.cheongyakone.api.member.FavoriteTrackerResponse;
+import com.cheongyakone.api.member.SavedSearchProfileResponse;
 import com.cheongyakone.api.member.PolicyConsentResponse;
 import com.cheongyakone.domain.member.FavoriteApplicationResult;
 import com.cheongyakone.config.AuthProperties;
@@ -29,6 +30,8 @@ import com.cheongyakone.domain.member.MemberRecommendationDismissalRepository;
 import com.cheongyakone.domain.member.MemberRepository;
 import com.cheongyakone.domain.member.MemberSearchPreference;
 import com.cheongyakone.domain.member.MemberSearchPreferenceRepository;
+import com.cheongyakone.domain.member.MemberSavedSearchProfile;
+import com.cheongyakone.domain.member.MemberSavedSearchProfileRepository;
 import com.cheongyakone.domain.member.MemberPolicyConsent;
 import com.cheongyakone.domain.member.MemberPolicyConsentRepository;
 import com.cheongyakone.domain.member.MemberPolicyType;
@@ -73,6 +76,7 @@ public class MemberService {
     private final MemberComparisonRepository comparisonRepository;
     private final MemberEligibilityProfileRepository eligibilityProfileRepository;
     private final MemberSearchPreferenceRepository searchPreferenceRepository;
+    private final MemberSavedSearchProfileRepository savedSearchProfileRepository;
     private final MemberPolicyConsentRepository policyConsentRepository;
     private final MemberNotificationPreferenceRepository notificationPreferenceRepository;
     private final MemberNotificationRepository notificationRepository;
@@ -94,6 +98,7 @@ public class MemberService {
             MemberComparisonRepository comparisonRepository,
             MemberEligibilityProfileRepository eligibilityProfileRepository,
             MemberSearchPreferenceRepository searchPreferenceRepository,
+            MemberSavedSearchProfileRepository savedSearchProfileRepository,
             MemberPolicyConsentRepository policyConsentRepository,
             MemberNotificationPreferenceRepository notificationPreferenceRepository,
             MemberNotificationRepository notificationRepository,
@@ -113,6 +118,7 @@ public class MemberService {
         this.comparisonRepository = comparisonRepository;
         this.eligibilityProfileRepository = eligibilityProfileRepository;
         this.searchPreferenceRepository = searchPreferenceRepository;
+        this.savedSearchProfileRepository = savedSearchProfileRepository;
         this.policyConsentRepository = policyConsentRepository;
         this.notificationPreferenceRepository = notificationPreferenceRepository;
         this.notificationRepository = notificationRepository;
@@ -578,6 +584,36 @@ public class MemberService {
     public void deleteSearchPreference(String rawToken) {
         Member member = requireMember(rawToken);
         searchPreferenceRepository.deleteByMember_Id(member.getId());
+    }
+
+    @Transactional(readOnly = true)
+    public List<SavedSearchProfileResponse> savedSearchProfiles(String rawToken) {
+        Member member = requireMember(rawToken);
+        return savedSearchProfileRepository.findAllByMember_IdOrderByUpdatedAtDesc(member.getId()).stream().map(SavedSearchProfileResponse::from).toList();
+    }
+
+    @Transactional
+    public SavedSearchProfileResponse saveSearchProfile(String rawToken, Long profileId, MemberRequests.SavedSearchProfile request) {
+        Member member = requireMember(rawToken);
+        validatePriceRange(request.minPriceManwon(), request.maxPriceManwon());
+        Instant now = clock.instant();
+        MemberSavedSearchProfile profile = profileId == null
+                ? new MemberSavedSearchProfile(member, request.name(), now)
+                : savedSearchProfileRepository.findByIdAndMember_Id(profileId, member.getId()).orElseThrow(() -> new MemberApiException(HttpStatus.NOT_FOUND, "SAVED_SEARCH_PROFILE_NOT_FOUND", "저장한 검색 조건을 찾을 수 없습니다."));
+        profile.change(request.name(), request.region(), request.housingCategory(), request.status(), request.sort(), request.minPriceManwon(), request.maxPriceManwon(), now);
+        try { return SavedSearchProfileResponse.from(savedSearchProfileRepository.save(profile)); }
+        catch (DataIntegrityViolationException exception) { throw new MemberApiException(HttpStatus.CONFLICT, "SAVED_SEARCH_PROFILE_NAME_DUPLICATED", "같은 이름의 저장 조건이 이미 있습니다."); }
+    }
+
+    @Transactional
+    public void deleteSavedSearchProfile(String rawToken, Long profileId) {
+        Member member = requireMember(rawToken);
+        MemberSavedSearchProfile profile = savedSearchProfileRepository.findByIdAndMember_Id(profileId, member.getId()).orElseThrow(() -> new MemberApiException(HttpStatus.NOT_FOUND, "SAVED_SEARCH_PROFILE_NOT_FOUND", "저장한 검색 조건을 찾을 수 없습니다."));
+        savedSearchProfileRepository.delete(profile);
+    }
+
+    private void validatePriceRange(Integer minPriceManwon, Integer maxPriceManwon) {
+        if (minPriceManwon != null && maxPriceManwon != null && minPriceManwon > maxPriceManwon) throw new MemberApiException(HttpStatus.BAD_REQUEST, "PRICE_RANGE_INVALID", "최소 예산은 최대 예산보다 클 수 없습니다.");
     }
 
     @Transactional(readOnly = true)

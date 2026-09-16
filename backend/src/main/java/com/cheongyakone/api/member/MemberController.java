@@ -197,6 +197,24 @@ public class MemberController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/saved-search-profiles")
+    public List<SavedSearchProfileResponse> savedSearchProfiles(HttpServletRequest request) { return memberService.savedSearchProfiles(token(request)); }
+
+    @PostMapping("/saved-search-profiles")
+    public ResponseEntity<SavedSearchProfileResponse> createSavedSearchProfile(HttpServletRequest request, @Valid @RequestBody MemberRequests.SavedSearchProfile body) {
+        return ResponseEntity.status(201).body(memberService.saveSearchProfile(token(request), null, body));
+    }
+
+    @PutMapping("/saved-search-profiles/{profileId}")
+    public SavedSearchProfileResponse updateSavedSearchProfile(HttpServletRequest request, @PathVariable @Positive Long profileId, @Valid @RequestBody MemberRequests.SavedSearchProfile body) {
+        return memberService.saveSearchProfile(token(request), profileId, body);
+    }
+
+    @DeleteMapping("/saved-search-profiles/{profileId}")
+    public ResponseEntity<Void> deleteSavedSearchProfile(HttpServletRequest request, @PathVariable @Positive Long profileId) {
+        memberService.deleteSavedSearchProfile(token(request), profileId); return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/eligibility-profile")
     public ResponseEntity<EligibilityProfileResponse> eligibilityProfile(HttpServletRequest request) {
         return memberService.eligibilityProfile(token(request))
