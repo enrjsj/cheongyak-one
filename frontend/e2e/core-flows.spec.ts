@@ -70,6 +70,8 @@ async function signup(page: Page) {
   await page.locator('input[type="date"]').fill("1991-01-01");
   await page.locator(".profile-fields select").nth(1).selectOption("FEMALE");
   await page.getByRole("checkbox", { name: /개인정보 수집·이용/ }).check();
+  await page.getByRole("checkbox", { name: /서비스 이용약관 동의/ }).check();
+  await page.getByRole("checkbox", { name: /개인정보 처리방침 동의/ }).check();
   await page.getByRole("button", { name: "가입 완료하기" }).click();
   await expect(page.getByRole("button", { name: "테스트 회원" })).toBeVisible();
 }

@@ -2,6 +2,7 @@ package com.cheongyakone.api.member;
 
 import com.cheongyakone.application.member.MemberService;
 import com.cheongyakone.application.member.MemberAccountRecoveryService;
+import com.cheongyakone.application.member.EmailRequestRateLimiter;
 import com.cheongyakone.application.member.SessionTokenCodec;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -24,19 +25,22 @@ public class AuthController {
     private final SessionTokenCodec tokenCodec;
     private final Clock clock;
     private final MemberAccountRecoveryService accountRecoveryService;
+    private final EmailRequestRateLimiter emailRequestRateLimiter;
 
     public AuthController(
             MemberService memberService,
             SessionCookieSupport cookieSupport,
             SessionTokenCodec tokenCodec,
             Clock clock,
-            MemberAccountRecoveryService accountRecoveryService
+            MemberAccountRecoveryService accountRecoveryService,
+            EmailRequestRateLimiter emailRequestRateLimiter
     ) {
         this.memberService = memberService;
         this.cookieSupport = cookieSupport;
         this.tokenCodec = tokenCodec;
         this.clock = clock;
         this.accountRecoveryService = accountRecoveryService;
+        this.emailRequestRateLimiter = emailRequestRateLimiter;
     }
 
     @PostMapping("/signup")
@@ -82,6 +86,7 @@ public class AuthController {
     public ResponseEntity<Void> requestEmailVerification(
             @Valid @RequestBody MemberRequests.EmailRequest request
     ) {
+        emailRequestRateLimiter.check("email-verification", request.email());
         accountRecoveryService.requestEmailVerification(request.email());
         return accepted();
     }
@@ -98,6 +103,7 @@ public class AuthController {
     public ResponseEntity<Void> requestPasswordReset(
             @Valid @RequestBody MemberRequests.EmailRequest request
     ) {
+        emailRequestRateLimiter.check("password-reset", request.email());
         accountRecoveryService.requestPasswordReset(request.email());
         return accepted();
     }

@@ -161,7 +161,9 @@ class MemberApiIntegrationTest {
                                   "householdMemberCount":3,
                                   "childCount":1,
                                   "residenceRegion":"서울",
-                                  "personalProfileConsent":true
+                                  "personalProfileConsent":true,
+                                  "termsAgreed":true,
+                                  "privacyPolicyAgreed":true
                                 }
                                 """))
                 .andExpect(status().isCreated())
@@ -1007,7 +1009,9 @@ class MemberApiIntegrationTest {
                                   "householdMemberCount":3,
                                   "childCount":1,
                                   "residenceRegion":"서울",
-                                  "personalProfileConsent":true
+                                  "personalProfileConsent":true,
+                                  "termsAgreed":true,
+                                  "privacyPolicyAgreed":true
                                 }
                                 """.formatted(statisticsBirthDate)))
                 .andExpect(status().isCreated());
@@ -1193,7 +1197,7 @@ class MemberApiIntegrationTest {
 
     private String signupJson(String email, String nickname) {
         return "{\"email\":\"" + email + "\",\"password\":\"" + PASSWORD
-                + "\",\"nickname\":\"" + nickname + "\"}";
+                + "\",\"nickname\":\"" + nickname + "\",\"termsAgreed\":true,\"privacyPolicyAgreed\":true}";
     }
 
     private String searchPreferenceJson() {

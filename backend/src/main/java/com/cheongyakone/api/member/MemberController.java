@@ -41,6 +41,11 @@ public class MemberController {
         return memberService.me(token(request));
     }
 
+    @GetMapping("/policy-consents")
+    public List<PolicyConsentResponse> policyConsents(HttpServletRequest request) {
+        return memberService.policyConsents(token(request));
+    }
+
     @GetMapping("/device-tokens")
     public List<MemberDeviceTokenResponse> deviceTokens(HttpServletRequest request) {
         return deviceTokenService.devices(token(request));

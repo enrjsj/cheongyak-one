@@ -103,6 +103,14 @@ export interface MemberProfileInput {
   childCount?: number;
   residenceRegion?: string;
   personalProfileConsent?: boolean;
+  termsAgreed?: boolean;
+  privacyPolicyAgreed?: boolean;
+}
+
+export interface PolicyConsent {
+  policyType: "TERMS" | "PRIVACY_POLICY";
+  policyVersion: string;
+  agreedAt: string;
 }
 
 export type SyncExecutionStatus = "RUNNING" | "SUCCEEDED" | "PARTIALLY_SUCCEEDED" | "FAILED";
@@ -516,6 +524,10 @@ export function deleteMemberPersonalProfile(): Promise<MemberProfile> {
   return requestJson<MemberProfile>("/api/v1/members/me/personal-profile", {
     method: "DELETE",
   });
+}
+
+export function fetchPolicyConsents(): Promise<PolicyConsent[]> {
+  return requestJson<PolicyConsent[]>("/api/v1/members/me/policy-consents");
 }
 
 export function changeMemberPassword(currentPassword: string, newPassword: string): Promise<void> {

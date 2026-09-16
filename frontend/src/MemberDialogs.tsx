@@ -5,6 +5,7 @@ import {
   MemberMaritalStatus,
   MemberProfile,
   MemberProfileInput,
+  PolicyConsent,
   MemberSession,
 } from "./api";
 import { useDialogAccessibility } from "./useDialogAccessibility";
@@ -28,6 +29,7 @@ interface MemberDialogsProps {
   onLoadSessions: () => Promise<MemberSession[]>;
   onRevokeSession: (sessionId: number) => Promise<void>;
   onRevokeOtherSessions: () => Promise<MemberSession[]>;
+  onLoadPolicyConsents: () => Promise<PolicyConsent[]>;
 }
 
 const RESIDENCE_REGIONS = [
@@ -76,6 +78,7 @@ export default function MemberDialogs({
   onLoadSessions,
   onRevokeSession,
   onRevokeOtherSessions,
+  onLoadPolicyConsents,
 }: MemberDialogsProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -89,6 +92,10 @@ export default function MemberDialogs({
   const [childCount, setChildCount] = useState("");
   const [residenceRegion, setResidenceRegion] = useState("");
   const [personalProfileConsent, setPersonalProfileConsent] = useState(false);
+  const [termsAgreed, setTermsAgreed] = useState(false);
+  const [privacyPolicyAgreed, setPrivacyPolicyAgreed] = useState(false);
+  const [policyDocument, setPolicyDocument] = useState<"terms" | "privacy" | null>(null);
+  const [policyConsents, setPolicyConsents] = useState<PolicyConsent[]>([]);
   const [confirmPersonalProfileDeletion, setConfirmPersonalProfileDeletion] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -133,8 +140,15 @@ export default function MemberDialogs({
       setChildCount("");
       setResidenceRegion("");
       setPersonalProfileConsent(false);
+      setTermsAgreed(false);
+      setPrivacyPolicyAgreed(false);
     }
   }, [member, mode]);
+
+  useEffect(() => {
+    if (mode !== "account" || !member) return;
+    onLoadPolicyConsents().then(setPolicyConsents).catch(() => setPolicyConsents([]));
+  }, [member, mode, onLoadPolicyConsents]);
 
   useEffect(() => {
     if (mode !== "account" || !member) {
@@ -197,6 +211,10 @@ export default function MemberDialogs({
         setError("맞춤 정보를 저장하려면 선택 개인정보 수집·이용에 동의해주세요.");
         return;
       }
+      if (!termsAgreed || !privacyPolicyAgreed) {
+        setError("서비스 이용약관과 개인정보 처리방침에 모두 동의해주세요.");
+        return;
+      }
       void execute(() => onSignup(email, password, profileInput()));
     } else {
       void execute(() => onLogin(email, password));
@@ -212,6 +230,8 @@ export default function MemberDialogs({
     childCount: optionalNumber(childCount),
     residenceRegion: residenceRegion || undefined,
     personalProfileConsent: personalProfileConsent || undefined,
+    termsAgreed: termsAgreed || undefined,
+    privacyPolicyAgreed: privacyPolicyAgreed || undefined,
   });
 
   const hasPersonalProfileInput = Boolean(
@@ -328,6 +348,11 @@ export default function MemberDialogs({
                     <input type="checkbox" checked={personalProfileConsent} onChange={(event) => setPersonalProfileConsent(event.target.checked)} />
                     <span><b>[선택] 맞춤 서비스·통계를 위한 개인정보 수집·이용에 동의합니다.</b><small>목적: 공고 추천, 자격 사전점검 보조, 서비스 이용 통계 및 추천 품질 개선 · 항목: 생년월일, 성별, 혼인 상태, 가구원·자녀 수, 거주 지역 · 보유: 맞춤정보 삭제 또는 회원 탈퇴까지</small><em>동의하지 않아도 선택정보 없이 가입할 수 있습니다.</em></span>
                   </label>
+                  <div className="required-policy-consent">
+                    <label><input type="checkbox" checked={termsAgreed} onChange={(event) => setTermsAgreed(event.target.checked)} /> <b>[필수] 서비스 이용약관 동의</b></label><button type="button" onClick={() => setPolicyDocument("terms")}>전문 보기</button>
+                    <label><input type="checkbox" checked={privacyPolicyAgreed} onChange={(event) => setPrivacyPolicyAgreed(event.target.checked)} /> <b>[필수] 개인정보 처리방침 동의</b></label><button type="button" onClick={() => setPolicyDocument("privacy")}>전문 보기</button>
+                  </div>
+                  {policyDocument && <section className="policy-document"><div><b>{policyDocument === "terms" ? "서비스 이용약관" : "개인정보 처리방침"}</b><button type="button" onClick={() => setPolicyDocument(null)}>닫기</button></div><p>{policyDocument === "terms" ? "청약ONE은 청약 공고 탐색과 개인화 보조 기능을 제공합니다. 실제 청약 자격과 신청 결과는 공식 공고 및 사업주체의 심사에 따릅니다." : "계정 정보는 서비스 제공과 보안에 사용합니다. 선택 맞춤 정보는 별도 선택 동의가 있을 때만 추천 및 집계 통계에 활용하며, 맞춤 정보 삭제 또는 회원 탈퇴 시 제거됩니다."}</p><small>시행일: 2026년 9월 16일 · 버전: 2026-09-16-v1</small></section>}
                   {hasPersonalProfileInput && !personalProfileConsent && <p className="consent-required" role="status">입력한 맞춤 정보를 저장하려면 위 동의가 필요합니다.</p>}
                 </>
               ) : (
@@ -338,8 +363,8 @@ export default function MemberDialogs({
               )}
               {error && <p className="member-message error" role="alert">{error}</p>}
               {mode === "signup" && signupStep === 2 && <button className="member-back-button" type="button" onClick={() => setSignupStep(1)} disabled={busy}>이전 단계</button>}
-              <button className="primary-button member-submit" type="submit" disabled={busy || (mode === "signup" && signupStep === 2 && hasPersonalProfileInput && !personalProfileConsent)}>{busy ? "처리 중…" : mode === "signup" ? signupStep === 1 ? "맞춤 정보 입력하기" : "가입 완료하기" : "로그인"}</button>
-              {mode === "signup" && signupStep === 2 && <button className="member-skip-button" type="button" disabled={busy} onClick={() => void execute(() => onSignup(email, password, { nickname }))}>선택정보 없이 가입</button>}
+              <button className="primary-button member-submit" type="submit" disabled={busy || (mode === "signup" && signupStep === 2 && ((hasPersonalProfileInput && !personalProfileConsent) || !termsAgreed || !privacyPolicyAgreed))}>{busy ? "처리 중…" : mode === "signup" ? signupStep === 1 ? "맞춤 정보 입력하기" : "가입 완료하기" : "로그인"}</button>
+              {mode === "signup" && signupStep === 2 && <button className="member-skip-button" type="button" disabled={busy || !termsAgreed || !privacyPolicyAgreed} onClick={() => void execute(() => onSignup(email, password, { nickname, termsAgreed, privacyPolicyAgreed }))}>선택정보 없이 가입</button>}
               {mode === "login" && (
                 <div className="member-flow-actions">
                   <button type="button" onClick={() => onModeChange("forgot-password")}>비밀번호를 잊으셨나요?</button>
@@ -351,6 +376,7 @@ export default function MemberDialogs({
         ) : member ? (
           <div className="account-sections">
             <div className="account-summary"><span>{member.nickname.slice(0, 1)}</span><div><b>{member.nickname}</b><small>{member.email}</small></div></div>
+            <section className="account-section"><h3>약관 동의 내역</h3>{policyConsents.length ? <ul className="policy-consent-history">{policyConsents.map((consent) => <li key={`${consent.policyType}-${consent.policyVersion}`}><b>{consent.policyType === "TERMS" ? "서비스 이용약관" : "개인정보 처리방침"}</b><span>{consent.policyVersion} · {formatConsentDate(consent.agreedAt)}</span></li>)}</ul> : <p className="field-help">동의 내역을 불러오지 못했습니다.</p>}</section>
 
             <form className="account-section" onSubmit={(event) => {
               event.preventDefault();

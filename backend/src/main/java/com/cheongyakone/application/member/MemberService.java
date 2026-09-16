@@ -8,6 +8,7 @@ import com.cheongyakone.api.member.MemberSessionResponse;
 import com.cheongyakone.api.member.EligibilityProfileResponse;
 import com.cheongyakone.api.member.SearchPreferenceResponse;
 import com.cheongyakone.api.member.FavoriteTrackerResponse;
+import com.cheongyakone.api.member.PolicyConsentResponse;
 import com.cheongyakone.domain.member.FavoriteApplicationResult;
 import com.cheongyakone.config.AuthProperties;
 import com.cheongyakone.domain.member.Member;
@@ -28,6 +29,9 @@ import com.cheongyakone.domain.member.MemberRecommendationDismissalRepository;
 import com.cheongyakone.domain.member.MemberRepository;
 import com.cheongyakone.domain.member.MemberSearchPreference;
 import com.cheongyakone.domain.member.MemberSearchPreferenceRepository;
+import com.cheongyakone.domain.member.MemberPolicyConsent;
+import com.cheongyakone.domain.member.MemberPolicyConsentRepository;
+import com.cheongyakone.domain.member.MemberPolicyType;
 import com.cheongyakone.domain.notice.SubscriptionNotice;
 import com.cheongyakone.domain.notice.SubscriptionNoticeRepository;
 import org.springframework.http.HttpStatus;
@@ -54,6 +58,8 @@ public class MemberService {
     private static final int MAXIMUM_ACTIVE_SESSIONS = 10;
     private static final int MAXIMUM_COMPARISONS = 3;
     public static final String PERSONAL_PROFILE_CONSENT_VERSION = "2026-09-10-v2";
+    public static final String TERMS_VERSION = "2026-09-16-v1";
+    public static final String PRIVACY_POLICY_VERSION = "2026-09-16-v1";
     private static final Duration LOGIN_LOCK_DURATION = Duration.ofMinutes(10);
     private static final Set<String> RESIDENCE_REGIONS = Set.of(
             "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
@@ -67,6 +73,7 @@ public class MemberService {
     private final MemberComparisonRepository comparisonRepository;
     private final MemberEligibilityProfileRepository eligibilityProfileRepository;
     private final MemberSearchPreferenceRepository searchPreferenceRepository;
+    private final MemberPolicyConsentRepository policyConsentRepository;
     private final MemberNotificationPreferenceRepository notificationPreferenceRepository;
     private final MemberNotificationRepository notificationRepository;
     private final MemberRecommendationDismissalRepository recommendationDismissalRepository;
@@ -87,6 +94,7 @@ public class MemberService {
             MemberComparisonRepository comparisonRepository,
             MemberEligibilityProfileRepository eligibilityProfileRepository,
             MemberSearchPreferenceRepository searchPreferenceRepository,
+            MemberPolicyConsentRepository policyConsentRepository,
             MemberNotificationPreferenceRepository notificationPreferenceRepository,
             MemberNotificationRepository notificationRepository,
             MemberRecommendationDismissalRepository recommendationDismissalRepository,
@@ -105,6 +113,7 @@ public class MemberService {
         this.comparisonRepository = comparisonRepository;
         this.eligibilityProfileRepository = eligibilityProfileRepository;
         this.searchPreferenceRepository = searchPreferenceRepository;
+        this.policyConsentRepository = policyConsentRepository;
         this.notificationPreferenceRepository = notificationPreferenceRepository;
         this.notificationRepository = notificationRepository;
         this.recommendationDismissalRepository = recommendationDismissalRepository;
@@ -135,6 +144,9 @@ public class MemberService {
                 request.residenceRegion(),
                 request.personalProfileConsent()
         );
+        if (!Boolean.TRUE.equals(request.termsAgreed()) || !Boolean.TRUE.equals(request.privacyPolicyAgreed())) {
+            throw new MemberApiException(HttpStatus.BAD_REQUEST, "REQUIRED_POLICY_CONSENT", "서비스 이용약관과 개인정보 처리방침에 모두 동의해주세요.");
+        }
         Instant now = clock.instant();
         Member member = new Member(
                 email,
@@ -152,11 +164,21 @@ public class MemberService {
         try {
             // 동시 가입 요청도 DB 유니크 제약에서 즉시 확인하도록 flush한다.
             Member saved = memberRepository.saveAndFlush(member);
+            policyConsentRepository.save(new MemberPolicyConsent(saved, MemberPolicyType.TERMS, TERMS_VERSION, now));
+            policyConsentRepository.save(new MemberPolicyConsent(saved, MemberPolicyType.PRIVACY_POLICY, PRIVACY_POLICY_VERSION, now));
             accountRecoveryService.prepareSignup(saved);
             return MemberResponse.from(saved);
         } catch (DataIntegrityViolationException exception) {
             throw conflict("EMAIL_ALREADY_USED", "이미 가입된 이메일입니다.");
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<PolicyConsentResponse> policyConsents(String rawToken) {
+        Member member = requireMember(rawToken);
+        return policyConsentRepository.findAllByMember_IdOrderByAgreedAtDesc(member.getId()).stream()
+                .map(PolicyConsentResponse::from)
+                .toList();
     }
 
     @Transactional(noRollbackFor = MemberApiException.class)
