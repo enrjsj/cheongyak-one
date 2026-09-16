@@ -1,3 +1,4 @@
+// 백엔드 계약을 한곳에서 관리한다. 인증 요청은 아래 공통 요청 함수가 쿠키와 CSRF 헤더를 처리한다.
 export type SourceSystem = "REB_APT" | "REB_OFFICETEL" | "MYHOME_PUBLIC_RENTAL";
 export type HousingCategory = "APARTMENT" | "PUBLIC_RENTAL" | "OFFICETEL";
 export type NoticeStatus = "UPCOMING" | "OPEN" | "CLOSED" | "ANNOUNCED";

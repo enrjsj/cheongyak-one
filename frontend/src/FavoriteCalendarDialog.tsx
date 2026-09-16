@@ -1,3 +1,4 @@
+// 관심 공고의 접수·마감·당첨 발표 일정을 날짜순으로 모아 보여준다.
 import { NoticeSummary } from "./api";
 import { useDialogAccessibility } from "./useDialogAccessibility";
 

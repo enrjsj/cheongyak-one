@@ -1,5 +1,7 @@
 package com.cheongyakone.api.member;
 
+// HttpOnly 세션 쿠키만으로 막을 수 없는 교차 사이트 상태 변경 요청을 검증한다.
+
 import com.cheongyakone.application.member.MemberApiException;
 import com.cheongyakone.application.member.SessionTokenCodec;
 import jakarta.servlet.http.HttpServletRequest;

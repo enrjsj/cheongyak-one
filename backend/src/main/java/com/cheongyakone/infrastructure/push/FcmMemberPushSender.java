@@ -1,5 +1,7 @@
 package com.cheongyakone.infrastructure.push;
 
+// 하이브리드 앱의 FCM 기기 토큰으로 알림을 전송하는 인프라 어댑터다.
+
 import com.cheongyakone.application.member.MemberPushSender;
 import com.cheongyakone.domain.member.MemberNotification;
 import com.google.auth.oauth2.GoogleCredentials;

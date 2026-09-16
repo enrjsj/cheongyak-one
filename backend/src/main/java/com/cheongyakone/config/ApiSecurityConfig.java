@@ -1,5 +1,7 @@
 package com.cheongyakone.config;
 
+// 세션 쿠키를 사용하는 회원 API의 상태 변경 요청에 CSRF 검증을 연결한다.
+
 import com.cheongyakone.api.member.CsrfProtectionInterceptor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;

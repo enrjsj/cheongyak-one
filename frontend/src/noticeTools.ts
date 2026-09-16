@@ -1,3 +1,4 @@
+// URL과 브라우저 저장소에만 존재하는 공고 탐색 상태를 정규화하는 순수 함수 모음이다.
 import type { NoticeSummary } from "./api";
 
 export type NoticeSortKey = "LATEST" | "DEADLINE";

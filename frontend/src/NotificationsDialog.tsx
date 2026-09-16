@@ -1,3 +1,4 @@
+// 읽음 처리와 공고 상세 이동을 제공하는 회원 알림함 모달이다.
 import { FormEvent, useEffect, useState } from "react";
 import { useDialogAccessibility } from "./useDialogAccessibility";
 import {

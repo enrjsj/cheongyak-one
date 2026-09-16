@@ -1,3 +1,4 @@
+// 가입·로그인·계정관리와 개인정보 동의 입력을 담당하는 모달 집합이다.
 import { FormEvent, useEffect, useState } from "react";
 import {
   MemberGender,

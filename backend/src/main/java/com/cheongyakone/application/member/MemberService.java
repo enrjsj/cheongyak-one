@@ -1,5 +1,7 @@
 package com.cheongyakone.application.member;
 
+// 회원 가입·세션·프로필·관심청약 등 회원 상태 변경을 한 트랜잭션 경계에서 처리한다.
+
 import com.cheongyakone.api.member.MemberRequests;
 import com.cheongyakone.api.member.MemberResponse;
 import com.cheongyakone.api.member.MemberSessionResponse;
