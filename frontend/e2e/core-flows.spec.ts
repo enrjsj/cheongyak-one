@@ -7,6 +7,8 @@ const notices = [
 
 async function mockApi(page: Page) {
   let member: Record<string, unknown> | undefined;
+  let favoriteIds: number[] = [];
+  const trackers = new Map<number, Record<string, unknown>>();
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -28,8 +30,21 @@ async function mockApi(page: Page) {
     const detail = path.match(/^\/api\/v1\/notices\/(\d+)$/);
     if (detail) return json(notices.find((notice) => notice.id === Number(detail[1])));
     if (path.endsWith("/changes")) return json([]);
-    if (path.endsWith("/favorites")) return json({ noticeIds: [] });
-    if (path.endsWith("/favorites/tracker")) return json([]);
+    if (path.endsWith("/favorites/tracker")) return json([...trackers.values()]);
+    const favoriteTracker = path.match(/^\/api\/v1\/members\/me\/favorites\/(\d+)\/tracker$/);
+    if (favoriteTracker) {
+      const noticeId = Number(favoriteTracker[1]);
+      const tracker = { noticeId, ...request.postDataJSON(), updatedAt: "2026-09-01T00:00:00Z" };
+      trackers.set(noticeId, tracker);
+      return json(tracker);
+    }
+    const favorite = path.match(/^\/api\/v1\/members\/me\/favorites\/(\d+)$/);
+    if (favorite) {
+      const noticeId = Number(favorite[1]);
+      favoriteIds = request.method() === "PUT" ? [...new Set([...favoriteIds, noticeId])] : favoriteIds.filter((id) => id !== noticeId);
+      return json({ noticeIds: favoriteIds });
+    }
+    if (path.endsWith("/favorites")) return json({ noticeIds: favoriteIds });
     if (path.endsWith("/comparisons")) return json({ noticeIds: [] });
     if (path.endsWith("/search-preference")) return json(null);
     if (path.endsWith("/eligibility-profile")) {
@@ -84,4 +99,22 @@ test("회원가입 후 사전점검 답변을 계정에 저장한다", async ({ 
   await expect(page.getByText("나의 확인 체크리스트")).toBeVisible();
   await page.getByRole("button", { name: "내 계정에 저장" }).click();
   await expect(page.getByText("사전점검 답변을 저장했습니다.")).toBeVisible();
+});
+
+test("회원은 관심청약 체크리스트를 완료하고 신청 상태를 기록한다", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/");
+  await signup(page);
+  const notice = page.locator("article").filter({ hasText: "E2E 서울 공공분양" });
+  await notice.getByLabel(/관심청약 저장/).click();
+  await page.locator(".saved-button").click();
+  await expect(notice.getByText("신청 전 확인")).toBeVisible();
+  await notice.getByRole("checkbox").check({ force: true });
+  await notice.getByRole("checkbox").nth(1).check({ force: true });
+  await notice.getByRole("checkbox").nth(2).check({ force: true });
+  await notice.getByRole("checkbox").nth(3).check({ force: true });
+  await notice.getByRole("button", { name: "체크 완료 · 신청 준비로 변경" }).click();
+  await expect(notice.getByRole("button", { name: "신청 완료로 표시" })).toBeVisible();
+  await notice.getByRole("button", { name: "신청 완료로 표시" }).click();
+  await expect(notice.getByText("신청 결과")).toBeVisible();
 });
