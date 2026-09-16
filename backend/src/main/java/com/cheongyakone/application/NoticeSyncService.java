@@ -1,5 +1,7 @@
 package com.cheongyakone.application;
 
+// 외부 공고 소스별 동기화 실행과 재시도·실행 이력 기록을 담당하는 애플리케이션 서비스다.
+
 import com.cheongyakone.config.NoticeSyncRetryProperties;
 import com.cheongyakone.domain.notice.NoticeSnapshot;
 import com.cheongyakone.domain.sync.SyncExecution;

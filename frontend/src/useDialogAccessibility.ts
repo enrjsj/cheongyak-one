@@ -1,3 +1,4 @@
+// Escape 닫기와 최초 포커스를 공통 처리해 모달의 키보드 접근성을 보장한다.
 import { RefObject, useEffect, useRef } from "react";
 
 const FOCUSABLE_SELECTOR = [

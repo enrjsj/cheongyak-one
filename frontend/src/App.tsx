@@ -1,3 +1,4 @@
+// 서비스의 주요 사용자 흐름(검색·관심청약·비교·회원·사전점검)을 조합하는 화면 컨테이너다.
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   changeMemberPassword,

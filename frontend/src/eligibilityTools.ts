@@ -1,3 +1,4 @@
+// 실제 당첨 자격을 판정하지 않고, 사용자가 공고문에서 확인할 항목을 만드는 사전점검 도구다.
 export type EligibilityAnswer = "YES" | "NO" | "UNKNOWN";
 
 export type EligibilityQuestion = {

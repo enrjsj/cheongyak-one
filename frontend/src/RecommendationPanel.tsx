@@ -1,3 +1,4 @@
+// 회원 프로필과 저장된 조건을 바탕으로 계산된 추천 공고를 표시한다.
 import { MemberRecommendationList } from "./api";
 
 interface RecommendationPanelProps {
