@@ -123,6 +123,16 @@ public final class MemberRequests {
     ) {
     }
 
+    public record SavedSearchProfile(
+            @NotBlank @Size(max = 40) String name,
+            @Size(max = 40) String region,
+            HousingCategory housingCategory,
+            @NotNull SearchPreferenceStatus status,
+            @NotNull SearchPreferenceSort sort,
+            @PositiveOrZero @Max(1000000) Integer minPriceManwon,
+            @PositiveOrZero @Max(1000000) Integer maxPriceManwon
+    ) { }
+
     public record EligibilityProfile(
             @NotNull EligibilityAnswer homeless,
             @NotNull EligibilityAnswer subscriptionAccount,
