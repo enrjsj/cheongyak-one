@@ -107,6 +107,7 @@ test("회원은 관심청약 체크리스트를 완료하고 신청 상태를 �
   await signup(page);
   const notice = page.locator("article").filter({ hasText: "E2E 서울 공공분양" });
   await notice.getByLabel(/관심청약 저장/).click();
+  await expect(page.getByText("계정 관심청약에 저장했어요.")).toBeVisible();
   await page.locator(".saved-button").click();
   await expect(notice.getByText("신청 전 확인")).toBeVisible();
   await notice.getByRole("checkbox").check({ force: true });
