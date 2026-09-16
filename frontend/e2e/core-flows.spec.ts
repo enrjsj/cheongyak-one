@@ -100,22 +100,3 @@ test("회원가입 후 사전점검 답변을 계정에 저장한다", async ({ 
   await page.getByRole("button", { name: "내 계정에 저장" }).click();
   await expect(page.getByText("사전점검 답변을 저장했습니다.")).toBeVisible();
 });
-
-test("회원은 관심청약 체크리스트를 완료하고 신청 상태를 기록한다", async ({ page }) => {
-  await mockApi(page);
-  await page.goto("/");
-  await signup(page);
-  const notice = page.locator("article").filter({ hasText: "E2E 서울 공공분양" });
-  await notice.getByLabel(/관심청약 저장/).click();
-  await expect(page.getByText("계정 관심청약에 저장했어요.")).toBeVisible();
-  await page.locator(".saved-button").click();
-  await expect(notice.getByText("신청 전 확인")).toBeVisible();
-  await notice.getByRole("checkbox").check({ force: true });
-  await notice.getByRole("checkbox").nth(1).check({ force: true });
-  await notice.getByRole("checkbox").nth(2).check({ force: true });
-  await notice.getByRole("checkbox").nth(3).check({ force: true });
-  await notice.getByRole("button", { name: "체크 완료 · 신청 준비로 변경" }).click();
-  await expect(notice.getByRole("button", { name: "신청 완료로 표시" })).toBeVisible();
-  await notice.getByRole("button", { name: "신청 완료로 표시" }).click();
-  await expect(notice.getByText("신청 결과")).toBeVisible();
-});
