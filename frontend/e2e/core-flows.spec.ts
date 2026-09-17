@@ -8,6 +8,7 @@ const notices = [
 async function mockApi(page: Page) {
   let member: Record<string, unknown> | undefined;
   let favoriteIds: number[] = [];
+  let savedSearchProfiles = [{ id: 11, name: "서울 기본 조건", region: "서울", housingCategory: "APARTMENT", status: "OPEN", sort: "DEADLINE", defaultProfile: true, newNoticeEnabled: true, updatedAt: "2026-09-01T00:00:00Z" }];
   const trackers = new Map<number, Record<string, unknown>>();
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
@@ -46,6 +47,19 @@ async function mockApi(page: Page) {
     }
     if (path.endsWith("/favorites")) return json({ noticeIds: favoriteIds });
     if (path.endsWith("/comparisons")) return json({ noticeIds: [] });
+    if (path === "/api/v1/members/me/saved-search-profiles") return json(savedSearchProfiles);
+    const savedProfileToggle = path.match(/^\/api\/v1\/members\/me\/saved-search-profiles\/(\d+)\/new-notice-enabled$/);
+    if (savedProfileToggle) {
+      const id = Number(savedProfileToggle[1]);
+      savedSearchProfiles = savedSearchProfiles.map((profile) => profile.id === id ? { ...profile, newNoticeEnabled: request.postDataJSON().enabled } : profile);
+      return json(savedSearchProfiles.find((profile) => profile.id === id));
+    }
+    const savedProfile = path.match(/^\/api\/v1\/members\/me\/saved-search-profiles\/(\d+)$/);
+    if (savedProfile && request.method() === "PUT") {
+      const id = Number(savedProfile[1]);
+      savedSearchProfiles = savedSearchProfiles.map((profile) => profile.id === id ? { ...profile, ...request.postDataJSON() } : profile);
+      return json(savedSearchProfiles.find((profile) => profile.id === id));
+    }
     if (path.endsWith("/search-preference")) return json(null);
     if (path.endsWith("/eligibility-profile")) {
       if (request.method() === "GET") return json(null);
@@ -101,4 +115,19 @@ test("회원가입 후 사전점검 답변을 계정에 저장한다", async ({ 
   await expect(page.getByText("나의 확인 체크리스트")).toBeVisible();
   await page.getByRole("button", { name: "내 계정에 저장" }).click();
   await expect(page.getByText("사전점검 답변을 저장했습니다.")).toBeVisible();
+});
+
+test("저장 조건을 수정하고 신규 공고 알림을 개별로 끈다", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/");
+  await signup(page);
+  await page.getByRole("button", { name: /지역·유형·예산 필터/ }).click();
+  await expect(page.getByText("서울 기본 조건")).toBeVisible();
+  await page.getByRole("button", { name: "수정", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "저장 조건 수정" })).toBeVisible();
+  await page.getByLabel("조건 이름").fill("서울 아파트 조건");
+  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.getByText("저장 조건 이름을 변경했습니다.")).toBeVisible();
+  await page.getByRole("button", { name: "신규 알림 켜짐", exact: true }).click();
+  await expect(page.getByRole("button", { name: "신규 알림 꺼짐", exact: true })).toBeVisible();
 });

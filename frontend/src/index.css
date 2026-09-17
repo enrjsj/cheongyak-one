@@ -918,3 +918,11 @@ footer { background: var(--navy); color: white; }
 .saved-search-profiles button { border: 0; border-radius: 6px; padding: 5px 7px; background: #edf3ff; color: #31598d; font-size: 11px; cursor: pointer; }
 .saved-search-profiles .profile-notice-on { background: #e7f7ee; color: #187044; }
 .saved-search-profiles .profile-notice-off { background: #f2f3f5; color: #6e7580; }
+.profile-editor-modal { width: min(420px, calc(100vw - 32px)); }
+.profile-editor-modal form { display: grid; gap: 18px; padding: 18px; }
+.profile-editor-field { display: grid; gap: 7px; color: #233759; font-size: 13px; font-weight: 700; }
+.profile-editor-field input { width: 100%; box-sizing: border-box; border: 1px solid #cfd9ea; border-radius: 9px; padding: 11px 12px; color: #182c4d; font: inherit; }
+.profile-editor-summary { display: grid; gap: 6px; padding: 13px; border-radius: 10px; background: #f5f8fe; color: #51627c; }
+.profile-editor-summary b { color: #233759; font-size: 12px; }
+.profile-editor-summary p { margin: 0; font-size: 13px; }
+.profile-editor-summary small { color: #71809a; line-height: 1.5; }
