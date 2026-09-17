@@ -482,6 +482,7 @@ export default function Home() {
   // 브라우저 프롬프트 대신 수정 대상을 유지해 모바일에서도 안전하게 편집한다.
   const [editingSavedSearchProfile, setEditingSavedSearchProfile] = useState<SavedSearchProfile>();
   const [savedSearchProfileName, setSavedSearchProfileName] = useState("");
+  const [savedSearchProfileDraft, setSavedSearchProfileDraft] = useState<SearchPreferenceInput>({ status: "ALL", sort: "LATEST" });
   const [eligibilityProfile, setEligibilityProfile] = useState<EligibilityProfile>();
   const [eligibilityBusy, setEligibilityBusy] = useState(false);
   const [preferenceBusy, setPreferenceBusy] = useState(false);
@@ -1253,16 +1254,17 @@ export default function Home() {
 
   const openSavedSearchProfileEditor = (profile: SavedSearchProfile) => {
     setSavedSearchProfileName(profile.name);
+    setSavedSearchProfileDraft({ region: profile.region, housingCategory: profile.housingCategory, status: profile.status, sort: profile.sort, minPriceManwon: profile.minPriceManwon, maxPriceManwon: profile.maxPriceManwon });
     setEditingSavedSearchProfile(profile);
   };
 
-  const handleRenameSavedSearchProfile = async (event: FormEvent<HTMLFormElement>) => {
+  const handleUpdateSavedSearchProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const profile = editingSavedSearchProfile;
     const name = savedSearchProfileName.trim();
-    if (!profile || !name || name === profile.name) { setEditingSavedSearchProfile(undefined); return; }
+    if (!profile || !name) return;
     setPreferenceBusy(true);
-    try { const updated = await updateSavedSearchProfile(profile.id, { ...profile, name }); setSavedSearchProfiles((items) => items.map((item) => item.id === profile.id ? updated : item)); setToast("저장 조건 이름을 변경했습니다."); setEditingSavedSearchProfile(undefined); }
+    try { const updated = await updateSavedSearchProfile(profile.id, { name, ...savedSearchProfileDraft }); setSavedSearchProfiles((items) => items.map((item) => item.id === profile.id ? updated : item)); setToast("저장 조건을 수정했습니다."); setEditingSavedSearchProfile(undefined); }
     catch (error) { setToast(error instanceof Error ? error.message : "저장 조건을 수정하지 못했습니다."); }
     finally { setPreferenceBusy(false); }
   };
@@ -1974,9 +1976,16 @@ export default function Home() {
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditingSavedSearchProfile(undefined); }}>
           <section ref={savedSearchProfileEditorRef} tabIndex={-1} className="modal profile-editor-modal" role="dialog" aria-modal="true" aria-labelledby="saved-search-profile-editor-title">
             <div className="modal-head"><div><span>SAVED FILTER</span><h2 id="saved-search-profile-editor-title">저장 조건 수정</h2></div><button type="button" onClick={() => setEditingSavedSearchProfile(undefined)} aria-label="닫기"><Icon name="close" /></button></div>
-            <form onSubmit={(event) => void handleRenameSavedSearchProfile(event)}>
+            <form onSubmit={(event) => void handleUpdateSavedSearchProfile(event)}>
               <label className="profile-editor-field">조건 이름<input autoFocus value={savedSearchProfileName} maxLength={40} onChange={(event) => setSavedSearchProfileName(event.target.value)} placeholder="예: 서울 신혼부부" /></label>
-              <div className="profile-editor-summary"><b>저장된 검색 범위</b><p>{editingSavedSearchProfile.region ?? "전국"} · {editingSavedSearchProfile.housingCategory ? CATEGORY_LABELS[editingSavedSearchProfile.housingCategory] : "전체 유형"} · {formatPricePreference(editingSavedSearchProfile)}</p><small>검색 범위는 필터에서 조건을 적용한 뒤 새 이름으로 저장해 추가할 수 있어요.</small></div>
+              <div className="profile-editor-fields">
+                <label>지역<select value={savedSearchProfileDraft.region ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, region: event.target.value || undefined }))}><option value="">전국</option>{availableRegions.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
+                <label>주택 유형<select value={savedSearchProfileDraft.housingCategory ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, housingCategory: event.target.value as HousingCategory || undefined }))}><option value="">전체 유형</option>{(Object.entries(CATEGORY_LABELS) as Array<[HousingCategory, string]>).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+                <label>공고 상태<select value={savedSearchProfileDraft.status} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, status: event.target.value as SearchPreferenceInput["status"] }))}>{(["ALL", "TODAY", "OPEN", "UPCOMING"] as const).map((value) => <option value={value} key={value}>{STATUS_LABELS[value.toLowerCase() as StatusKey]}</option>)}</select></label>
+                <label>정렬<select value={savedSearchProfileDraft.sort} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, sort: event.target.value as SearchPreferenceInput["sort"] }))}><option value="LATEST">최신순</option><option value="DEADLINE">마감 임박순</option></select></label>
+                <label>최소 예산 (만원)<input type="number" min="0" max="1000000" inputMode="numeric" value={savedSearchProfileDraft.minPriceManwon ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, minPriceManwon: priceInManwon(event.target.value) }))} placeholder="예: 30000" /></label>
+                <label>최대 예산 (만원)<input type="number" min="0" max="1000000" inputMode="numeric" value={savedSearchProfileDraft.maxPriceManwon ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, maxPriceManwon: priceInManwon(event.target.value) }))} placeholder="예: 60000" /></label>
+              </div>
               <div className="modal-actions"><button className="reset-button" type="button" onClick={() => setEditingSavedSearchProfile(undefined)}>취소</button><button className="primary-button" type="submit" disabled={preferenceBusy}>{preferenceBusy ? "저장 중…" : "저장"}</button></div>
             </form>
           </section>
