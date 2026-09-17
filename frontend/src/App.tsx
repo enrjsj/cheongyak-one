@@ -1067,6 +1067,7 @@ export default function Home() {
   const handleLogin = async (email: string, password: string) => {
     const synchronized = await synchronizeMemberLists(await loginMember(email, password));
     let preferenceApplied = false;
+    let defaultProfileApplied = false;
     try {
       const preference = await fetchSearchPreference();
       setSearchPreference(preference);
@@ -1078,13 +1079,27 @@ export default function Home() {
       // 로그인은 유지하고 검색조건만 사용자가 다시 불러올 수 있게 한다.
     }
     try {
+      const profiles = await fetchSavedSearchProfiles();
+      setSavedSearchProfiles(profiles);
+      // 로그인 동작에서도 기본 프로필을 즉시 반영해 새로고침 없이 동일한 시작 조건을 제공한다.
+      const defaultProfile = profiles.find((item) => item.defaultProfile);
+      if (defaultProfile) {
+        applySearchPreference(defaultProfile);
+        defaultProfileApplied = true;
+      }
+    } catch {
+      // 로그인은 유지하고 저장 프로필은 필터에서 다시 불러올 수 있게 한다.
+    }
+    try {
       setEligibilityProfile(await fetchEligibilityProfile());
     } catch {
       // 로그인은 유지하고 사전점검은 사용자가 다시 시작할 수 있게 한다.
     }
     setMemberDialog(null);
     setToast(synchronized
-      ? preferenceApplied
+      ? defaultProfileApplied
+        ? "로그인하고 기본 저장 조건을 적용했어요."
+        : preferenceApplied
         ? "로그인하고 저장된 맞춤 검색조건을 적용했어요."
         : "로그인했습니다. 관심·비교 목록을 계정과 동기화했어요."
       : "로그인은 완료됐지만 목록 동기화는 다시 시도해야 합니다.");
