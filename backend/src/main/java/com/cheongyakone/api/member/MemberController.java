@@ -220,6 +220,11 @@ public class MemberController {
         return memberService.setDefaultSavedSearchProfile(token(request), profileId);
     }
 
+    @PutMapping("/saved-search-profiles/{profileId}/new-notice-enabled")
+    public SavedSearchProfileResponse setSavedSearchProfileNewNoticeEnabled(HttpServletRequest request, @PathVariable @Positive Long profileId, @RequestBody java.util.Map<String, Boolean> body) {
+        return memberService.setSavedSearchProfileNewNoticeEnabled(token(request), profileId, Boolean.TRUE.equals(body.get("enabled")));
+    }
+
     @PostMapping("/saved-search-profiles/{profileId}/duplicate")
     public ResponseEntity<SavedSearchProfileResponse> duplicateSavedSearchProfile(HttpServletRequest request, @PathVariable @Positive Long profileId) {
         return ResponseEntity.status(201).body(memberService.duplicateSavedSearchProfile(token(request), profileId));

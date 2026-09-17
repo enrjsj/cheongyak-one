@@ -624,6 +624,16 @@ public class MemberService {
         return SavedSearchProfileResponse.from(savedSearchProfileRepository.save(target));
     }
 
+    /** 저장 조건별 신규 공고 알림 수신 여부를 독립적으로 바꾼다. */
+    @Transactional
+    public SavedSearchProfileResponse setSavedSearchProfileNewNoticeEnabled(String rawToken, Long profileId, boolean enabled) {
+        Member member = requireMember(rawToken);
+        MemberSavedSearchProfile profile = savedSearchProfileRepository.findByIdAndMember_Id(profileId, member.getId())
+                .orElseThrow(() -> new MemberApiException(HttpStatus.NOT_FOUND, "SAVED_SEARCH_PROFILE_NOT_FOUND", "저장한 검색 조건을 찾을 수 없습니다."));
+        profile.setNewNoticeEnabled(enabled, clock.instant());
+        return SavedSearchProfileResponse.from(savedSearchProfileRepository.save(profile));
+    }
+
     @Transactional
     public SavedSearchProfileResponse duplicateSavedSearchProfile(String rawToken, Long profileId) {
         Member member = requireMember(rawToken);

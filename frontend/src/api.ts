@@ -644,6 +644,11 @@ export function duplicateSavedSearchProfile(id: number): Promise<SavedSearchProf
   return requestJson<SavedSearchProfile>(`/api/v1/members/me/saved-search-profiles/${id}/duplicate`, { method: "POST" });
 }
 
+/** 프로필별 신규 공고 알림만 켜거나 끈다. */
+export function setSavedSearchProfileNewNoticeEnabled(id: number, enabled: boolean): Promise<SavedSearchProfile> {
+  return requestJson<SavedSearchProfile>(`/api/v1/members/me/saved-search-profiles/${id}/new-notice-enabled`, { method: "PUT", body: JSON.stringify({ enabled }) });
+}
+
 export function fetchEligibilityProfile(): Promise<EligibilityProfile | undefined> {
   return requestJson<EligibilityProfile | undefined>("/api/v1/members/me/eligibility-profile");
 }
