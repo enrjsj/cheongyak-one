@@ -922,6 +922,9 @@ footer { background: var(--navy); color: white; }
 .profile-editor-modal form { display: grid; gap: 18px; padding: 18px; }
 .profile-editor-field { display: grid; gap: 7px; color: #233759; font-size: 13px; font-weight: 700; }
 .profile-editor-field input { width: 100%; box-sizing: border-box; border: 1px solid #cfd9ea; border-radius: 9px; padding: 11px 12px; color: #182c4d; font: inherit; }
+.profile-editor-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.profile-editor-fields label { display: grid; gap: 7px; color: #233759; font-size: 13px; font-weight: 700; }
+.profile-editor-fields input, .profile-editor-fields select { width: 100%; min-height: 42px; box-sizing: border-box; border: 1px solid #cfd9ea; border-radius: 9px; padding: 9px 10px; color: #182c4d; background: #fff; font: inherit; }
 .profile-editor-summary { display: grid; gap: 6px; padding: 13px; border-radius: 10px; background: #f5f8fe; color: #51627c; }
 .profile-editor-summary b { color: #233759; font-size: 12px; }
 .profile-editor-summary p { margin: 0; font-size: 13px; }
