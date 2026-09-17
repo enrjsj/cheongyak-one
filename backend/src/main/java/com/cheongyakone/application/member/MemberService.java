@@ -60,6 +60,7 @@ public class MemberService {
     private static final int MAXIMUM_LOGIN_ATTEMPTS = 5;
     private static final int MAXIMUM_ACTIVE_SESSIONS = 10;
     private static final int MAXIMUM_COMPARISONS = 3;
+    private static final int MAXIMUM_SAVED_SEARCH_PROFILES = 10;
     public static final String PERSONAL_PROFILE_CONSENT_VERSION = "2026-09-10-v2";
     public static final String TERMS_VERSION = "2026-09-16-v1";
     public static final String PRIVACY_POLICY_VERSION = "2026-09-16-v1";
@@ -600,6 +601,7 @@ public class MemberService {
         MemberSavedSearchProfile profile = profileId == null
                 ? new MemberSavedSearchProfile(member, request.name(), now)
                 : savedSearchProfileRepository.findByIdAndMember_Id(profileId, member.getId()).orElseThrow(() -> new MemberApiException(HttpStatus.NOT_FOUND, "SAVED_SEARCH_PROFILE_NOT_FOUND", "저장한 검색 조건을 찾을 수 없습니다."));
+        if (profileId == null && savedSearchProfileRepository.countByMember_Id(member.getId()) >= MAXIMUM_SAVED_SEARCH_PROFILES) throw new MemberApiException(HttpStatus.BAD_REQUEST, "SAVED_SEARCH_PROFILE_LIMIT_EXCEEDED", "저장 검색조건은 최대 10개까지 만들 수 있습니다.");
         profile.change(request.name(), request.region(), request.housingCategory(), request.status(), request.sort(), request.minPriceManwon(), request.maxPriceManwon(), now);
         try { return SavedSearchProfileResponse.from(savedSearchProfileRepository.save(profile)); }
         catch (DataIntegrityViolationException exception) { throw new MemberApiException(HttpStatus.CONFLICT, "SAVED_SEARCH_PROFILE_NAME_DUPLICATED", "같은 이름의 저장 조건이 이미 있습니다."); }
@@ -610,6 +612,27 @@ public class MemberService {
         Member member = requireMember(rawToken);
         MemberSavedSearchProfile profile = savedSearchProfileRepository.findByIdAndMember_Id(profileId, member.getId()).orElseThrow(() -> new MemberApiException(HttpStatus.NOT_FOUND, "SAVED_SEARCH_PROFILE_NOT_FOUND", "저장한 검색 조건을 찾을 수 없습니다."));
         savedSearchProfileRepository.delete(profile);
+    }
+
+    @Transactional
+    public SavedSearchProfileResponse setDefaultSavedSearchProfile(String rawToken, Long profileId) {
+        Member member = requireMember(rawToken);
+        Instant now = clock.instant();
+        MemberSavedSearchProfile target = savedSearchProfileRepository.findByIdAndMember_Id(profileId, member.getId()).orElseThrow(() -> new MemberApiException(HttpStatus.NOT_FOUND, "SAVED_SEARCH_PROFILE_NOT_FOUND", "저장한 검색 조건을 찾을 수 없습니다."));
+        savedSearchProfileRepository.findAllByMember_IdAndDefaultProfileTrue(member.getId()).forEach(profile -> profile.setDefaultProfile(false, now));
+        target.setDefaultProfile(true, now);
+        return SavedSearchProfileResponse.from(savedSearchProfileRepository.save(target));
+    }
+
+    @Transactional
+    public SavedSearchProfileResponse duplicateSavedSearchProfile(String rawToken, Long profileId) {
+        Member member = requireMember(rawToken);
+        if (savedSearchProfileRepository.countByMember_Id(member.getId()) >= MAXIMUM_SAVED_SEARCH_PROFILES) throw new MemberApiException(HttpStatus.BAD_REQUEST, "SAVED_SEARCH_PROFILE_LIMIT_EXCEEDED", "저장 검색조건은 최대 10개까지 만들 수 있습니다.");
+        MemberSavedSearchProfile source = savedSearchProfileRepository.findByIdAndMember_Id(profileId, member.getId()).orElseThrow(() -> new MemberApiException(HttpStatus.NOT_FOUND, "SAVED_SEARCH_PROFILE_NOT_FOUND", "저장한 검색 조건을 찾을 수 없습니다."));
+        Instant now = clock.instant();
+        MemberSavedSearchProfile copy = new MemberSavedSearchProfile(member, source.getName() + " 복사본", now);
+        copy.change(copy.getName(), source.getRegion(), source.getHousingCategory(), source.getStatus(), source.getSort(), source.getMinPriceManwon(), source.getMaxPriceManwon(), now);
+        return SavedSearchProfileResponse.from(savedSearchProfileRepository.save(copy));
     }
 
     private void validatePriceRange(Integer minPriceManwon, Integer maxPriceManwon) {

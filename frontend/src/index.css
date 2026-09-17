@@ -914,4 +914,5 @@ footer { background: var(--navy); color: white; }
 .saved-search-profiles p, .saved-search-profiles small { color: #78869b; font-size: 11px; margin: 0; }
 .saved-search-profiles article { padding: 9px 0; border-top: 1px solid #edf0f6; }
 .saved-search-profiles article span { display: grid; gap: 2px; }
+.saved-search-profiles article em { margin-left: 5px; padding: 2px 4px; border-radius: 4px; background: #dcecff; color: #23588d; font-size: 10px; font-style: normal; }
 .saved-search-profiles button { border: 0; border-radius: 6px; padding: 5px 7px; background: #edf3ff; color: #31598d; font-size: 11px; cursor: pointer; }
