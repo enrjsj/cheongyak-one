@@ -215,6 +215,16 @@ public class MemberController {
         memberService.deleteSavedSearchProfile(token(request), profileId); return ResponseEntity.noContent().build();
     }
 
+    @PutMapping("/saved-search-profiles/{profileId}/default")
+    public SavedSearchProfileResponse setDefaultSavedSearchProfile(HttpServletRequest request, @PathVariable @Positive Long profileId) {
+        return memberService.setDefaultSavedSearchProfile(token(request), profileId);
+    }
+
+    @PostMapping("/saved-search-profiles/{profileId}/duplicate")
+    public ResponseEntity<SavedSearchProfileResponse> duplicateSavedSearchProfile(HttpServletRequest request, @PathVariable @Positive Long profileId) {
+        return ResponseEntity.status(201).body(memberService.duplicateSavedSearchProfile(token(request), profileId));
+    }
+
     @GetMapping("/eligibility-profile")
     public ResponseEntity<EligibilityProfileResponse> eligibilityProfile(HttpServletRequest request) {
         return memberService.eligibilityProfile(token(request))
