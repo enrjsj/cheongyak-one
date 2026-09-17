@@ -45,6 +45,9 @@ import {
   saveSearchPreference,
   createSavedSearchProfile,
   deleteSavedSearchProfile,
+  duplicateSavedSearchProfile,
+  setDefaultSavedSearchProfile,
+  updateSavedSearchProfile,
   saveEligibilityProfile,
   revokeMemberSession,
   revokeOtherMemberSessions,
@@ -1223,6 +1226,29 @@ export default function Home() {
     finally { setPreferenceBusy(false); }
   };
 
+  const handleRenameSavedSearchProfile = async (profile: SavedSearchProfile) => {
+    const name = window.prompt("새 이름을 입력해주세요.", profile.name);
+    if (!name?.trim() || name.trim() === profile.name) return;
+    setPreferenceBusy(true);
+    try { const updated = await updateSavedSearchProfile(profile.id, { ...profile, name: name.trim() }); setSavedSearchProfiles((items) => items.map((item) => item.id === profile.id ? updated : item)); setToast("저장 조건 이름을 변경했습니다."); }
+    catch (error) { setToast(error instanceof Error ? error.message : "저장 조건을 수정하지 못했습니다."); }
+    finally { setPreferenceBusy(false); }
+  };
+
+  const handleDefaultSavedSearchProfile = async (profile: SavedSearchProfile) => {
+    setPreferenceBusy(true);
+    try { const updated = await setDefaultSavedSearchProfile(profile.id); setSavedSearchProfiles((items) => items.map((item) => ({ ...item, ...(item.id === profile.id ? updated : { defaultProfile: false }) }))); setToast(`'${profile.name}'을 기본 조건으로 설정했습니다.`); }
+    catch (error) { setToast(error instanceof Error ? error.message : "기본 조건을 설정하지 못했습니다."); }
+    finally { setPreferenceBusy(false); }
+  };
+
+  const handleDuplicateSavedSearchProfile = async (profile: SavedSearchProfile) => {
+    setPreferenceBusy(true);
+    try { const copied = await duplicateSavedSearchProfile(profile.id); setSavedSearchProfiles((items) => [copied, ...items]); setToast("저장 조건을 복제했습니다."); }
+    catch (error) { setToast(error instanceof Error ? error.message : "저장 조건을 복제하지 못했습니다."); }
+    finally { setPreferenceBusy(false); }
+  };
+
   const toggleComparison = async (id: number) => {
     if (comparisonPendingId !== undefined || comparisonResetPending) return;
     const update = updateComparison(comparisonIds, id);
@@ -1888,7 +1914,7 @@ export default function Home() {
                   <div className="saved-search-profiles">
                     <div><b>내 저장 조건</b><button type="button" onClick={() => void handleCreateSavedSearchProfile()} disabled={preferenceBusy}>새 이름으로 저장</button></div>
                     {savedSearchProfiles.length === 0 ? <p>여러 조건을 이름으로 저장해 빠르게 다시 적용할 수 있어요.</p> : savedSearchProfiles.map((profile) => (
-                      <article key={profile.id}><span><b>{profile.name}</b><small>{profile.region ?? "전국"} · {profile.housingCategory ? CATEGORY_LABELS[profile.housingCategory] : "전체 유형"} · {formatPricePreference(profile)}</small></span><div><button type="button" onClick={() => { applySearchPreference(profile); setToast(`'${profile.name}' 조건을 적용했습니다.`); }} disabled={preferenceBusy}>적용</button><button type="button" onClick={() => void handleDeleteSavedSearchProfile(profile)} disabled={preferenceBusy}>삭제</button></div></article>
+                      <article key={profile.id}><span><b>{profile.name}{profile.defaultProfile && <em>기본</em>}</b><small>{profile.region ?? "전국"} · {profile.housingCategory ? CATEGORY_LABELS[profile.housingCategory] : "전체 유형"} · {formatPricePreference(profile)}</small></span><div><button type="button" onClick={() => { applySearchPreference(profile); setToast(`'${profile.name}' 조건을 적용했습니다.`); }} disabled={preferenceBusy}>적용</button><button type="button" onClick={() => void handleRenameSavedSearchProfile(profile)} disabled={preferenceBusy}>이름</button><button type="button" onClick={() => void handleDuplicateSavedSearchProfile(profile)} disabled={preferenceBusy}>복제</button>{!profile.defaultProfile && <button type="button" onClick={() => void handleDefaultSavedSearchProfile(profile)} disabled={preferenceBusy}>기본 설정</button>}<button type="button" onClick={() => void handleDeleteSavedSearchProfile(profile)} disabled={preferenceBusy}>삭제</button></div></article>
                     ))}
                   </div>
                 </>

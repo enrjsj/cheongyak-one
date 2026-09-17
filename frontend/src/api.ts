@@ -301,6 +301,8 @@ export interface SearchPreferenceInput {
 export interface SavedSearchProfile extends SearchPreferenceInput {
   id: number;
   name: string;
+  defaultProfile: boolean;
+  newNoticeEnabled: boolean;
   updatedAt: string;
 }
 
@@ -628,6 +630,18 @@ export function createSavedSearchProfile(input: SearchPreferenceInput & { name: 
 
 export function deleteSavedSearchProfile(id: number): Promise<void> {
   return requestJson<void>(`/api/v1/members/me/saved-search-profiles/${id}`, { method: "DELETE" });
+}
+
+export function updateSavedSearchProfile(id: number, input: SearchPreferenceInput & { name: string }): Promise<SavedSearchProfile> {
+  return requestJson<SavedSearchProfile>(`/api/v1/members/me/saved-search-profiles/${id}`, { method: "PUT", body: JSON.stringify(input) });
+}
+
+export function setDefaultSavedSearchProfile(id: number): Promise<SavedSearchProfile> {
+  return requestJson<SavedSearchProfile>(`/api/v1/members/me/saved-search-profiles/${id}/default`, { method: "PUT" });
+}
+
+export function duplicateSavedSearchProfile(id: number): Promise<SavedSearchProfile> {
+  return requestJson<SavedSearchProfile>(`/api/v1/members/me/saved-search-profiles/${id}/duplicate`, { method: "POST" });
 }
 
 export function fetchEligibilityProfile(): Promise<EligibilityProfile | undefined> {
