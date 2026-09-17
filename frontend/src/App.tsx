@@ -47,6 +47,7 @@ import {
   deleteSavedSearchProfile,
   duplicateSavedSearchProfile,
   setDefaultSavedSearchProfile,
+  setSavedSearchProfileNewNoticeEnabled,
   updateSavedSearchProfile,
   saveEligibilityProfile,
   revokeMemberSession,
@@ -680,7 +681,13 @@ export default function Home() {
           if (!cancelled) setToast(error instanceof Error ? error.message : "저장한 검색조건을 불러오지 못했습니다.");
         }
         try {
-          if (!cancelled) setSavedSearchProfiles(await fetchSavedSearchProfiles());
+          const profiles = await fetchSavedSearchProfiles();
+          if (!cancelled) {
+            setSavedSearchProfiles(profiles);
+            // 로그인 직후에는 기본 프로필을 우선 적용해 이전 단일 검색조건보다 예측 가능한 시작 화면을 제공한다.
+            const defaultProfile = profiles.find((item) => item.defaultProfile);
+            if (defaultProfile) applySearchPreference(defaultProfile);
+          }
         } catch (error) {
           if (!cancelled) setToast(error instanceof Error ? error.message : "저장 검색조건 목록을 불러오지 못했습니다.");
         }
@@ -1246,6 +1253,16 @@ export default function Home() {
     setPreferenceBusy(true);
     try { const copied = await duplicateSavedSearchProfile(profile.id); setSavedSearchProfiles((items) => [copied, ...items]); setToast("저장 조건을 복제했습니다."); }
     catch (error) { setToast(error instanceof Error ? error.message : "저장 조건을 복제하지 못했습니다."); }
+    finally { setPreferenceBusy(false); }
+  };
+
+  const handleSavedSearchProfileNoticeToggle = async (profile: SavedSearchProfile) => {
+    setPreferenceBusy(true);
+    try {
+      const updated = await setSavedSearchProfileNewNoticeEnabled(profile.id, !profile.newNoticeEnabled);
+      setSavedSearchProfiles((items) => items.map((item) => item.id === updated.id ? updated : item));
+      setToast(updated.newNoticeEnabled ? "이 조건의 신규 공고 알림을 켰습니다." : "이 조건의 신규 공고 알림을 껐습니다.");
+    } catch (error) { setToast(error instanceof Error ? error.message : "신규 공고 알림 설정을 바꾸지 못했습니다."); }
     finally { setPreferenceBusy(false); }
   };
 
@@ -1914,7 +1931,7 @@ export default function Home() {
                   <div className="saved-search-profiles">
                     <div><b>내 저장 조건</b><button type="button" onClick={() => void handleCreateSavedSearchProfile()} disabled={preferenceBusy}>새 이름으로 저장</button></div>
                     {savedSearchProfiles.length === 0 ? <p>여러 조건을 이름으로 저장해 빠르게 다시 적용할 수 있어요.</p> : savedSearchProfiles.map((profile) => (
-                      <article key={profile.id}><span><b>{profile.name}{profile.defaultProfile && <em>기본</em>}</b><small>{profile.region ?? "전국"} · {profile.housingCategory ? CATEGORY_LABELS[profile.housingCategory] : "전체 유형"} · {formatPricePreference(profile)}</small></span><div><button type="button" onClick={() => { applySearchPreference(profile); setToast(`'${profile.name}' 조건을 적용했습니다.`); }} disabled={preferenceBusy}>적용</button><button type="button" onClick={() => void handleRenameSavedSearchProfile(profile)} disabled={preferenceBusy}>이름</button><button type="button" onClick={() => void handleDuplicateSavedSearchProfile(profile)} disabled={preferenceBusy}>복제</button>{!profile.defaultProfile && <button type="button" onClick={() => void handleDefaultSavedSearchProfile(profile)} disabled={preferenceBusy}>기본 설정</button>}<button type="button" onClick={() => void handleDeleteSavedSearchProfile(profile)} disabled={preferenceBusy}>삭제</button></div></article>
+                      <article key={profile.id}><span><b>{profile.name}{profile.defaultProfile && <em>기본</em>}</b><small>{profile.region ?? "전국"} · {profile.housingCategory ? CATEGORY_LABELS[profile.housingCategory] : "전체 유형"} · {formatPricePreference(profile)}</small></span><div><button className={profile.newNoticeEnabled ? "profile-notice-on" : "profile-notice-off"} type="button" onClick={() => void handleSavedSearchProfileNoticeToggle(profile)} disabled={preferenceBusy}>{profile.newNoticeEnabled ? "신규 알림 켜짐" : "신규 알림 꺼짐"}</button><button type="button" onClick={() => { applySearchPreference(profile); setToast(`'${profile.name}' 조건을 적용했습니다.`); }} disabled={preferenceBusy}>적용</button><button type="button" onClick={() => void handleRenameSavedSearchProfile(profile)} disabled={preferenceBusy}>이름</button><button type="button" onClick={() => void handleDuplicateSavedSearchProfile(profile)} disabled={preferenceBusy}>복제</button>{!profile.defaultProfile && <button type="button" onClick={() => void handleDefaultSavedSearchProfile(profile)} disabled={preferenceBusy}>기본 설정</button>}<button type="button" onClick={() => void handleDeleteSavedSearchProfile(profile)} disabled={preferenceBusy}>삭제</button></div></article>
                     ))}
                   </div>
                 </>

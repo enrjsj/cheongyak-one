@@ -848,17 +848,19 @@ class MemberApiIntegrationTest {
                 login("matching-notification@example.com", PASSWORD).andReturn()
         );
 
-        mockMvc.perform(authenticated(put("/api/v1/members/me/search-preference"), session)
+        MvcResult savedProfile = mockMvc.perform(authenticated(post("/api/v1/members/me/saved-search-profiles"), session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
+                                  "name": "대전 오피스텔",
                                   "region": "대전알림전용",
                                   "housingCategory": "OFFICETEL",
                                   "status": "ALL",
                                   "sort": "DEADLINE"
                                 }
                                 """))
-                .andExpect(status().isOk());
+                .andExpect(status().isCreated())
+                .andReturn();
 
         notificationGenerator.generateMatchingFor(today);
         notificationGenerator.generateMatchingFor(today);
@@ -872,6 +874,13 @@ class MemberApiIntegrationTest {
                 .andExpect(jsonPath("$.notifications[0].message").value(
                         "저장한 검색조건에 맞는 새 공고가 등록됐습니다."
                 ));
+
+        Number profileId = JsonPath.read(savedProfile.getResponse().getContentAsString(), "$.id");
+        mockMvc.perform(authenticated(put("/api/v1/members/me/saved-search-profiles/{id}/new-notice-enabled", profileId), session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"enabled\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.newNoticeEnabled").value(false));
     }
 
     @Test

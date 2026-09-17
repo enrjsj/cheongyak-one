@@ -45,6 +45,7 @@ import {
   setComparison,
   suspendAdminMember,
   unlockAdminMember,
+  setSavedSearchProfileNewNoticeEnabled,
   updateMemberProfile,
 } from "../src/api.ts";
 
@@ -241,6 +242,29 @@ test("saved search preference uses authenticated CRUD requests", async () => {
   assert.equal(requests[2].init.method, "DELETE");
   assert.equal(new Headers(requests[0].init.headers).get("X-CSRF-Token"), "saved-search-token");
   assert.equal(new Headers(requests[2].init.headers).get("X-CSRF-Token"), "saved-search-token");
+});
+
+test("saved search profile notification toggle uses the authenticated endpoint", async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  const originalDocument = globalThis.document;
+  globalThis.document = { cookie: "CHEONGYAK_CSRF=profile-toggle-token" };
+  globalThis.fetch = async (url, init) => {
+    requests.push({ url: String(url), init });
+    return new Response(JSON.stringify({ id: 9, name: "서울", newNoticeEnabled: false }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  try {
+    const profile = await setSavedSearchProfileNewNoticeEnabled(9, false);
+    assert.equal(profile.newNoticeEnabled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+  assert.equal(requests[0].url, "/api/v1/members/me/saved-search-profiles/9/new-notice-enabled");
+  assert.equal(requests[0].init.method, "PUT");
+  assert.deepEqual(JSON.parse(requests[0].init.body), { enabled: false });
+  assert.equal(new Headers(requests[0].init.headers).get("X-CSRF-Token"), "profile-toggle-token");
 });
 
 test("eligibility profile uses authenticated CRUD requests", async () => {

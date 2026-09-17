@@ -1,6 +1,7 @@
 package com.cheongyakone.application.member;
 
 import com.cheongyakone.domain.member.MemberSearchPreference;
+import com.cheongyakone.domain.member.MemberSavedSearchProfile;
 import com.cheongyakone.domain.member.SearchPreferenceStatus;
 import com.cheongyakone.domain.notice.NoticeStatus;
 import com.cheongyakone.domain.notice.SubscriptionNotice;
@@ -72,6 +73,16 @@ final class MemberNoticePreferenceMatcher {
         if (!matchesStatus(notice, preference.getStatus(), today)) {
             return false;
         }
+        return notice.getApplyEndDate() == null || !notice.getApplyEndDate().isBefore(today);
+    }
+
+    /** 저장 프로필도 단일 검색조건과 같은 규칙으로 신규 공고를 매칭한다. */
+    static boolean matches(SubscriptionNotice notice, MemberSavedSearchProfile profile, LocalDate today) {
+        if (profile.getHousingCategory() != null && profile.getHousingCategory() != notice.getHousingCategory()) return false;
+        if (profile.getRegion() != null && !matchesRegion(notice, profile.getRegion())) return false;
+        if (profile.getMinPriceManwon() != null && (notice.getMinPrice() == null || notice.getMinPrice().compareTo(won(profile.getMinPriceManwon())) < 0)) return false;
+        if (profile.getMaxPriceManwon() != null && (notice.getMinPrice() == null || notice.getMinPrice().compareTo(won(profile.getMaxPriceManwon())) > 0)) return false;
+        if (!matchesStatus(notice, profile.getStatus(), today)) return false;
         return notice.getApplyEndDate() == null || !notice.getApplyEndDate().isBefore(today);
     }
 

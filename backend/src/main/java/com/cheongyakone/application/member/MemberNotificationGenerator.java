@@ -5,6 +5,7 @@ import com.cheongyakone.domain.member.MemberNotificationPreference;
 import com.cheongyakone.domain.member.MemberNotificationPreferenceRepository;
 import com.cheongyakone.domain.member.MemberNotificationRepository;
 import com.cheongyakone.domain.member.MemberSearchPreferenceRepository;
+import com.cheongyakone.domain.member.MemberSavedSearchProfileRepository;
 import com.cheongyakone.domain.member.NotificationType;
 import com.cheongyakone.domain.notice.SubscriptionNotice;
 import com.cheongyakone.domain.notice.SubscriptionNoticeRepository;
@@ -35,6 +36,7 @@ public class MemberNotificationGenerator {
     private final MemberFavoriteRepository favoriteRepository;
     private final MemberNotificationPreferenceRepository preferenceRepository;
     private final MemberSearchPreferenceRepository searchPreferenceRepository;
+    private final MemberSavedSearchProfileRepository savedSearchProfileRepository;
     private final SubscriptionNoticeRepository noticeRepository;
     private final MemberNotificationRepository notificationRepository;
     private final MemberNotificationWriter notificationWriter;
@@ -44,6 +46,7 @@ public class MemberNotificationGenerator {
             MemberFavoriteRepository favoriteRepository,
             MemberNotificationPreferenceRepository preferenceRepository,
             MemberSearchPreferenceRepository searchPreferenceRepository,
+            MemberSavedSearchProfileRepository savedSearchProfileRepository,
             SubscriptionNoticeRepository noticeRepository,
             MemberNotificationRepository notificationRepository,
             MemberNotificationWriter notificationWriter,
@@ -52,6 +55,7 @@ public class MemberNotificationGenerator {
         this.favoriteRepository = favoriteRepository;
         this.preferenceRepository = preferenceRepository;
         this.searchPreferenceRepository = searchPreferenceRepository;
+        this.savedSearchProfileRepository = savedSearchProfileRepository;
         this.noticeRepository = noticeRepository;
         this.notificationRepository = notificationRepository;
         this.notificationWriter = notificationWriter;
@@ -132,12 +136,12 @@ public class MemberNotificationGenerator {
         Instant dayStart = today.atStartOfDay(KOREA_ZONE).toInstant();
         Instant dayEnd = today.plusDays(1).atStartOfDay(KOREA_ZONE).toInstant();
         var notices = noticeRepository.findAllByFirstSeenAtGreaterThanEqualAndFirstSeenAtLessThan(dayStart, dayEnd);
-        var searchPreferences = searchPreferenceRepository.findAllForNotification();
-        if (notices.isEmpty() || searchPreferences.isEmpty()) {
+        var savedProfiles = savedSearchProfileRepository.findAllForNotification();
+        if (notices.isEmpty() || savedProfiles.isEmpty()) {
             return 0;
         }
 
-        Set<Long> memberIds = searchPreferences.stream()
+        Set<Long> memberIds = savedProfiles.stream()
                 .map(preference -> preference.getMemberId())
                 .collect(Collectors.toSet());
         Map<Long, NotificationSettings> settingsByMember = new HashMap<>();
@@ -147,24 +151,24 @@ public class MemberNotificationGenerator {
 
         Instant now = clock.instant();
         int createdCount = 0;
-        for (var searchPreference : searchPreferences) {
-            if (!searchPreference.isMemberActive()) {
+        for (var savedProfile : savedProfiles) {
+            if (!savedProfile.isMemberActive()) {
                 continue;
             }
             NotificationSettings settings = settingsByMember.getOrDefault(
-                    searchPreference.getMemberId(),
+                    savedProfile.getMemberId(),
                     NotificationSettings.defaults()
             );
             if (!settings.newMatchingNoticeEnabled()) {
                 continue;
             }
             for (SubscriptionNotice notice : notices) {
-                if (!MemberNoticePreferenceMatcher.matches(notice, searchPreference, today)) {
+                if (!MemberNoticePreferenceMatcher.matches(notice, savedProfile, today)) {
                     continue;
                 }
                 try {
                     if (notificationWriter.createIfMissing(
-                            searchPreference.getMemberId(),
+                            savedProfile.getMemberId(),
                             notice.getId(),
                             NotificationType.NEW_MATCHING_NOTICE,
                             today,
@@ -176,7 +180,7 @@ public class MemberNotificationGenerator {
                 } catch (DataIntegrityViolationException exception) {
                     log.warn(
                             "Matching notice notification insert conflicted: memberId={}, noticeId={}",
-                            searchPreference.getMemberId(),
+                            savedProfile.getMemberId(),
                             notice.getId(),
                             exception
                     );
