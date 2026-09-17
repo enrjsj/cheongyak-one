@@ -875,7 +875,7 @@ class MemberApiIntegrationTest {
                         "저장한 검색조건에 맞는 새 공고가 등록됐습니다."
                 ));
 
-        long profileId = JsonPath.read(savedProfile.getResponse().getContentAsString(), "$.id");
+        Number profileId = JsonPath.read(savedProfile.getResponse().getContentAsString(), "$.id");
         mockMvc.perform(authenticated(put("/api/v1/members/me/saved-search-profiles/{id}/new-notice-enabled", profileId), session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"enabled\":false}"))
