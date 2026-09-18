@@ -50,11 +50,7 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
 }
 .brand { display: flex; align-items: center; gap: 11px; font-size: 21px; font-weight: 850; letter-spacing: -.04em; color: var(--navy); }
-.brand-mark { width: 31px; height: 31px; display: grid; grid-template-columns: repeat(3, 1fr); align-items: end; gap: 3px; padding: 7px 6px; border-radius: 10px; background: var(--navy); transform: rotate(-1deg); }
-.brand-mark span { display: block; border-radius: 3px 3px 1px 1px; background: #fff; }
-.brand-mark span:nth-child(1) { height: 7px; opacity: .75; }
-.brand-mark span:nth-child(2) { height: 11px; }
-.brand-mark span:nth-child(3) { height: 16px; background: #63e4cc; }
+.brand-mark { width: 35px; height: 35px; flex: 0 0 auto; object-fit: contain; }
 .main-nav { display: flex; gap: 34px; margin-left: 82px; height: 100%; }
 .main-nav a { position: relative; display: flex; align-items: center; color: #657083; font-size: 15px; font-weight: 650; }
 .main-nav a.active { color: var(--navy); }
@@ -792,7 +788,7 @@ footer { background: var(--navy); color: white; }
   .site-header { height: 64px; }
   .header-inner { padding: 0 18px; }
   .brand { font-size: 18px; }
-  .brand-mark { width: 28px; height: 28px; }
+  .brand-mark { width: 31px; height: 31px; }
   .main-nav, .demo-chip { display: none; }
   .header-actions { gap: 7px; }
   .saved-button, .account-button, .admin-button { width: 38px; padding: 0; justify-content: center; }
