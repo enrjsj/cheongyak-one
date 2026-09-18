@@ -1,11 +1,11 @@
 services:
   - type: web
     name: cheongyak-one-api
-    runtime: java
+    # Render Blueprint는 Java native runtime을 제공하지 않아 Docker로 Java 21을 실행한다.
+    runtime: docker
+    dockerfilePath: ./Dockerfile
     plan: free
     autoDeploy: true
-    buildCommand: mvn -B -pl backend -DskipTests package
-    startCommand: java -XX:MaxRAMPercentage=70 -jar backend/target/cheongyak-one-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=render
     healthCheckPath: /actuator/health
     envVars:
       - key: DB_URL
