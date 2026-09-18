@@ -53,41 +53,47 @@ public class NoticeSyncStartupRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) throws IOException {
-        NoticeSyncResult result = noticeSyncService.synchronize();
-        List<SubscriptionNotice> notices = noticeRepository.findAll(
-                Sort.by(
-                        Sort.Order.desc("noticeDate"),
-                        Sort.Order.asc("housingCategory"),
-                        Sort.Order.asc("title")
-                )
-        );
+        try {
+            NoticeSyncResult result = noticeSyncService.synchronize();
+            List<SubscriptionNotice> notices = noticeRepository.findAll(
+                    Sort.by(
+                            Sort.Order.desc("noticeDate"),
+                            Sort.Order.asc("housingCategory"),
+                            Sort.Order.asc("title")
+                    )
+            );
 
-        List<NoticeExportItem> items = notices.stream()
-                .limit(200)
-                .map(NoticeExportItem::from)
-                .toList();
+            List<NoticeExportItem> items = notices.stream()
+                    .limit(200)
+                    .map(NoticeExportItem::from)
+                    .toList();
 
-        NoticeExportReport report = new NoticeExportReport(
-                Instant.now(clock),
-                result.fetchedCount(),
-                result.savedCount(),
-                notices.size(),
-                items
-        );
+            NoticeExportReport report = new NoticeExportReport(
+                    Instant.now(clock),
+                    result.fetchedCount(),
+                    result.savedCount(),
+                    notices.size(),
+                    items
+            );
 
-        Path parent = exportPath.getParent();
-        if (parent != null) {
-            Files.createDirectories(parent);
+            Path parent = exportPath.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(exportPath.toFile(), report);
+
+            log.info(
+                    "Real notice synchronization exported: path={}, fetched={}, saved={}, database={}",
+                    exportPath,
+                    result.fetchedCount(),
+                    result.savedCount(),
+                    notices.size()
+            );
+        } catch (RuntimeException exception) {
+            // 외부 공고 API 오류가 Render 웹 서버의 기동 자체를 막지 않도록 한다.
+            // 실패 원인은 NoticeSyncService가 SYNC_EXECUTION 이력에 별도로 기록한다.
+            log.error("Startup notice synchronization failed; continuing server startup", exception);
         }
-        objectMapper.writerWithDefaultPrettyPrinter().writeValue(exportPath.toFile(), report);
-
-        log.info(
-                "Real notice synchronization exported: path={}, fetched={}, saved={}, database={}",
-                exportPath,
-                result.fetchedCount(),
-                result.savedCount(),
-                notices.size()
-        );
     }
 
     record NoticeExportReport(
