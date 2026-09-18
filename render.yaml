@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: cheongyak-one-api
+    runtime: java
+    plan: free
+    autoDeploy: true
+    buildCommand: mvn -B -pl backend -DskipTests package
+    startCommand: java -XX:MaxRAMPercentage=70 -jar backend/target/cheongyak-one-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=render
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: REB_API_KEY
+        sync: false
+      - key: MYHOME_API_KEY
+        sync: false
+      - key: FRONTEND_BASE_URL
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: AUTH_SECURE_COOKIE
+        value: "true"
+      - key: AUTH_COOKIE_SAME_SITE
+        value: "None"
+      - key: MEMBER_MAIL_DELIVERY
+        value: "disabled"
+      - key: MEMBER_EMAIL_VERIFICATION_REQUIRED
+        value: "false"

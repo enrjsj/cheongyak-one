@@ -334,6 +334,12 @@ class ApiError extends Error {
 }
 
 const DEMO_MODE = import.meta.env?.VITE_DEMO_MODE === "true";
+// Vercel은 빌드 시 이 값을 주입한다. 비어 있으면 Vite 개발 프록시와 같은 출처 API를 그대로 사용한다.
+const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
+
+function apiUrl(path: string): string {
+  return /^https?:\/\//.test(path) ? path : `${API_BASE_URL}${path}`;
+}
 
 const DEMO_NOTICES: NoticeDetail[] = [
   { id: 101, sourceSystem: "MYHOME_PUBLIC_RENTAL", housingCategory: "PUBLIC_RENTAL", status: "OPEN", title: "서울 수서 A3블록 행복주택 입주자 모집", regionCode: "서울", address: "서울특별시 강남구 자곡동", noticeDate: "2026-09-02", applyStartDate: "2026-09-07", applyEndDate: "2026-09-12", winnerAnnounceDate: "2026-10-08", totalUnits: 320, housingDetailType: "행복주택", rentType: "공공임대", businessEntityName: "한국토지주택공사", contactPhone: "1600-1004", officialUrl: "https://apply.lh.or.kr", syncedAt: "2026-09-09T08:30:00+09:00" },
@@ -393,7 +399,8 @@ function cookieValue(name: string): string | undefined {
 }
 
 async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
-  if (DEMO_MODE) return demoJson<T>(url, init);
+  const requestUrl = apiUrl(url);
+  if (DEMO_MODE) return demoJson<T>(requestUrl, init);
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
   if (init.body) headers.set("Content-Type", "application/json");
@@ -402,7 +409,7 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
     const csrfToken = cookieValue("CHEONGYAK_CSRF");
     if (csrfToken) headers.set("X-CSRF-Token", csrfToken);
   }
-  const response = await fetch(url, {
+  const response = await fetch(requestUrl, {
     ...init,
     headers,
     // HttpOnly 회원 세션을 동일 출처 API 요청에 자동으로 포함한다.

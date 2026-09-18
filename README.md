@@ -12,6 +12,8 @@
 
 AWS 운영 배포는 Elastic Beanstalk, RDS PostgreSQL, 비공개 S3, CloudFront, GitHub OIDC로 구성됩니다. 인프라 생성과 배포 순서는 [AWS 배포 가이드](docs/aws-deployment.md)를 참고합니다.
 
+공개 테스트에서는 기존 코드 구조를 유지한 [Vercel + Render + Supabase 배포 가이드](docs/vercel-render-supabase-deployment.md)를 사용할 수 있습니다. GitHub `main`을 각 서비스에 연결하면 자동 배포하며, 실제 클라우드 리소스 생성은 가이드의 계정 설정 단계에서만 수행합니다.
+
 ## 로컬 실행
 
 ### 프런트엔드

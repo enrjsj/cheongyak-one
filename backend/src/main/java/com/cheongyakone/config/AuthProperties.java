@@ -9,11 +9,13 @@ public record AuthProperties(
         String cookieName,
         String csrfCookieName,
         Duration sessionDuration,
-        boolean secureCookie
+        boolean secureCookie,
+        String cookieSameSite
 ) {
     public AuthProperties {
         cookieName = cookieName == null || cookieName.isBlank() ? "CHEONGYAK_SESSION" : cookieName;
         csrfCookieName = csrfCookieName == null || csrfCookieName.isBlank() ? "CHEONGYAK_CSRF" : csrfCookieName;
         sessionDuration = sessionDuration == null ? Duration.ofDays(14) : sessionDuration;
+        cookieSameSite = cookieSameSite == null || cookieSameSite.isBlank() ? "Lax" : cookieSameSite;
     }
 }

@@ -52,7 +52,7 @@ public class SessionCookieSupport {
         return ResponseCookie.from(properties.cookieName(), value)
                 .httpOnly(true)
                 .secure(properties.secureCookie())
-                .sameSite("Lax")
+                .sameSite(properties.cookieSameSite())
                 .path("/");
     }
 
@@ -61,7 +61,7 @@ public class SessionCookieSupport {
         return ResponseCookie.from(properties.csrfCookieName(), value)
                 .httpOnly(false)
                 .secure(properties.secureCookie())
-                .sameSite("Lax")
+                .sameSite(properties.cookieSameSite())
                 .path("/");
     }
 }
