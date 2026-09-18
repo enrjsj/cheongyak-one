@@ -65,7 +65,11 @@ app:
     cookie-name: CHEONGYAK_SESSION
     csrf-cookie-name: CHEONGYAK_CSRF
     session-duration: 14d
-    secure-cookie: false
+    secure-cookie: ${AUTH_SECURE_COOKIE:false}
+    cookie-same-site: ${AUTH_COOKIE_SAME_SITE:Lax}
+  cors:
+    # Vercel 공개 URL은 CORS_ALLOWED_ORIGINS에 정확한 https 주소로 등록한다.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
   member-mail:
     delivery: ${MEMBER_MAIL_DELIVERY:log}
     verification-required: ${MEMBER_EMAIL_VERIFICATION_REQUIRED:true}

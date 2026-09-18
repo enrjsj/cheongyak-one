@@ -1,0 +1,33 @@
+# Render + Supabase 공개 테스트 프로필. 실제 값은 Render 환경변수에서만 주입한다.
+server:
+  port: ${PORT:8080}
+
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:5}
+      minimum-idle: ${DB_POOL_MIN_IDLE:1}
+      connection-timeout: 30000
+      validation-timeout: 5000
+      max-lifetime: 840000
+      keepalive-time: 300000
+  jpa:
+    open-in-view: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+app:
+  auth:
+    secure-cookie: ${AUTH_SECURE_COOKIE:true}
+    # Vercel과 Render가 서로 다른 도메인이므로 브라우저 로그인 테스트에는 None이 필요하다.
+    cookie-same-site: ${AUTH_COOKIE_SAME_SITE:None}
+  member-mail:
+    delivery: ${MEMBER_MAIL_DELIVERY:disabled}
+    verification-required: ${MEMBER_EMAIL_VERIFICATION_REQUIRED:false}
