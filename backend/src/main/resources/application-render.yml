@@ -29,6 +29,11 @@ management:
       enabled: false
 
 app:
+  notice-sync:
+    # Render Free 인스턴스는 유휴 상태에서 멈춰 정기 스케줄 실행을 보장할 수 없다.
+    # 첫 배포 직후 빈 공고 목록이 노출되지 않도록 기동 시 한 번 수집하되,
+    # 장애 대응 시 NOTICE_SYNC_RUN_ON_STARTUP=false로 즉시 비활성화할 수 있다.
+    run-on-startup: ${NOTICE_SYNC_RUN_ON_STARTUP:true}
   auth:
     secure-cookie: ${AUTH_SECURE_COOKIE:true}
     # Vercel과 Render가 서로 다른 도메인이므로 브라우저 로그인 테스트에는 None이 필요하다.
