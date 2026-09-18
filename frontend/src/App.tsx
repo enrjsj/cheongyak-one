@@ -1582,7 +1582,7 @@ export default function Home() {
       <header className="site-header">
         <div className="header-inner">
           <a className="brand" href="#top" aria-label="청약한눈 홈">
-            <span className="brand-mark"><span></span><span></span><span></span></span>
+            <img className="brand-mark" src="/brand/logo.png" alt="" />
             <span>청약한눈</span>
           </a>
           <nav className="main-nav" aria-label="주요 메뉴">
