@@ -22,6 +22,11 @@ management:
   endpoint:
     health:
       show-details: never
+  health:
+    # 공개 테스트에서는 SMTP를 구성하지 않는다. Spring Mail 자동 헬스체크가
+    # Render의 서비스 헬스체크를 DOWN으로 만들지 않도록 제외한다.
+    mail:
+      enabled: false
 
 app:
   auth:
