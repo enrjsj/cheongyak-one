@@ -58,4 +58,12 @@ public class NoticeSyncCoordinator {
             running.set(false);
         }
     }
+
+    /**
+     * GitHub Actions 같은 외부 스케줄러가 호출할 때 사용한다. 실행 중인 동기화가 있으면
+     * false를 반환해 중복 수집을 피한다.
+     */
+    public boolean synchronizeExternallyTriggered() {
+        return synchronizeScheduled();
+    }
 }

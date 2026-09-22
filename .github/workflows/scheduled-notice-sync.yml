@@ -1,0 +1,35 @@
+name: Scheduled notice synchronization
+
+on:
+  schedule:
+    # 매일 03:20 KST (UTC 기준 전날 18:20). GitHub schedule은 몇 분 지연될 수 있다.
+    - cron: "20 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-notice-sync
+  cancel-in-progress: false
+
+jobs:
+  synchronize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RENDER_API_BASE_URL: ${{ secrets.RENDER_API_BASE_URL }}
+      SCHEDULED_NOTICE_SYNC_API_KEY: ${{ secrets.SCHEDULED_NOTICE_SYNC_API_KEY }}
+    steps:
+      - name: Trigger authenticated notice synchronization
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$RENDER_API_BASE_URL"
+          test -n "$SCHEDULED_NOTICE_SYNC_API_KEY"
+
+          curl --fail-with-body --show-error --silent \
+            --retry 3 --retry-all-errors --retry-delay 10 \
+            --connect-timeout 30 --max-time 300 \
+            --request POST "${RENDER_API_BASE_URL%/}/internal/scheduled-notice-sync" \
+            --header "X-Scheduled-Sync-Key: ${SCHEDULED_NOTICE_SYNC_API_KEY}"
