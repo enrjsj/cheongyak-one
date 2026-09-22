@@ -1,6 +1,7 @@
 package com.cheongyakone.api;
 
 import com.cheongyakone.application.NoticeQueryService;
+import com.cheongyakone.application.NoticeFreshnessService;
 import com.cheongyakone.domain.notice.HousingCategory;
 import com.cheongyakone.domain.notice.NoticeStatus;
 import org.springframework.data.domain.Page;
@@ -18,9 +19,11 @@ import java.math.BigDecimal;
 public class NoticeController {
 
     private final NoticeQueryService noticeQueryService;
+    private final NoticeFreshnessService noticeFreshnessService;
 
-    public NoticeController(NoticeQueryService noticeQueryService) {
+    public NoticeController(NoticeQueryService noticeQueryService, NoticeFreshnessService noticeFreshnessService) {
         this.noticeQueryService = noticeQueryService;
+        this.noticeFreshnessService = noticeFreshnessService;
     }
 
     @GetMapping
@@ -49,6 +52,11 @@ public class NoticeController {
             @RequestParam(required = false) BigDecimal maxPrice
     ) {
         return noticeQueryService.findFacets(category, keyword, region, minPrice, maxPrice);
+    }
+
+    @GetMapping("/freshness")
+    public NoticeFreshnessResponse freshness() {
+        return noticeFreshnessService.freshness();
     }
 
     @GetMapping("/{id}")

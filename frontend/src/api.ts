@@ -60,6 +60,12 @@ export interface NoticeSearchFacets {
   upcoming: number;
 }
 
+/** 공개 공고 데이터가 마지막으로 완료된 동기화 기준 시각이다. */
+export interface NoticeFreshness {
+  generatedAt: string;
+  lastCompletedAt?: string | null;
+}
+
 export interface NoticeSearchRequest {
   category?: HousingCategory;
   status?: NoticeStatus;
@@ -463,6 +469,10 @@ export function fetchNoticeFacets(request: Pick<NoticeSearchRequest, "category" 
   params.delete("size");
   params.delete("sort");
   return requestJson<NoticeSearchFacets>(`/api/v1/notices/facets?${params.toString()}`, { signal });
+}
+
+export function fetchNoticeFreshness(signal?: AbortSignal): Promise<NoticeFreshness> {
+  return requestJson<NoticeFreshness>("/api/v1/notices/freshness", { signal });
 }
 
 export async function fetchNotice(id: number, signal?: AbortSignal): Promise<NoticeDetail> {

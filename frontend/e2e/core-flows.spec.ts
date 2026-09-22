@@ -27,6 +27,7 @@ async function mockApi(page: Page, options: { failInitialNoticeLoad?: boolean } 
       return json(member);
     }
     if (path === "/api/v1/auth/login") return json(member);
+    if (path === "/api/v1/notices/freshness") return json({ generatedAt: "2026-09-01T00:00:00Z", lastCompletedAt: "2026-09-01T00:00:00Z" });
     if (path === "/api/v1/notices/facets" || path === "/api/v1/notices") {
       if (options.failInitialNoticeLoad && failedNoticeRequests < 2) {
         failedNoticeRequests += 1;
@@ -101,6 +102,7 @@ test("비회원도 관심청약 저장과 공고 비교를 할 수 있다", asyn
   await mockApi(page);
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
+  await expect(page.getByText(/최근 동기화/)).toBeVisible();
   await page.locator("article").filter({ hasText: "E2E 서울 공공분양" }).getByLabel(/관심청약 저장/).click();
   await page.locator(".saved-button").click();
   await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();

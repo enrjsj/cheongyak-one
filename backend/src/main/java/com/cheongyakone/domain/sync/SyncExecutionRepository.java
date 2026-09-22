@@ -15,4 +15,6 @@ public interface SyncExecutionRepository extends JpaRepository<SyncExecution, Lo
     long countByStatusAndStartedAtAfter(SyncExecutionStatus status, Instant threshold);
 
     Optional<SyncExecution> findFirstByStatusOrderByFinishedAtDesc(SyncExecutionStatus status);
+
+    Optional<SyncExecution> findFirstByStatusInOrderByFinishedAtDesc(List<SyncExecutionStatus> statuses);
 }
