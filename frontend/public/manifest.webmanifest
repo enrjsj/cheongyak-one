@@ -12,8 +12,9 @@
       "src": "/brand/logo.png",
       "sizes": "1254x1254",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ],
+  "categories": ["utilities", "productivity"],
   "orientation": "portrait-primary"
 }
