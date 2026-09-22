@@ -8,6 +8,7 @@ import {
   deleteEligibilityProfile,
   dismissMemberRecommendation,
   fetchNoticeFacets,
+  fetchNoticeFreshness,
   fetchNoticePage,
   fetchCurrentMember,
   fetchComparisonIds,
@@ -42,6 +43,7 @@ import {
   NoticeSummary,
   NoticeStatus,
   NoticeSearchFacets,
+  NoticeFreshness,
   saveSearchPreference,
   createSavedSearchProfile,
   deleteSavedSearchProfile,
@@ -442,6 +444,7 @@ export default function Home() {
   const [notices, setNotices] = useState<NoticeSummary[]>([]);
   const [knownNotices, setKnownNotices] = useState<Map<number, NoticeSummary>>(new Map());
   const [noticeFacets, setNoticeFacets] = useState<NoticeSearchFacets>({ total: 0, endingToday: 0, open: 0, upcoming: 0 });
+  const [noticeFreshness, setNoticeFreshness] = useState<NoticeFreshness>();
   const [noticePage, setNoticePage] = useState(0);
   const [noticeTotal, setNoticeTotal] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -572,6 +575,15 @@ export default function Home() {
     // 검색 조건을 바꾼 뒤에는 새 요청으로 간주해 Render 기동 대기 재시도를 다시 허용한다.
     automaticLoadRetryCount.current = 0;
   }, [activeStatus, category, maxPriceManwon, minPriceManwon, query, region, savedOnly, sortKey]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchNoticeFreshness(controller.signal)
+      .then((freshness) => setNoticeFreshness(freshness))
+      // 기준 시각을 가져오지 못해도 공고 검색 기능은 그대로 동작해야 한다.
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [loadVersion]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -982,7 +994,7 @@ export default function Home() {
     ?? applications.find((item) => item.statusKey === "open")
     ?? schedule[0]?.item;
   const highlightEvent = highlight ? eventFor(highlight) : undefined;
-  const syncedAt = notices.map((notice) => notice.syncedAt).sort().at(-1);
+  const syncedAt = noticeFreshness?.lastCompletedAt ?? notices.map((notice) => notice.syncedAt).sort().at(-1);
   const syncedLabel = syncedAt ? new Intl.DateTimeFormat("ko-KR", {
     timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
   }).format(new Date(syncedAt)) : "동기화 전";
@@ -1681,7 +1693,7 @@ export default function Home() {
           ) : (
             <div className="next-event no-event"><span>새로운 접수 일정을 확인 중입니다.</span></div>
           )}
-          <p className="data-note">청약홈 실데이터 · {syncedLabel} 기준</p>
+          <p className="data-note">공개 공고 데이터 · 최근 동기화 {syncedLabel}</p>
         </aside>
       </section>
 
