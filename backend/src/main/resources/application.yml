@@ -93,6 +93,11 @@ app:
     retry:
       max-attempts: ${NOTICE_SYNC_MAX_ATTEMPTS:3}
       delay: ${NOTICE_SYNC_RETRY_DELAY:2s}
+  scheduled-notice-sync:
+    # GitHub Actions가 Render Free 인스턴스를 깨워 일배치를 실행할 때만 켠다.
+    # 키 없이 enabled=true로 두어도 동기화 요청은 거부된다.
+    enabled: ${SCHEDULED_NOTICE_SYNC_ENABLED:false}
+    api-key: ${SCHEDULED_NOTICE_SYNC_API_KEY:}
   member-notification:
     cron: "${MEMBER_NOTIFICATION_CRON:0 5 * * * *}"
     email-cron: "${MEMBER_NOTIFICATION_EMAIL_CRON:0 */5 * * * *}"

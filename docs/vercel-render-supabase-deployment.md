@@ -64,7 +64,30 @@ Render 무료 인스턴스는 유휴 상태에서 sleep될 수 있다. 이 경�
 2. GitHub Actions/외부 scheduler가 인증된 내부 동기화 작업을 호출하도록 별도 트리거 추가
 3. AWS 이전 시 EventBridge Scheduler와 별도 배치 프로세스로 분리
 
-현재는 기존 Spring Boot 스케줄러를 유지한다. 무료 Render에서는 배치 실행 이력을 관리자 화면에서 확인하고, 누락 시 관리자 수동 동기화로 보완한다.
+이 저장소에는 **GitHub Actions 예약 호출 방식**이 포함되어 있다. 적용 후에는 Render의 기동 시 동기화와 중복 호출되지 않게 `NOTICE_SYNC_RUN_ON_STARTUP=false`로 변경한다.
+
+### GitHub Actions 예약 동기화 설정
+
+`main` 반영·Render 자동 배포가 끝난 뒤 다음 값을 등록한다. 실제 키는 저장소나 코드에 넣지 않는다.
+
+1. Render Environment에 등록
+
+```text
+SCHEDULED_NOTICE_SYNC_ENABLED=true
+SCHEDULED_NOTICE_SYNC_API_KEY=<32자 이상 임의 문자열>
+NOTICE_SYNC_RUN_ON_STARTUP=false
+```
+
+2. GitHub 저장소 → **Settings → Secrets and variables → Actions → Secrets**에 등록
+
+```text
+RENDER_API_BASE_URL=https://<Render API URL>
+SCHEDULED_NOTICE_SYNC_API_KEY=<Render에 넣은 같은 값>
+```
+
+3. GitHub **Actions → Scheduled notice synchronization → Run workflow**를 한 번 실행한다. 성공하면 매일 03:20 KST에 공고 동기화와 신규 공고·관심 공고 알림 생성을 요청한다.
+
+전용 엔드포인트는 `SCHEDULED_NOTICE_SYNC_ENABLED=true`일 때만 만들어지고, `X-Scheduled-Sync-Key`가 일치하지 않으면 `401`을 반환한다. 관리자 로그인 API와 분리되어 있으며, 브라우저 CORS 대상도 아니다.
 
 ## 5. 최초 관리자 지정
 
