@@ -5,9 +5,10 @@ const notices = [
   { id: 2, sourceSystem: "MYHOME_PUBLIC_RENTAL", housingCategory: "PUBLIC_RENTAL", status: "UPCOMING", title: "E2E 경기 행복주택", regionCode: "경기", address: "경기도 고양시", noticeDate: "2026-09-02", applyStartDate: "2026-09-21", applyEndDate: "2026-09-25", winnerAnnounceDate: "2026-10-03", totalUnits: 80, officialUrl: "https://applyhome.example/2", syncedAt: "2026-09-01T00:00:00Z" },
 ];
 
-async function mockApi(page: Page) {
+async function mockApi(page: Page, options: { failInitialNoticeLoad?: boolean } = {}) {
   let member: Record<string, unknown> | undefined;
   let favoriteIds: number[] = [];
+  let failedNoticeRequests = 0;
   let savedSearchProfiles = [{ id: 11, name: "서울 기본 조건", region: "서울", housingCategory: "APARTMENT", status: "OPEN", sort: "DEADLINE", defaultProfile: true, newNoticeEnabled: true, updatedAt: "2026-09-01T00:00:00Z" }];
   const trackers = new Map<number, Record<string, unknown>>();
   await page.route("**/api/v1/**", async (route) => {
@@ -26,8 +27,14 @@ async function mockApi(page: Page) {
       return json(member);
     }
     if (path === "/api/v1/auth/login") return json(member);
-    if (path === "/api/v1/notices/facets") return json({ total: notices.length, endingToday: 0, open: 1, upcoming: 1 });
-    if (path === "/api/v1/notices") return json({ content: notices, number: 0, size: 24, totalElements: notices.length, totalPages: 1 });
+    if (path === "/api/v1/notices/facets" || path === "/api/v1/notices") {
+      if (options.failInitialNoticeLoad && failedNoticeRequests < 2) {
+        failedNoticeRequests += 1;
+        return route.abort("failed");
+      }
+      if (path === "/api/v1/notices/facets") return json({ total: notices.length, endingToday: 0, open: 1, upcoming: 1 });
+      return json({ content: notices, number: 0, size: 24, totalElements: notices.length, totalPages: 1 });
+    }
     const detail = path.match(/^\/api\/v1\/notices\/(\d+)$/);
     if (detail) return json(notices.find((notice) => notice.id === Number(detail[1])));
     if (path.endsWith("/changes")) return json([]);
@@ -102,6 +109,14 @@ test("비회원도 관심청약 저장과 공고 비교를 할 수 있다", asyn
   await page.getByRole("button", { name: "비교 담기" }).nth(0).click();
   await page.getByRole("button", { name: "비교하기" }).click();
   await expect(page.getByRole("heading", { name: "청약 공고 비교" })).toBeVisible();
+});
+
+test("Render 기동 중 첫 공고 요청이 실패하면 자동으로 다시 불러온다", async ({ page }) => {
+  await mockApi(page, { failInitialNoticeLoad: true });
+  await page.goto("/");
+
+  await expect(page.getByText(/서버를 깨우는 중이에요/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible({ timeout: 7_000 });
 });
 
 test("회원가입 후 사전점검 답변을 계정에 저장한다", async ({ page }) => {
