@@ -1,5 +1,5 @@
 // 서비스의 주요 사용자 흐름(검색·관심청약·비교·회원·사전점검)을 조합하는 화면 컨테이너다.
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   changeMemberPassword,
   clearComparisons,
@@ -415,6 +415,10 @@ function categoryValue(label: string): HousingCategory | undefined {
     .find(([, categoryLabel]) => categoryLabel === label)?.[0];
 }
 
+function isTemporaryApiConnectionError(error: unknown): boolean {
+  return error instanceof TypeError && /fetch|network/i.test(error.message);
+}
+
 function priceInManwon(value: string): number | undefined {
   if (!/^\d+$/.test(value)) return undefined;
   const parsed = Number(value);
@@ -444,6 +448,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [loadVersion, setLoadVersion] = useState(0);
+  const automaticLoadRetryCount = useRef(0);
   const [query, setQuery] = useState(initialSearch.query);
   const [activeStatus, setActiveStatus] = useState<StatusKey>(initialSearch.status);
   const [region, setRegion] = useState(initialSearch.region ?? "전체");
@@ -564,7 +569,13 @@ export default function Home() {
   });
 
   useEffect(() => {
+    // 검색 조건을 바꾼 뒤에는 새 요청으로 간주해 Render 기동 대기 재시도를 다시 허용한다.
+    automaticLoadRetryCount.current = 0;
+  }, [activeStatus, category, maxPriceManwon, minPriceManwon, query, region, savedOnly, sortKey]);
+
+  useEffect(() => {
     const controller = new AbortController();
+    let retryTimer: number | undefined;
     const timer = window.setTimeout(() => {
       setLoading(true);
       setLoadError("");
@@ -578,9 +589,10 @@ export default function Home() {
       Promise.all([
         fetchNoticePage({ ...request, page: 0 }, controller.signal),
         fetchNoticeFacets(request, controller.signal),
-      ])
-        .then(([page, facets]) => {
-          setNotices(page.content);
+    ])
+      .then(([page, facets]) => {
+        automaticLoadRetryCount.current = 0;
+        setNotices(page.content);
           setNoticePage(0);
           setNoticeTotal(page.totalElements);
           setNoticeFacets(facets);
@@ -592,11 +604,18 @@ export default function Home() {
         })
         .catch((error: unknown) => {
           if (error instanceof DOMException && error.name === "AbortError") return;
+          if (isTemporaryApiConnectionError(error) && automaticLoadRetryCount.current < 2) {
+            automaticLoadRetryCount.current += 1;
+            const attempt = automaticLoadRetryCount.current;
+            setLoadError(`서버를 깨우는 중이에요. 잠시 후 자동으로 다시 시도합니다. (${attempt}/2)`);
+            retryTimer = window.setTimeout(() => setLoadVersion((version) => version + 1), 3_500);
+            return;
+          }
           setLoadError(error instanceof Error ? error.message : "청약 정보를 불러오지 못했습니다.");
         })
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, 250);
-    return () => { window.clearTimeout(timer); controller.abort(); };
+    return () => { window.clearTimeout(timer); if (retryTimer) window.clearTimeout(retryTimer); controller.abort(); };
   }, [activeStatus, category, loadVersion, maxPriceManwon, minPriceManwon, query, region, savedIds, savedOnly, sortKey]);
 
   const loadMoreNotices = async () => {
@@ -1714,7 +1733,7 @@ export default function Home() {
             ) : loadError ? (
               <div className="inline-error" role="alert">
                 <span>!</span><h3>공고를 불러오지 못했어요</h3><p>{loadError}</p>
-                <button type="button" onClick={() => setLoadVersion((version) => version + 1)}>다시 불러오기</button>
+                <button type="button" onClick={() => { automaticLoadRetryCount.current = 0; setLoadVersion((version) => version + 1); }}>다시 불러오기</button>
               </div>
             ) : visible.length > 0 ? (
               <>
