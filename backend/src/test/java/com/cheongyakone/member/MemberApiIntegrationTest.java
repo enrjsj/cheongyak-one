@@ -881,6 +881,22 @@ class MemberApiIntegrationTest {
                         .content("{\"enabled\":false}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.newNoticeEnabled").value(false));
+
+        SubscriptionNotice noticeAfterDisabled = noticeWithProfile(
+                "matching-notification-disabled",
+                "알림 해제 후 신규 오피스텔",
+                HousingCategory.OFFICETEL,
+                NoticeStatus.UPCOMING,
+                "대전알림전용",
+                today.plusDays(3),
+                today.plusDays(11)
+        );
+        noticeRepository.saveAndFlush(noticeAfterDisabled);
+
+        assertThat(notificationGenerator.generateMatchingFor(today)).isZero();
+        mockMvc.perform(get("/api/v1/members/me/notifications").cookie(session.cookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.notifications.length()").value(1));
     }
 
     @Test
