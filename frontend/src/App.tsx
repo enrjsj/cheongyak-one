@@ -97,6 +97,10 @@ type FavoriteProgressFilter = FavoriteProgress | "ALL" | "INCOMPLETE" | "URGENT"
 type FavoriteChecklistKey = "noticeDocumentChecked" | "eligibilityChecked" | "scheduleChecked" | "fundsChecked";
 type FavoriteSortKey = "PREPARATION" | "DEADLINE" | "RESULT";
 
+// 처음 화면에 너무 많은 카드를 만들지 않아 Render Free 기동 뒤의 체감 시간을 줄인다.
+const NOTICE_PAGE_SIZE = 12;
+const SEARCH_DEBOUNCE_MS = 350;
+
 const FAVORITE_PROGRESS_LABELS: Record<FavoriteProgress, string> = {
   SAVED: "저장만 함",
   CHECKING: "조건 확인 중",
@@ -444,6 +448,7 @@ export default function Home() {
   const [notices, setNotices] = useState<NoticeSummary[]>([]);
   const [knownNotices, setKnownNotices] = useState<Map<number, NoticeSummary>>(new Map());
   const [noticeFacets, setNoticeFacets] = useState<NoticeSearchFacets>({ total: 0, endingToday: 0, open: 0, upcoming: 0 });
+  const [facetsLoading, setFacetsLoading] = useState(true);
   const [noticeFreshness, setNoticeFreshness] = useState<NoticeFreshness>();
   const [noticePage, setNoticePage] = useState(0);
   const [noticeTotal, setNoticeTotal] = useState(0);
@@ -453,6 +458,7 @@ export default function Home() {
   const [loadVersion, setLoadVersion] = useState(0);
   const automaticLoadRetryCount = useRef(0);
   const [query, setQuery] = useState(initialSearch.query);
+  const [debouncedQuery, setDebouncedQuery] = useState(initialSearch.query);
   const [activeStatus, setActiveStatus] = useState<StatusKey>(initialSearch.status);
   const [region, setRegion] = useState(initialSearch.region ?? "전체");
   const [category, setCategory] = useState(initialSearch.category ? CATEGORY_LABELS[initialSearch.category] : "전체");
@@ -505,6 +511,7 @@ export default function Home() {
   const [favoriteCalendarOpen, setFavoriteCalendarOpen] = useState(false);
   const [detailRouteVersion, setDetailRouteVersion] = useState(0);
   const [recentNoticeIds, setRecentNoticeIds] = useState<number[]>(initialRecentNoticeIds);
+  const freshnessLoaded = useRef(false);
 
   const rememberNotice = (noticeId: number) => {
     setRecentNoticeIds((currentIds) => {
@@ -561,58 +568,66 @@ export default function Home() {
   const currentSearchRequest = () => ({
     category: categoryValue(category),
     status: activeStatus === "open" ? "OPEN" as const : activeStatus === "upcoming" ? "UPCOMING" as const : undefined,
-    keyword: query,
+    keyword: debouncedQuery,
     region: region === "전체" ? undefined : region,
     minPrice: priceInWon(minPriceManwon),
     maxPrice: priceInWon(maxPriceManwon),
     ids: savedOnly ? [...savedIds] : undefined,
     endingToday: activeStatus === "today",
     sort: sortKey,
-    size: 24,
+    size: NOTICE_PAGE_SIZE,
   });
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
   useEffect(() => {
     // 검색 조건을 바꾼 뒤에는 새 요청으로 간주해 Render 기동 대기 재시도를 다시 허용한다.
     automaticLoadRetryCount.current = 0;
-  }, [activeStatus, category, maxPriceManwon, minPriceManwon, query, region, savedOnly, sortKey]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchNoticeFreshness(controller.signal)
-      .then((freshness) => setNoticeFreshness(freshness))
-      // 기준 시각을 가져오지 못해도 공고 검색 기능은 그대로 동작해야 한다.
-      .catch(() => undefined);
-    return () => controller.abort();
-  }, [loadVersion]);
+  }, [activeStatus, category, debouncedQuery, maxPriceManwon, minPriceManwon, region, savedOnly, sortKey]);
 
   useEffect(() => {
     const controller = new AbortController();
     let retryTimer: number | undefined;
     const timer = window.setTimeout(() => {
       setLoading(true);
+      setFacetsLoading(true);
       setLoadError("");
       const request = currentSearchRequest();
       if (savedOnly && request.ids?.length === 0) {
         setNotices([]);
         setNoticeTotal(0);
+        setFacetsLoading(false);
         setLoading(false);
         return;
       }
-      Promise.all([
-        fetchNoticePage({ ...request, page: 0 }, controller.signal),
-        fetchNoticeFacets(request, controller.signal),
-    ])
-      .then(([page, facets]) => {
+      fetchNoticePage({ ...request, page: 0 }, controller.signal)
+      .then((page) => {
         automaticLoadRetryCount.current = 0;
         setNotices(page.content);
-          setNoticePage(0);
-          setNoticeTotal(page.totalElements);
-          setNoticeFacets(facets);
-          setKnownNotices((known) => {
-            const next = new Map(known);
-            page.content.forEach((notice) => next.set(notice.id, notice));
-            return next;
-          });
+        setNoticePage(0);
+        setNoticeTotal(page.totalElements);
+        setKnownNotices((known) => {
+          const next = new Map(known);
+          page.content.forEach((notice) => next.set(notice.id, notice));
+          return next;
+        });
+
+        // 목록이 먼저 보이면 상태 집계·기준 시각이 약간 늦어도 화면은 바로 사용할 수 있다.
+        void fetchNoticeFacets(request, controller.signal)
+          .then((facets) => setNoticeFacets(facets))
+          .catch(() => undefined)
+          .finally(() => { if (!controller.signal.aborted) setFacetsLoading(false); });
+
+        if (!freshnessLoaded.current) {
+          freshnessLoaded.current = true;
+          void fetchNoticeFreshness(controller.signal)
+            .then((freshness) => setNoticeFreshness(freshness))
+            // 기준 시각을 가져오지 못해도 공고 검색 기능은 그대로 동작해야 한다.
+            .catch(() => { freshnessLoaded.current = false; });
+        }
         })
         .catch((error: unknown) => {
           if (error instanceof DOMException && error.name === "AbortError") return;
@@ -628,7 +643,7 @@ export default function Home() {
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, 250);
     return () => { window.clearTimeout(timer); if (retryTimer) window.clearTimeout(retryTimer); controller.abort(); };
-  }, [activeStatus, category, loadVersion, maxPriceManwon, minPriceManwon, query, region, savedIds, savedOnly, sortKey]);
+  }, [activeStatus, category, debouncedQuery, loadVersion, maxPriceManwon, minPriceManwon, region, savedIds, savedOnly, sortKey]);
 
   const loadMoreNotices = async () => {
     if (loadingMore || notices.length >= noticeTotal) return;
@@ -1005,6 +1020,8 @@ export default function Home() {
   const resetVisible = () => setVisibleCount(6);
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
+    setDebouncedQuery(query);
+    setLoadVersion((version) => version + 1);
     setActiveStatus("all");
     setSavedOnly(false);
     resetVisible();
@@ -1680,9 +1697,9 @@ export default function Home() {
             <span className="live-dot">LIVE</span>
           </div>
           <div className="week-stats">
-            <div><strong>{openCount}</strong><span>접수중</span></div>
-            <div><strong>{todayCount}</strong><span>오늘 마감</span></div>
-            <div><strong>{upcomingCount}</strong><span>오픈 예정</span></div>
+            <div><strong>{facetsLoading ? "–" : openCount}</strong><span>접수중</span></div>
+            <div><strong>{facetsLoading ? "–" : todayCount}</strong><span>오늘 마감</span></div>
+            <div><strong>{facetsLoading ? "–" : upcomingCount}</strong><span>오픈 예정</span></div>
           </div>
           {highlight && highlightEvent ? (
             <button className="next-event" type="button" onClick={() => openDetail(highlight)}>
@@ -1701,7 +1718,7 @@ export default function Home() {
         <div className="status-tabs" role="tablist" aria-label="청약 상태">
           {statuses.map((status) => (
             <button className={activeStatus === status.key ? "selected" : ""} type="button" role="tab" aria-selected={activeStatus === status.key} key={status.key} onClick={() => { setActiveStatus(status.key); setSavedOnly(false); setFavoriteProgressFilter("ALL"); resetVisible(); }}>
-              <span className={`tab-icon ${status.tone}`}><Icon name={status.icon} /></span><span>{status.label}<b>{loading ? "–" : status.count}</b></span>
+              <span className={`tab-icon ${status.tone}`}><Icon name={status.icon} /></span><span>{status.label}<b>{loading || facetsLoading ? "–" : status.count}</b></span>
             </button>
           ))}
         </div>
@@ -1873,7 +1890,7 @@ export default function Home() {
                     </article>
                   ))}
                 </div>
-                {notices.length < noticeTotal && <button className="more-button" type="button" onClick={() => void loadMoreNotices()} disabled={loadingMore}>{loadingMore ? "불러오는 중" : `다음 ${Math.min(24, noticeTotal - notices.length)}건 더보기`} <Icon name="arrow" /></button>}
+                {notices.length < noticeTotal && <button className="more-button" type="button" onClick={() => void loadMoreNotices()} disabled={loadingMore}>{loadingMore ? "불러오는 중" : `다음 ${Math.min(NOTICE_PAGE_SIZE, noticeTotal - notices.length)}건 더보기`} <Icon name="arrow" /></button>}
               </>
             ) : (
               <div className="empty-state">
