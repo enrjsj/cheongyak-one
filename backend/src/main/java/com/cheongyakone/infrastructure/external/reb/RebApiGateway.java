@@ -152,17 +152,17 @@ class RebApiGateway {
         ));
     }
 
-    List<RebApartmentUnitTypeSnapshot> fetchApartmentUnitTypes(String sourceNoticeId) {
+    List<RebApartmentUnitTypeSnapshot> fetchUnitTypes(RebNoticeType noticeType, String sourceNoticeId) {
         String[] identifiers = sourceNoticeId.split(":", 2);
         String manageNo = identifiers[0];
         String publicNoticeNo = identifiers.length == 2 ? identifiers[1] : identifiers[0];
         List<RebApartmentUnitTypeSnapshot> result = new ArrayList<>();
         for (int page = 1; page <= properties.maxPages(); page++) {
-            URI uri = buildApartmentModelUri(manageNo, publicNoticeNo, page);
+            URI uri = buildUnitTypeUri(noticeType, manageNo, publicNoticeNo, page);
             JsonNode response = restClient.get().uri(uri).retrieve().body(JsonNode.class);
             if (response == null || !response.path("data").isArray()) {
                 String code = response == null ? "empty-response" : response.path("code").asText("unknown");
-                throw new IllegalStateException("REB apartment model API returned an invalid response (code=" + code + ")");
+                throw new IllegalStateException("REB " + noticeType + " model API returned an invalid response (code=" + code + ")");
             }
             JsonNode data = response.path("data");
             for (JsonNode item : data) mapApartmentUnitType(item).ifPresent(result::add);
@@ -198,9 +198,9 @@ class RebApiGateway {
                 .toUri();
     }
 
-    private URI buildApartmentModelUri(String manageNo, String publicNoticeNo, int page) {
+    URI buildUnitTypeUri(RebNoticeType noticeType, String manageNo, String publicNoticeNo, int page) {
         return UriComponentsBuilder.fromUriString(properties.baseUrl())
-                .pathSegment("getAPTLttotPblancMdl")
+                .pathSegment(noticeType.unitTypeEndpoint())
                 .queryParam("page", page).queryParam("perPage", properties.pageSize()).queryParam("returnType", "JSON")
                 .queryParam("cond[HOUSE_MANAGE_NO::EQ]", manageNo)
                 .queryParam("cond[PBLANC_NO::EQ]", publicNoticeNo)

@@ -37,6 +37,7 @@ class NoticeSyncServiceTest {
     private final SyncExecutionRecorder recorder = mock(SyncExecutionRecorder.class);
     private final NoticeSyncRetryWaiter retryWaiter = mock(NoticeSyncRetryWaiter.class);
     private final RebApartmentUnitTypeSyncService apartmentUnitTypeSyncService = mock(RebApartmentUnitTypeSyncService.class);
+    private final RebOfficetelUnitTypeSyncService officetelUnitTypeSyncService = mock(RebOfficetelUnitTypeSyncService.class);
     private final SyncExecution execution = SyncExecution.start(clock.instant());
 
     @BeforeEach
@@ -88,6 +89,18 @@ class NoticeSyncServiceTest {
     }
 
     @Test
+    void synchronizesOfficetelUnitTypesAfterSavingOfficetelNotices() {
+        NoticeSourceClient client = source(SourceSystem.REB_OFFICETEL, true);
+        NoticeSnapshot snapshot = snapshot(SourceSystem.REB_OFFICETEL, "office-1");
+        when(client.fetch(any(), any())).thenReturn(List.of(snapshot));
+
+        service(List.of(client), 1).synchronize();
+
+        verify(officetelUnitTypeSyncService).synchronize(List.of("office-1"), clock.instant());
+        verify(apartmentUnitTypeSyncService).synchronize(List.of(), clock.instant());
+    }
+
+    @Test
     void failsExecutionWhenEveryEnabledSourceFails() {
         NoticeSourceClient failed = source(SourceSystem.REB_APT, true);
         when(failed.fetch(any(), any())).thenThrow(new IllegalStateException("serviceKey=secret-value&code=500"));
@@ -124,6 +137,7 @@ class NoticeSyncServiceTest {
                 new NoticeSyncRetryProperties(maxAttempts, Duration.ZERO),
                 retryWaiter,
                 apartmentUnitTypeSyncService,
+                officetelUnitTypeSyncService,
                 clock
         );
     }
