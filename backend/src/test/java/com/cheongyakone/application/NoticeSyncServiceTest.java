@@ -36,6 +36,7 @@ class NoticeSyncServiceTest {
     private final NoticeUpsertService upsertService = mock(NoticeUpsertService.class);
     private final SyncExecutionRecorder recorder = mock(SyncExecutionRecorder.class);
     private final NoticeSyncRetryWaiter retryWaiter = mock(NoticeSyncRetryWaiter.class);
+    private final RebApartmentUnitTypeSyncService apartmentUnitTypeSyncService = mock(RebApartmentUnitTypeSyncService.class);
     private final SyncExecution execution = SyncExecution.start(clock.instant());
 
     @BeforeEach
@@ -122,6 +123,7 @@ class NoticeSyncServiceTest {
                 recorder,
                 new NoticeSyncRetryProperties(maxAttempts, Duration.ZERO),
                 retryWaiter,
+                apartmentUnitTypeSyncService,
                 clock
         );
     }

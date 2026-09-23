@@ -152,6 +152,38 @@ class RebApiGateway {
         ));
     }
 
+    List<RebApartmentUnitTypeSnapshot> fetchApartmentUnitTypes(String sourceNoticeId) {
+        String[] identifiers = sourceNoticeId.split(":", 2);
+        String manageNo = identifiers[0];
+        String publicNoticeNo = identifiers.length == 2 ? identifiers[1] : identifiers[0];
+        List<RebApartmentUnitTypeSnapshot> result = new ArrayList<>();
+        for (int page = 1; page <= properties.maxPages(); page++) {
+            URI uri = buildApartmentModelUri(manageNo, publicNoticeNo, page);
+            JsonNode response = restClient.get().uri(uri).retrieve().body(JsonNode.class);
+            if (response == null || !response.path("data").isArray()) {
+                String code = response == null ? "empty-response" : response.path("code").asText("unknown");
+                throw new IllegalStateException("REB apartment model API returned an invalid response (code=" + code + ")");
+            }
+            JsonNode data = response.path("data");
+            for (JsonNode item : data) mapApartmentUnitType(item).ifPresent(result::add);
+            if (data.size() < properties.pageSize()) break;
+        }
+        return result;
+    }
+
+    Optional<RebApartmentUnitTypeSnapshot> mapApartmentUnitType(JsonNode item) {
+        String typeName = firstText(item, "HOUSE_TY", "HOUSE_TY_NM", "MODEL_NM");
+        String modelId = firstText(item, "MODEL_NO", "HOUSE_TY");
+        if (!StringUtils.hasText(typeName) || !StringUtils.hasText(modelId)) return Optional.empty();
+        Integer general = firstInteger(item, "SUPLY_HSHLDCO", "GNRL_SUPLY_HSHLDCO");
+        Integer special = firstInteger(item, "SPSPLY_HSHLDCO", "SPSPLY_HSHLD_COUNT");
+        Integer total = firstInteger(item, "TOT_SUPLY_HSHLDCO", "TOT_SUPLY_HSHLD_COUNT");
+        if (total == null && (general != null || special != null)) total = (general == null ? 0 : general) + (special == null ? 0 : special);
+        return Optional.of(new RebApartmentUnitTypeSnapshot(modelId, typeName,
+                firstDecimal(item, "SUPLY_AR", "SUPLY_AREA"), general, special, total,
+                firstDecimal(item, "LTTOT_TOP_AMOUNT", "LTTOT_TOP_AMT", "MAX_LTTOT_AMOUNT")));
+    }
+
     URI buildUri(RebNoticeType noticeType, LocalDate from, LocalDate to, int page) {
         return UriComponentsBuilder.fromUriString(properties.baseUrl())
                 .pathSegment(noticeType.endpoint())
@@ -164,6 +196,15 @@ class RebApiGateway {
                 .encode()
                 .buildAndExpand(properties.decodedServiceKey())
                 .toUri();
+    }
+
+    private URI buildApartmentModelUri(String manageNo, String publicNoticeNo, int page) {
+        return UriComponentsBuilder.fromUriString(properties.baseUrl())
+                .pathSegment("getAPTLttotPblancMdl")
+                .queryParam("page", page).queryParam("perPage", properties.pageSize()).queryParam("returnType", "JSON")
+                .queryParam("cond[HOUSE_MANAGE_NO::EQ]", manageNo)
+                .queryParam("cond[PBLANC_NO::EQ]", publicNoticeNo)
+                .queryParam("serviceKey", "{serviceKey}").encode().buildAndExpand(properties.decodedServiceKey()).toUri();
     }
 
     private boolean isOfficetel(JsonNode item) {
@@ -262,6 +303,13 @@ class RebApiGateway {
         } catch (ArithmeticException | NumberFormatException ignored) {
             return null;
         }
+    }
+
+    private BigDecimal firstDecimal(JsonNode item, String... fieldNames) {
+        String value = firstText(item, fieldNames);
+        if (!StringUtils.hasText(value)) return null;
+        try { return new BigDecimal(value.replace(",", "")); }
+        catch (NumberFormatException invalidNumber) { log.warn("Ignored invalid REB decimal field: {}", value); return null; }
     }
 
     private String sha256(JsonNode item) {

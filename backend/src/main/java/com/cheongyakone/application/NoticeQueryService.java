@@ -9,6 +9,7 @@ import com.cheongyakone.domain.notice.NoticeChangeHistoryRepository;
 import com.cheongyakone.domain.notice.NoticeStatus;
 import com.cheongyakone.domain.notice.SubscriptionNotice;
 import com.cheongyakone.domain.notice.SubscriptionNoticeRepository;
+import com.cheongyakone.domain.notice.SubscriptionNoticeUnitTypeRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -28,11 +29,13 @@ public class NoticeQueryService {
 
     private final SubscriptionNoticeRepository noticeRepository;
     private final NoticeChangeHistoryRepository changeHistoryRepository;
+    private final SubscriptionNoticeUnitTypeRepository unitTypeRepository;
     private final Clock clock;
 
-    public NoticeQueryService(SubscriptionNoticeRepository noticeRepository, NoticeChangeHistoryRepository changeHistoryRepository, Clock clock) {
+    public NoticeQueryService(SubscriptionNoticeRepository noticeRepository, NoticeChangeHistoryRepository changeHistoryRepository, SubscriptionNoticeUnitTypeRepository unitTypeRepository, Clock clock) {
         this.noticeRepository = noticeRepository;
         this.changeHistoryRepository = changeHistoryRepository;
+        this.unitTypeRepository = unitTypeRepository;
         this.clock = clock;
     }
 
@@ -127,7 +130,8 @@ public class NoticeQueryService {
 
     public NoticeDetailResponse findById(Long id) {
         return noticeRepository.findById(id)
-                .map(NoticeDetailResponse::from)
+                .map(notice -> NoticeDetailResponse.from(notice, unitTypeRepository.findAllByNoticeIdOrderBySupplyAreaAscHousingTypeNameAsc(notice.getId()).stream()
+                        .map(com.cheongyakone.api.NoticeUnitTypeResponse::from).toList()))
                 .orElseThrow(() -> new NoticeNotFoundException(id));
     }
 

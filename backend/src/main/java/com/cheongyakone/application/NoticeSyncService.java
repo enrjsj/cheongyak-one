@@ -32,6 +32,7 @@ public class NoticeSyncService {
     private final SyncExecutionRecorder executionRecorder;
     private final NoticeSyncRetryProperties retryProperties;
     private final NoticeSyncRetryWaiter retryWaiter;
+    private final RebApartmentUnitTypeSyncService apartmentUnitTypeSyncService;
     private final Clock clock;
 
     public NoticeSyncService(
@@ -40,6 +41,7 @@ public class NoticeSyncService {
             SyncExecutionRecorder executionRecorder,
             NoticeSyncRetryProperties retryProperties,
             NoticeSyncRetryWaiter retryWaiter,
+            RebApartmentUnitTypeSyncService apartmentUnitTypeSyncService,
             Clock clock
     ) {
         this.sourceClients = sourceClients;
@@ -47,6 +49,7 @@ public class NoticeSyncService {
         this.executionRecorder = executionRecorder;
         this.retryProperties = retryProperties;
         this.retryWaiter = retryWaiter;
+        this.apartmentUnitTypeSyncService = apartmentUnitTypeSyncService;
         this.clock = clock;
     }
 
@@ -57,6 +60,7 @@ public class NoticeSyncService {
         int savedCount = 0;
         int successfulSourceCount = 0;
         List<String> sourceFailures = new ArrayList<>();
+        List<String> apartmentSourceNoticeIds = new ArrayList<>();
 
         try {
             LocalDate today = LocalDate.now(clock);
@@ -89,8 +93,11 @@ public class NoticeSyncService {
                 for (NoticeSnapshot snapshot : snapshots) {
                     noticeUpsertService.upsert(snapshot, clock.instant());
                     savedCount++;
+                    if (snapshot.sourceSystem() == com.cheongyakone.domain.notice.SourceSystem.REB_APT) apartmentSourceNoticeIds.add(snapshot.sourceNoticeId());
                 }
             }
+
+            apartmentUnitTypeSyncService.synchronize(apartmentSourceNoticeIds, clock.instant());
 
             if (successfulSourceCount == 0) {
                 String message = sourceFailures.isEmpty()

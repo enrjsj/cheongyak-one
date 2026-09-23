@@ -316,6 +316,11 @@ function formatWon(value?: number): string | undefined {
   return `${Math.round(value / 10_000).toLocaleString("ko-KR")}만원`;
 }
 
+function formatArea(value?: number): string {
+  if (value === undefined || value === null) return "-";
+  return `${Number(value.toFixed(2)).toLocaleString("ko-KR")}㎡`;
+}
+
 function statusPresentation(status: NoticeStatus, applyEndDate?: string): {
   state: string;
   stateTone: StateTone;
@@ -2083,6 +2088,14 @@ export default function Home() {
                   <div><dt>우편번호</dt><dd>{selectedDetail.postalCode || "공고문 확인"}</dd></div>
                 </dl>
                 {selectedDetail.homepageUrl && <a className="notice-homepage-link" href={selectedDetail.homepageUrl} target="_blank" rel="noreferrer">분양 홈페이지 열기 <Icon name="arrow" /></a>}
+              </section>
+            )}
+            {selectedDetail && (selectedDetail.unitTypes?.length ?? 0) > 0 && (
+              <section className="notice-unit-types" aria-labelledby="notice-unit-types-title">
+                <div><h3 id="notice-unit-types-title">주택형별 공급·분양가</h3><p>최고 분양가 기준이며, 최종 금액은 공식 공고문을 확인하세요.</p></div>
+                <div className="notice-unit-types-table-wrap"><table><thead><tr><th scope="col">주택형</th><th scope="col">공급면적</th><th scope="col">일반</th><th scope="col">특별</th><th scope="col">합계</th><th scope="col">최고 분양가</th></tr></thead><tbody>
+                  {selectedDetail.unitTypes?.map((unitType) => <tr key={unitType.modelId}><th scope="row">{unitType.housingTypeName}</th><td>{formatArea(unitType.supplyArea)}</td><td>{unitType.generalSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{unitType.specialSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{unitType.totalSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{formatWon(unitType.maxPrice) ?? "공고문 확인"}</td></tr>)}
+                </tbody></table></div>
               </section>
             )}
             <div className="eligibility-box"><span className="check-round"><Icon name="check" /></span><div><span>데이터 출처</span><h3>{detailApplication.fit}</h3><p>{detailApplication.deposit} · 본 서비스 정보보다 공식 공고문을 우선합니다.</p></div></div>

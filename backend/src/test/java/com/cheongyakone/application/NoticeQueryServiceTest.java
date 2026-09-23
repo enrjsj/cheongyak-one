@@ -2,6 +2,7 @@ package com.cheongyakone.application;
 
 import com.cheongyakone.domain.notice.NoticeChangeHistoryRepository;
 import com.cheongyakone.domain.notice.SubscriptionNoticeRepository;
+import com.cheongyakone.domain.notice.SubscriptionNoticeUnitTypeRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -26,6 +27,8 @@ class NoticeQueryServiceTest {
     private SubscriptionNoticeRepository noticeRepository;
     @Mock
     private NoticeChangeHistoryRepository changeHistoryRepository;
+    @Mock
+    private SubscriptionNoticeUnitTypeRepository unitTypeRepository;
 
     @Test
     void findsNoticesWithoutOptionalFilters() {
@@ -33,7 +36,7 @@ class NoticeQueryServiceTest {
         when(noticeRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(Page.empty());
 
-        NoticeQueryService service = new NoticeQueryService(noticeRepository, changeHistoryRepository,
+        NoticeQueryService service = new NoticeQueryService(noticeRepository, changeHistoryRepository, unitTypeRepository,
                 Clock.fixed(Instant.parse("2026-09-08T00:00:00Z"), ZoneOffset.UTC));
 
         var notices = service.findNotices(null, null, null, null, null, null, null, false, "DEADLINE", 0, 20);
@@ -44,7 +47,7 @@ class NoticeQueryServiceTest {
     @Test
     void returnsServerSideSearchFacetCounts() {
         when(noticeRepository.count(any(Specification.class))).thenReturn(10L, 1L, 3L, 2L);
-        NoticeQueryService service = new NoticeQueryService(noticeRepository, changeHistoryRepository,
+        NoticeQueryService service = new NoticeQueryService(noticeRepository, changeHistoryRepository, unitTypeRepository,
                 Clock.fixed(Instant.parse("2026-09-08T00:00:00Z"), ZoneOffset.UTC));
 
         var facets = service.findFacets(null, "서울", null, null, null);
@@ -59,7 +62,7 @@ class NoticeQueryServiceTest {
     void returnsEmptyChangeHistoryForExistingNotice() {
         when(noticeRepository.existsById(7L)).thenReturn(true);
         when(changeHistoryRepository.findTop20ByNoticeIdOrderByChangedAtDesc(7L)).thenReturn(java.util.List.of());
-        NoticeQueryService service = new NoticeQueryService(noticeRepository, changeHistoryRepository,
+        NoticeQueryService service = new NoticeQueryService(noticeRepository, changeHistoryRepository, unitTypeRepository,
                 Clock.fixed(Instant.parse("2026-09-08T00:00:00Z"), ZoneOffset.UTC));
 
         assertThat(service.findChanges(7L)).isEmpty();
