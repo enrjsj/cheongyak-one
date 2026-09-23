@@ -33,6 +33,7 @@ public class NoticeSyncService {
     private final NoticeSyncRetryProperties retryProperties;
     private final NoticeSyncRetryWaiter retryWaiter;
     private final RebApartmentUnitTypeSyncService apartmentUnitTypeSyncService;
+    private final RebOfficetelUnitTypeSyncService officetelUnitTypeSyncService;
     private final Clock clock;
 
     public NoticeSyncService(
@@ -42,6 +43,7 @@ public class NoticeSyncService {
             NoticeSyncRetryProperties retryProperties,
             NoticeSyncRetryWaiter retryWaiter,
             RebApartmentUnitTypeSyncService apartmentUnitTypeSyncService,
+            RebOfficetelUnitTypeSyncService officetelUnitTypeSyncService,
             Clock clock
     ) {
         this.sourceClients = sourceClients;
@@ -50,6 +52,7 @@ public class NoticeSyncService {
         this.retryProperties = retryProperties;
         this.retryWaiter = retryWaiter;
         this.apartmentUnitTypeSyncService = apartmentUnitTypeSyncService;
+        this.officetelUnitTypeSyncService = officetelUnitTypeSyncService;
         this.clock = clock;
     }
 
@@ -61,6 +64,7 @@ public class NoticeSyncService {
         int successfulSourceCount = 0;
         List<String> sourceFailures = new ArrayList<>();
         List<String> apartmentSourceNoticeIds = new ArrayList<>();
+        List<String> officetelSourceNoticeIds = new ArrayList<>();
 
         try {
             LocalDate today = LocalDate.now(clock);
@@ -94,10 +98,12 @@ public class NoticeSyncService {
                     noticeUpsertService.upsert(snapshot, clock.instant());
                     savedCount++;
                     if (snapshot.sourceSystem() == com.cheongyakone.domain.notice.SourceSystem.REB_APT) apartmentSourceNoticeIds.add(snapshot.sourceNoticeId());
+                    if (snapshot.sourceSystem() == com.cheongyakone.domain.notice.SourceSystem.REB_OFFICETEL) officetelSourceNoticeIds.add(snapshot.sourceNoticeId());
                 }
             }
 
             apartmentUnitTypeSyncService.synchronize(apartmentSourceNoticeIds, clock.instant());
+            officetelUnitTypeSyncService.synchronize(officetelSourceNoticeIds, clock.instant());
 
             if (successfulSourceCount == 0) {
                 String message = sourceFailures.isEmpty()

@@ -147,4 +147,13 @@ class RebApiGatewayTest {
         assertThat(snapshot.totalSupplyCount()).isEqualTo(50);
         assertThat(snapshot.maxPrice()).isEqualByComparingTo("785000000");
     }
+
+    @Test
+    void usesOfficetelModelEndpointWithNoticeIdentifiers() {
+        String path = gateway.buildUnitTypeUri(RebNoticeType.OFFICETEL, "2026000001", "2026000010", 1).getPath();
+        String query = gateway.buildUnitTypeUri(RebNoticeType.OFFICETEL, "2026000001", "2026000010", 1).getQuery();
+
+        assertThat(path).endsWith("/getUrbtyOfctlLttotPblancMdl");
+        assertThat(query).contains("HOUSE_MANAGE_NO::EQ]=2026000001", "PBLANC_NO::EQ]=2026000010");
+    }
 }

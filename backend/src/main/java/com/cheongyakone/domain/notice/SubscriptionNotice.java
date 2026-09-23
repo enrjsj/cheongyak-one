@@ -196,7 +196,8 @@ public class SubscriptionNotice {
         this.winnerAnnounceDate = snapshot.winnerAnnounceDate();
         this.totalUnits = snapshot.totalUnits();
         // APT 가격은 별도 주택형 API에서 보강한다. 목록 API가 가격을 주지 않아도 마지막 정상 수집값을 지우지 않는다.
-        if (snapshot.sourceSystem() != SourceSystem.REB_APT || snapshot.minPrice() != null || snapshot.maxPrice() != null) {
+        if ((snapshot.sourceSystem() != SourceSystem.REB_APT && snapshot.sourceSystem() != SourceSystem.REB_OFFICETEL)
+                || snapshot.minPrice() != null || snapshot.maxPrice() != null) {
             this.minPrice = snapshot.minPrice();
             this.maxPrice = snapshot.maxPrice();
         }
