@@ -134,7 +134,7 @@ class RebApiGatewayTest {
     void mapsApartmentUnitTypeAndPrice() throws Exception {
         JsonNode item = objectMapper.readTree("""
                 { "MODEL_NO": "084.9900A", "HOUSE_TY": "84A", "SUPLY_AR": "112.36",
-                  "SUPLY_HSHLDCO": "36", "SPSPLY_HSHLDCO": "14", "LTTOT_TOP_AMOUNT": "785000000" }
+                  "SUPLY_HSHLDCO": "36", "SPSPLY_HSHLDCO": "14", "LTTOT_TOP_AMOUNT": "78500" }
                 """);
 
         RebApartmentUnitTypeSnapshot snapshot = gateway.mapApartmentUnitType(item).orElseThrow();
