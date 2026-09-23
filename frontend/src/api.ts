@@ -64,6 +64,7 @@ export interface NoticeSearchFacets {
 export interface NoticeFreshness {
   generatedAt: string;
   lastCompletedAt?: string | null;
+  status: "FRESH" | "DELAYED" | "UNAVAILABLE";
 }
 
 export interface NoticeSearchRequest {

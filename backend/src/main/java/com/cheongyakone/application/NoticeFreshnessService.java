@@ -1,16 +1,21 @@
 package com.cheongyakone.application;
 
 import com.cheongyakone.api.NoticeFreshnessResponse;
+import com.cheongyakone.api.NoticeFreshnessStatus;
 import com.cheongyakone.domain.sync.SyncExecutionRepository;
 import com.cheongyakone.domain.sync.SyncExecutionStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 @Service
 public class NoticeFreshnessService {
+
+    private static final Duration FRESHNESS_THRESHOLD = Duration.ofHours(30);
 
     private static final List<SyncExecutionStatus> COMPLETED_STATUSES = List.of(
             SyncExecutionStatus.SUCCEEDED,
@@ -35,6 +40,12 @@ public class NoticeFreshnessService {
                 .findFirstByStatusInOrderByFinishedAtDesc(COMPLETED_STATUSES)
                 .map(execution -> execution.getFinishedAt())
                 .orElse(null);
-        return new NoticeFreshnessResponse(clock.instant(), lastCompletedAt);
+        Instant generatedAt = clock.instant();
+        NoticeFreshnessStatus status = lastCompletedAt == null
+                ? NoticeFreshnessStatus.UNAVAILABLE
+                : lastCompletedAt.plus(FRESHNESS_THRESHOLD).isBefore(generatedAt)
+                ? NoticeFreshnessStatus.DELAYED
+                : NoticeFreshnessStatus.FRESH;
+        return new NoticeFreshnessResponse(generatedAt, lastCompletedAt, status);
     }
 }
