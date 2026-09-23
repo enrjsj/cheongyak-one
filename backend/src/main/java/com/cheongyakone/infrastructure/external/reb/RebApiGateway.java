@@ -181,7 +181,8 @@ class RebApiGateway {
         if (total == null && (general != null || special != null)) total = (general == null ? 0 : general) + (special == null ? 0 : special);
         return Optional.of(new RebApartmentUnitTypeSnapshot(modelId, typeName,
                 firstDecimal(item, "SUPLY_AR", "SUPLY_AREA"), general, special, total,
-                firstDecimal(item, "LTTOT_TOP_AMOUNT", "LTTOT_TOP_AMT", "MAX_LTTOT_AMOUNT")));
+                // 청약홈 주택형 API의 분양가는 만원 단위다. 서비스 내부·API 계약은 원 단위로 유지한다.
+                amountInWon(firstDecimal(item, "LTTOT_TOP_AMOUNT", "LTTOT_TOP_AMT", "MAX_LTTOT_AMOUNT"))));
     }
 
     URI buildUri(RebNoticeType noticeType, LocalDate from, LocalDate to, int page) {
@@ -310,6 +311,10 @@ class RebApiGateway {
         if (!StringUtils.hasText(value)) return null;
         try { return new BigDecimal(value.replace(",", "")); }
         catch (NumberFormatException invalidNumber) { log.warn("Ignored invalid REB decimal field: {}", value); return null; }
+    }
+
+    private BigDecimal amountInWon(BigDecimal amountInManwon) {
+        return amountInManwon == null ? null : amountInManwon.movePointRight(4);
     }
 
     private String sha256(JsonNode item) {
