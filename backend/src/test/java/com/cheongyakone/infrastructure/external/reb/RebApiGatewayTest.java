@@ -129,4 +129,22 @@ class RebApiGatewayTest {
 
         assertThat(rawQuery).contains("serviceKey=abc%2Bdef%2Fghi%3D");
     }
+
+    @Test
+    void mapsApartmentUnitTypeAndPrice() throws Exception {
+        JsonNode item = objectMapper.readTree("""
+                { "MODEL_NO": "084.9900A", "HOUSE_TY": "84A", "SUPLY_AR": "112.36",
+                  "SUPLY_HSHLDCO": "36", "SPSPLY_HSHLDCO": "14", "LTTOT_TOP_AMOUNT": "785000000" }
+                """);
+
+        RebApartmentUnitTypeSnapshot snapshot = gateway.mapApartmentUnitType(item).orElseThrow();
+
+        assertThat(snapshot.modelId()).isEqualTo("084.9900A");
+        assertThat(snapshot.housingTypeName()).isEqualTo("84A");
+        assertThat(snapshot.supplyArea()).isEqualByComparingTo("112.36");
+        assertThat(snapshot.generalSupplyCount()).isEqualTo(36);
+        assertThat(snapshot.specialSupplyCount()).isEqualTo(14);
+        assertThat(snapshot.totalSupplyCount()).isEqualTo(50);
+        assertThat(snapshot.maxPrice()).isEqualByComparingTo("785000000");
+    }
 }

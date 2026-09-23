@@ -37,6 +37,17 @@ export interface NoticeDetail extends NoticeSummary {
   contractEndDate?: string;
   contentChangedAt?: string;
   lastChangeSummary?: string;
+  unitTypes?: NoticeUnitType[];
+}
+
+export interface NoticeUnitType {
+  modelId: string;
+  housingTypeName: string;
+  supplyArea?: number;
+  generalSupplyCount?: number;
+  specialSupplyCount?: number;
+  totalSupplyCount?: number;
+  maxPrice?: number;
 }
 
 export interface NoticeChange {

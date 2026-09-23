@@ -8,6 +8,7 @@ import com.cheongyakone.domain.notice.SubscriptionNotice;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 
 public record NoticeDetailResponse(
         Long id,
@@ -39,10 +40,11 @@ public record NoticeDetailResponse(
         LocalDate contractStartDate,
         LocalDate contractEndDate,
         Instant contentChangedAt,
-        String lastChangeSummary
+        String lastChangeSummary,
+        List<NoticeUnitTypeResponse> unitTypes
 ) {
 
-    public static NoticeDetailResponse from(SubscriptionNotice notice) {
+    public static NoticeDetailResponse from(SubscriptionNotice notice, List<NoticeUnitTypeResponse> unitTypes) {
         return new NoticeDetailResponse(
                 notice.getId(),
                 notice.getSourceSystem(),
@@ -73,7 +75,8 @@ public record NoticeDetailResponse(
                 notice.getContractStartDate(),
                 notice.getContractEndDate(),
                 notice.getContentChangedAt(),
-                notice.getLastChangeSummary()
+                notice.getLastChangeSummary(),
+                unitTypes
         );
     }
 }

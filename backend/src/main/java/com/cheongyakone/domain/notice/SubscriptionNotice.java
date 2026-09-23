@@ -195,8 +195,11 @@ public class SubscriptionNotice {
         this.applyEndDate = snapshot.applyEndDate();
         this.winnerAnnounceDate = snapshot.winnerAnnounceDate();
         this.totalUnits = snapshot.totalUnits();
-        this.minPrice = snapshot.minPrice();
-        this.maxPrice = snapshot.maxPrice();
+        // APT 가격은 별도 주택형 API에서 보강한다. 목록 API가 가격을 주지 않아도 마지막 정상 수집값을 지우지 않는다.
+        if (snapshot.sourceSystem() != SourceSystem.REB_APT || snapshot.minPrice() != null || snapshot.maxPrice() != null) {
+            this.minPrice = snapshot.minPrice();
+            this.maxPrice = snapshot.maxPrice();
+        }
         this.officialUrl = snapshot.officialUrl();
         this.postalCode = snapshot.postalCode();
         this.housingDetailType = snapshot.housingDetailType();
@@ -212,6 +215,11 @@ public class SubscriptionNotice {
         this.contractEndDate = snapshot.contractEndDate();
         this.contentHash = snapshot.contentHash();
         this.syncedAt = syncTime;
+    }
+
+    public void updatePriceRange(BigDecimal minPrice, BigDecimal maxPrice) {
+        this.minPrice = minPrice;
+        this.maxPrice = maxPrice;
     }
 
     private List<String> userVisibleChanges(NoticeSnapshot snapshot) {
