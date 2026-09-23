@@ -455,6 +455,20 @@ class MemberApiIntegrationTest {
     }
 
     @Test
+    void filtersNoticesWhenAnyHousingTypePriceOverlapsBudget() throws Exception {
+        noticeRepository.save(pricedNotice("budget-low", "예산 필터 공고 저가", 300_000_000L, 550_000_000L));
+        noticeRepository.save(pricedNotice("budget-middle", "예산 필터 공고 중간", 600_000_000L, 800_000_000L));
+        noticeRepository.save(pricedNotice("budget-high", "예산 필터 공고 고가", 700_000_000L, 900_000_000L));
+
+        mockMvc.perform(get("/api/v1/notices")
+                        .param("keyword", "예산 필터 공고")
+                        .param("minPrice", "500000000")
+                        .param("maxPrice", "650000000"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2));
+    }
+
+    @Test
     void protectsAndPersistsMemberSearchPreference() throws Exception {
         signup("preference@example.com", "맞춤회원");
         AuthenticatedSession session = authenticatedSession(login("preference@example.com", PASSWORD).andReturn());
@@ -1262,6 +1276,16 @@ class MemberApiIntegrationTest {
                 null,
                 null,
                 "notification-test-hash-" + sourceNoticeId
+        ), Instant.now());
+        return notice;
+    }
+
+    private SubscriptionNotice pricedNotice(String sourceNoticeId, String title, long minPrice, long maxPrice) {
+        SubscriptionNotice notice = new SubscriptionNotice(SourceSystem.REB_APT, sourceNoticeId, HousingCategory.APARTMENT, NoticeStatus.OPEN, title);
+        notice.updateFrom(new NoticeSnapshot(
+                SourceSystem.REB_APT, sourceNoticeId, HousingCategory.APARTMENT, NoticeStatus.OPEN, title,
+                "서울", "서울시 테스트구", LocalDate.now(), LocalDate.now(), LocalDate.now().plusDays(2), null,
+                10, java.math.BigDecimal.valueOf(minPrice), java.math.BigDecimal.valueOf(maxPrice), null, "budget-hash-" + sourceNoticeId
         ), Instant.now());
         return notice;
     }

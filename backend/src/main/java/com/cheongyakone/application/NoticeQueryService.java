@@ -119,7 +119,9 @@ public class NoticeQueryService {
         }
         if (minPrice != null && minPrice.signum() >= 0) {
             specification = specification.and((root, query, cb) ->
-                    cb.greaterThanOrEqualTo(root.<BigDecimal>get("minPrice"), minPrice));
+                    // 공고의 주택형 가격대와 사용자의 예산 구간이 한 번이라도 겹치면 노출한다.
+                    // 예: 3~5.5억 공고는 최소 예산 5억 검색 결과에 포함되어야 한다.
+                    cb.greaterThanOrEqualTo(root.<BigDecimal>get("maxPrice"), minPrice));
         }
         if (maxPrice != null && maxPrice.signum() >= 0) {
             specification = specification.and((root, query, cb) ->
