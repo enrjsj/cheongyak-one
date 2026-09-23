@@ -29,7 +29,9 @@ async function mockApi(page: Page, options: { failInitialNoticeLoad?: boolean } 
     if (path === "/api/v1/auth/login") return json(member);
     if (path === "/api/v1/notices/freshness") return json({ generatedAt: "2026-09-01T00:00:00Z", lastCompletedAt: "2026-09-01T00:00:00Z" });
     if (path === "/api/v1/notices/facets" || path === "/api/v1/notices") {
-      if (options.failInitialNoticeLoad && failedNoticeRequests < 2) {
+      // 목록이 첫 요청 실패 후 재시도되는 사용자 흐름을 검증한다.
+      // 상태 집계는 목록 표시 뒤의 보조 요청이므로 실패 시나리오에 섞지 않는다.
+      if (path === "/api/v1/notices" && options.failInitialNoticeLoad && failedNoticeRequests < 1) {
         failedNoticeRequests += 1;
         return route.abort("failed");
       }
