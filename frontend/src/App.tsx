@@ -1013,6 +1013,11 @@ export default function Home() {
   const syncedLabel = syncedAt ? new Intl.DateTimeFormat("ko-KR", {
     timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
   }).format(new Date(syncedAt)) : "동기화 전";
+  const dataFreshnessMessage = noticeFreshness?.status === "DELAYED"
+    ? `동기화 지연 · 마지막 갱신 ${syncedLabel}`
+    : noticeFreshness?.status === "UNAVAILABLE"
+      ? "동기화 기록을 확인 중입니다"
+      : `최근 동기화 ${syncedLabel}`;
   const today = koreaToday();
   const [, thisMonth, thisDay] = today.split("-").map(Number);
 
@@ -1710,7 +1715,7 @@ export default function Home() {
           ) : (
             <div className="next-event no-event"><span>새로운 접수 일정을 확인 중입니다.</span></div>
           )}
-          <p className="data-note">공개 공고 데이터 · 최근 동기화 {syncedLabel}</p>
+          <p className={`data-note ${noticeFreshness?.status === "DELAYED" ? "delayed" : ""}`}>공개 공고 데이터 · {dataFreshnessMessage}</p>
         </aside>
       </section>
 

@@ -3,6 +3,7 @@ package com.cheongyakone.application;
 import com.cheongyakone.domain.sync.SyncExecution;
 import com.cheongyakone.domain.sync.SyncExecutionRepository;
 import com.cheongyakone.domain.sync.SyncExecutionStatus;
+import com.cheongyakone.api.NoticeFreshnessStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -42,6 +43,7 @@ class NoticeFreshnessServiceTest {
 
         assertThat(response.generatedAt()).isEqualTo(Instant.parse("2026-09-22T04:00:00Z"));
         assertThat(response.lastCompletedAt()).isEqualTo(completedAt);
+        assertThat(response.status()).isEqualTo(NoticeFreshnessStatus.FRESH);
         ArgumentCaptor<List<SyncExecutionStatus>> statuses = ArgumentCaptor.forClass(List.class);
         verify(executionRepository).findFirstByStatusInOrderByFinishedAtDesc(statuses.capture());
         assertThat(statuses.getValue()).containsExactly(SyncExecutionStatus.SUCCEEDED, SyncExecutionStatus.PARTIALLY_SUCCEEDED);
@@ -57,6 +59,24 @@ class NoticeFreshnessServiceTest {
         NoticeFreshnessService service = new NoticeFreshnessService(executionRepository,
                 Clock.fixed(Instant.parse("2026-09-22T04:00:00Z"), ZoneOffset.UTC));
 
-        assertThat(service.freshness().lastCompletedAt()).isNull();
+        var response = service.freshness();
+        assertThat(response.lastCompletedAt()).isNull();
+        assertThat(response.status()).isEqualTo(NoticeFreshnessStatus.UNAVAILABLE);
+    }
+
+    @Test
+    void marksDataAsDelayedAfterThirtyHoursWithoutACompletedSynchronization() {
+        Instant completedAt = Instant.parse("2026-09-20T00:00:00Z");
+        SyncExecution execution = SyncExecution.start(completedAt.minusSeconds(20));
+        execution.succeed(completedAt, 20, 20);
+        when(executionRepository.findFirstByStatusInOrderByFinishedAtDesc(List.of(
+                SyncExecutionStatus.SUCCEEDED,
+                SyncExecutionStatus.PARTIALLY_SUCCEEDED
+        ))).thenReturn(Optional.of(execution));
+
+        NoticeFreshnessService service = new NoticeFreshnessService(executionRepository,
+                Clock.fixed(Instant.parse("2026-09-21T06:01:00Z"), ZoneOffset.UTC));
+
+        assertThat(service.freshness().status()).isEqualTo(NoticeFreshnessStatus.DELAYED);
     }
 }

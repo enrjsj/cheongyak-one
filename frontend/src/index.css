@@ -124,6 +124,7 @@ a { color: inherit; text-decoration: none; }
 .next-event .icon { width: 16px; color: #8fa3c1; }
 .next-event.no-event { display: flex; justify-content: center; min-height: 71px; color: #b8c5d8; font-size: 11px; cursor: default; }
 .data-note { position: relative; margin: 14px 0 0; text-align: center; color: #9aabc4; font-size: 12px; }
+.data-note.delayed { color: #c27336; font-weight: 700; }
 
 .dashboard { border-top: 1px solid #e7ebf1; background: white; padding: 0 24px 90px; }
 .status-tabs { position: sticky; top: 74px; z-index: 15; max-width: 1172px; margin: 0 auto; display: grid; grid-template-columns: repeat(4,1fr); border-bottom: 1px solid var(--line); background: rgba(255,255,255,.96); backdrop-filter: blur(14px); }
