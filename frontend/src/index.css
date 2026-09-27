@@ -715,6 +715,9 @@ footer { background: var(--navy); color: white; }
 .notice-unit-types thead th { color: #7c8797; font-size: 9px; font-weight: 700; }
 .notice-unit-types th:first-child, .notice-unit-types td:first-child { text-align: left; }
 .notice-unit-types tbody th { color: #33445d; }
+.notice-unit-types td small { display: block; margin-top: 2px; color: #8a94a3; font-size: 9px; font-weight: 500; }
+.notice-unit-types-price { color: #2354d8; font-weight: 800; }
+.notice-unit-types-empty > p { max-width: 430px; margin: 7px 0 0; color: #667386; text-align: left; line-height: 1.55; }
 .notice-homepage-link { width: fit-content; margin-top: 15px; display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 750; }
 .notice-homepage-link .icon { width: 13px; }
 .eligibility-box { margin-top: 17px; display: flex; gap: 13px; padding: 17px; border-radius: 13px; background: var(--mint-soft); }

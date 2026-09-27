@@ -321,6 +321,18 @@ function formatArea(value?: number): string {
   return `${Number(value.toFixed(2)).toLocaleString("ko-KR")}㎡`;
 }
 
+function formatPyeong(value?: number): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  return `${(value / 3.3058).toFixed(1)}평`;
+}
+
+function formatHousingType(value: string): string {
+  const match = /^0*(\d+(?:\.\d+)?)([A-Za-z].*)?$/.exec(value.trim());
+  if (!match) return value;
+  const size = Number(match[1]).toLocaleString("ko-KR", { maximumFractionDigits: 2 });
+  return `${size}${match[2] ?? ""}`;
+}
+
 function statusPresentation(status: NoticeStatus, applyEndDate?: string): {
   state: string;
   stateTone: StateTone;
@@ -2094,8 +2106,14 @@ export default function Home() {
               <section className="notice-unit-types" aria-labelledby="notice-unit-types-title">
                 <div><h3 id="notice-unit-types-title">주택형별 공급·분양가</h3><p>최고 분양가 기준이며, 최종 금액은 공식 공고문을 확인하세요.</p></div>
                 <div className="notice-unit-types-table-wrap"><table><thead><tr><th scope="col">주택형</th><th scope="col">공급면적</th><th scope="col">일반</th><th scope="col">특별</th><th scope="col">합계</th><th scope="col">최고 분양가</th></tr></thead><tbody>
-                  {selectedDetail.unitTypes?.map((unitType) => <tr key={unitType.modelId}><th scope="row">{unitType.housingTypeName}</th><td>{formatArea(unitType.supplyArea)}</td><td>{unitType.generalSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{unitType.specialSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{unitType.totalSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{formatWon(unitType.maxPrice) ?? "공고문 확인"}</td></tr>)}
+                  {selectedDetail.unitTypes?.map((unitType) => <tr key={unitType.modelId}><th scope="row">{formatHousingType(unitType.housingTypeName)}</th><td>{formatArea(unitType.supplyArea)}{formatPyeong(unitType.supplyArea) && <small>{formatPyeong(unitType.supplyArea)}</small>}</td><td>{unitType.generalSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{unitType.specialSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{unitType.totalSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td className="notice-unit-types-price">{formatWon(unitType.maxPrice) ?? "공고문 확인"}</td></tr>)}
                 </tbody></table></div>
+              </section>
+            )}
+            {selectedDetail && (selectedDetail.housingCategory === "APARTMENT" || selectedDetail.housingCategory === "OFFICETEL") && (selectedDetail.unitTypes?.length ?? 0) === 0 && (
+              <section className="notice-unit-types notice-unit-types-empty" aria-labelledby="notice-unit-types-title">
+                <h3 id="notice-unit-types-title">주택형별 공급·분양가</h3>
+                <p>이 공고는 주택형별 공급·분양가 데이터를 아직 확인하지 못했습니다. 정확한 내용은 공식 공고문을 확인하세요.</p>
               </section>
             )}
             <div className="eligibility-box"><span className="check-round"><Icon name="check" /></span><div><span>데이터 출처</span><h3>{detailApplication.fit}</h3><p>{detailApplication.deposit} · 본 서비스 정보보다 공식 공고문을 우선합니다.</p></div></div>
