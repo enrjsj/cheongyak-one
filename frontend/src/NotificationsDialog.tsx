@@ -1,5 +1,5 @@
 // 읽음 처리와 공고 상세 이동을 제공하는 회원 알림함 모달이다.
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useDialogAccessibility } from "./useDialogAccessibility";
 import {
   fetchNotificationInbox,
@@ -11,6 +11,13 @@ import {
   NotificationPreference,
   saveNotificationPreference,
 } from "./api";
+import {
+  filterNotifications,
+  notificationCategoryLabel,
+  notificationFilterOptions,
+} from "./notificationTools";
+import type { NotificationFilter } from "./notificationTools";
+import "./notificationInbox.css";
 
 interface NotificationsDialogProps {
   open: boolean;
@@ -60,6 +67,7 @@ export default function NotificationsDialog({
   onUnreadCountChange,
 }: NotificationsDialogProps) {
   const [tab, setTab] = useState<"inbox" | "settings">("inbox");
+  const [filter, setFilter] = useState<NotificationFilter>("ALL");
   const [inbox, setInbox] = useState<NotificationInbox>({ notifications: [], unreadCount: 0 });
   const [preference, setPreference] = useState<NotificationPreference>(DEFAULT_PREFERENCE);
   const [loading, setLoading] = useState(false);
@@ -91,6 +99,7 @@ export default function NotificationsDialog({
     setLoading(true);
     setError("");
     setNotice("");
+    setFilter("ALL");
     Promise.allSettled([fetchNotificationInbox(), fetchNotificationPreference()])
       .then(([inboxResult, preferenceResult]) => {
         if (cancelled) return;
@@ -126,6 +135,9 @@ export default function NotificationsDialog({
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [open, tab]);
+
+  const filteredNotifications = useMemo(() => filterNotifications(inbox.notifications, filter), [filter, inbox.notifications]);
+  const filterOptions = useMemo(() => notificationFilterOptions(inbox.notifications), [inbox.notifications]);
 
   if (!open) return null;
 
@@ -214,14 +226,17 @@ export default function NotificationsDialog({
               <button type="button" onClick={() => void refreshInbox(true)} disabled={loading || saving}>새로고침</button>
               {inbox.unreadCount > 0 && <button className="read-all-button" type="button" onClick={() => void readAll()} disabled={saving}>모두 읽음</button>}
             </div>
-            {inbox.notifications.map((item) => (
+            {inbox.notifications.length > 0 && <div className="notification-filter" role="group" aria-label="알림 분류">
+              {filterOptions.map((option) => <button key={option.value} type="button" className={filter === option.value ? "active" : ""} onClick={() => setFilter(option.value)}>{option.label}</button>)}
+            </div>}
+            {filteredNotifications.map((item) => (
               <button className={`notification-item${item.readAt ? " read" : ""}`} type="button" key={item.id} disabled={busyId !== undefined} onClick={() => void openNotification(item)}>
                 <span className="notification-dot" aria-hidden="true"></span>
-                <span><b>{item.noticeTitle}</b><small>{item.message}</small><em>{notificationDateLabel(item)}</em></span>
+                <span><b>{item.noticeTitle}</b><small>{item.message}</small><em><strong>{notificationCategoryLabel(item.type)}</strong>{notificationDateLabel(item)}</em></span>
                 <span aria-hidden="true">›</span>
               </button>
             ))}
-            {inbox.notifications.length === 0 && <div className="notification-empty"><b>아직 도착한 알림이 없어요</b><p>관심청약 일정과 저장한 조건의 신규 공고를 알려드릴게요.</p></div>}
+            {inbox.notifications.length === 0 ? <div className="notification-empty"><b>아직 도착한 알림이 없어요</b><p>관심청약 일정과 저장한 조건의 신규 공고를 알려드릴게요.</p></div> : filteredNotifications.length === 0 && <div className="notification-empty"><b>{filter === "UNREAD" ? "읽지 않은 알림이 없어요" : "해당 분류의 알림이 없어요"}</b><p>다른 분류를 선택하면 최근 알림을 확인할 수 있어요.</p></div>}
           </div>
         ) : (
           <form className="notification-settings" onSubmit={(event) => void savePreference(event)}>

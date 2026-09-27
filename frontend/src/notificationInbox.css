@@ -1,0 +1,4 @@
+.notification-filter { display: flex; gap: 6px; margin: 0 0 5px; overflow-x: auto; padding: 1px 0 4px; scrollbar-width: thin; }
+.notification-filter button { flex: 0 0 auto; min-height: 30px; padding: 0 10px; border: 1px solid #dfe5ee; border-radius: 15px; background: white; color: #7a8799; font-size: 9px; font-weight: 750; cursor: pointer; }
+.notification-filter button.active { border-color: #b9cef5; background: #edf4ff; color: var(--blue); }
+.notification-item em strong { display: inline; margin-right: 5px; color: #4c75ba; font-weight: 800; }
