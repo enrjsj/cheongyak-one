@@ -11,6 +11,11 @@ import {
   updateComparison,
   updateRecentNoticeIds,
 } from "../src/noticeTools.ts";
+import {
+  cacheNoticePage,
+  noticePageCacheKey,
+  readCachedNoticePage,
+} from "../src/noticePageCache.ts";
 
 const baseNotice = {
   id: 10,
@@ -87,6 +92,18 @@ test("recent notices are deduplicated, validated, and limited", () => {
   assert.deepEqual(normalizeRecentNoticeIds([3, 3, -1, "2", 2, 1], 3), [3, 2, 1]);
   assert.deepEqual(updateRecentNoticeIds([3, 2, 1], 2), [2, 3, 1]);
   assert.deepEqual(updateRecentNoticeIds([5, 4, 3, 2, 1], 6), [6, 5, 4, 3, 2]);
+});
+
+test("recent notice page cache restores only a fresh page for the same search", () => {
+  const values = new Map();
+  const storage = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  const key = noticePageCacheKey({ keyword: "은평", page: 0, size: 12 });
+  const page = { content: [baseNotice], number: 0, size: 12, totalElements: 1, totalPages: 1 };
+
+  cacheNoticePage(storage, key, page, 1_000);
+  assert.deepEqual(readCachedNoticePage(storage, key, 1_500, 1_000), { cachedAt: 1_000, page });
+  assert.equal(readCachedNoticePage(storage, key, 2_001, 1_000), undefined);
+  assert.notEqual(key, noticePageCacheKey({ keyword: "서울", page: 0, size: 12 }));
 });
 
 test("deadline sorting keeps closed notices after actionable notices", () => {

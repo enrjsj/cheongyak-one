@@ -54,7 +54,7 @@ PostgreSQL 연결 전에는 PostgreSQL 호환 모드의 H2 기반 local 프로�
 
 GitHub Actions의 `CI / real-data` 작업은 Repository Secret인 `REB_API_KEY`를 환경변수로 주입합니다. PostgreSQL 구성 전에는 H2에 실제 공고를 저장하고 공개 데이터만 `reb-real-data-sample` 아티팩트로 출력합니다.
 
-프런트엔드는 더 이상 예시 공고를 사용하지 않습니다. 백엔드의 `/api/v1/notices` 목록·상세 API를 호출하며, 개발 서버에서는 Vite 프록시가 `localhost:8080`의 Spring Boot로 요청을 전달합니다. 검색·지역·유형·상태·정렬은 서버에서 처리하고 프런트는 24건씩 다음 페이지를 요청합니다.
+프런트엔드는 더 이상 예시 공고를 사용하지 않습니다. 백엔드의 `/api/v1/notices` 목록·상세 API를 호출하며, 개발 서버에서는 Vite 프록시가 `localhost:8080`의 Spring Boot로 요청을 전달합니다. 검색·지역·유형·상태·정렬은 서버에서 처리하고 프런트는 첫 12건을 우선 표시한 뒤 다음 페이지를 요청합니다. 같은 탭에서는 최근 10분 이내에 본 목록을 임시로 보관해 Render Free 인스턴스 기동 중에도 먼저 표시합니다.
 
 상세 API는 목록용 요약 응답과 분리되어 공급 구분, 입주 예정월, 특별공급·계약 일정, 사업주체, 시공사, 문의처, 분양 홈페이지를 추가로 제공합니다. 외부 API의 링크는 HTTP·HTTPS 주소만 저장합니다.
 

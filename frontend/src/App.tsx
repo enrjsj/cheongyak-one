@@ -88,6 +88,7 @@ import {
   updateComparison,
   updateRecentNoticeIds,
 } from "./noticeTools";
+import { cacheNoticePage, noticePageCacheKey, readCachedNoticePage } from "./noticePageCache";
 
 type StatusKey = "all" | "today" | "open" | "upcoming";
 type StateTone = "mint" | "coral" | "blue" | "purple" | "gray";
@@ -473,6 +474,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [loadVersion, setLoadVersion] = useState(0);
+  const [cachedListShownAt, setCachedListShownAt] = useState<number>();
   const automaticLoadRetryCount = useRef(0);
   const [query, setQuery] = useState(initialSearch.query);
   const [debouncedQuery, setDebouncedQuery] = useState(initialSearch.query);
@@ -611,6 +613,7 @@ export default function Home() {
     const timer = window.setTimeout(() => {
       setLoading(true);
       setFacetsLoading(true);
+      setCachedListShownAt(undefined);
       setLoadError("");
       const request = currentSearchRequest();
       if (savedOnly && request.ids?.length === 0) {
@@ -620,12 +623,27 @@ export default function Home() {
         setLoading(false);
         return;
       }
+      const cacheKey = noticePageCacheKey({ ...request, page: 0 });
+      const cached = savedOnly ? undefined : readCachedNoticePage(window.sessionStorage, cacheKey);
+      if (cached) {
+        setNotices(cached.page.content);
+        setNoticePage(cached.page.number);
+        setNoticeTotal(cached.page.totalElements);
+        setCachedListShownAt(cached.cachedAt);
+        setKnownNotices((known) => {
+          const next = new Map(known);
+          cached.page.content.forEach((notice) => next.set(notice.id, notice));
+          return next;
+        });
+      }
       fetchNoticePage({ ...request, page: 0 }, controller.signal)
       .then((page) => {
         automaticLoadRetryCount.current = 0;
+        if (!savedOnly) cacheNoticePage(window.sessionStorage, cacheKey, page);
         setNotices(page.content);
         setNoticePage(0);
         setNoticeTotal(page.totalElements);
+        setCachedListShownAt(undefined);
         setKnownNotices((known) => {
           const next = new Map(known);
           page.content.forEach((notice) => next.set(notice.id, notice));
@@ -1030,7 +1048,9 @@ export default function Home() {
   const syncedLabel = syncedAt ? new Intl.DateTimeFormat("ko-KR", {
     timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
   }).format(new Date(syncedAt)) : "동기화 전";
-  const dataFreshnessMessage = noticeFreshness?.status === "DELAYED"
+  const dataFreshnessMessage = cachedListShownAt
+    ? "마지막으로 확인한 목록을 먼저 표시 중입니다"
+    : noticeFreshness?.status === "DELAYED"
     ? `동기화 지연 · 마지막 갱신 ${syncedLabel}`
     : noticeFreshness?.status === "UNAVAILABLE"
       ? "동기화 기록을 확인 중입니다"
@@ -1777,11 +1797,11 @@ export default function Home() {
               </div>
             </div>
 
-            {loading ? (
+            {loading && !cachedListShownAt ? (
               <div className="list-loading" role="status" aria-label="청약 공고 불러오는 중">
                 {[0, 1, 2].map((item) => <div className="list-skeleton" key={item}><i></i><strong></strong><span></span><small></small></div>)}
               </div>
-            ) : loadError ? (
+            ) : loadError && !cachedListShownAt ? (
               <div className="inline-error" role="alert">
                 <span>!</span><h3>공고를 불러오지 못했어요</h3><p>{loadError}</p>
                 <button type="button" onClick={() => { automaticLoadRetryCount.current = 0; setLoadVersion((version) => version + 1); }}>다시 불러오기</button>
