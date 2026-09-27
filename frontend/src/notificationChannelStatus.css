@@ -1,0 +1,8 @@
+.notification-channel-status { display: grid; gap: 7px; margin-top: 7px; padding: 13px; border: 1px solid #e0e5ec; border-radius: 11px; background: #fbfcfe; }
+.notification-channel-status > b { color: var(--navy); font-size: 11px; }
+.notification-channel-status > p { margin: -2px 0 2px; color: #7d8898; font-size: 9px; line-height: 1.45; }
+.notification-channel-status > div { display: grid; grid-template-columns: 1fr auto; gap: 3px 7px; align-items: center; padding-top: 8px; border-top: 1px solid #edf0f4; color: #526078; font-size: 10px; font-weight: 750; }
+.notification-channel-status em { padding: 3px 6px; border-radius: 5px; font-size: 8px; font-style: normal; }
+.notification-channel-status em.pending { background: #f0f3f7; color: #738095; }
+.notification-channel-status em.ready { background: #e8f7ee; color: #147845; }
+.notification-channel-status small { grid-column: 1 / -1; color: #8994a3; font-size: 8px; font-weight: 500; line-height: 1.4; }

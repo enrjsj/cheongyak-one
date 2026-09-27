@@ -55,6 +55,11 @@ public class MemberNotificationController {
         return notificationService.preference(cookieSupport.read(request));
     }
 
+    @GetMapping("/channels")
+    public NotificationChannelAvailabilityResponse channelAvailability(HttpServletRequest request) {
+        return notificationService.channelAvailability(cookieSupport.read(request));
+    }
+
     @PutMapping("/preference")
     public NotificationPreferenceResponse savePreference(
             HttpServletRequest servletRequest,

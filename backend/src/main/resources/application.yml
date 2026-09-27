@@ -107,5 +107,10 @@ app:
   member-push:
     delivery: ${MEMBER_PUSH_DELIVERY:disabled}
     fcm-service-account-base64: ${MEMBER_PUSH_FCM_SERVICE_ACCOUNT_BASE64:}
+  # 기본값은 외부 유료 발송을 절대 실행하지 않는다. 사업자 계약·심사가 끝난 뒤에만
+  # Render의 서버 Secret으로 enabled 값과 공급사 설정을 주입한다.
+  member-notification-channel:
+    kakao-alimtalk-delivery: ${MEMBER_KAKAO_ALIMTALK_DELIVERY:disabled}
+    sms-delivery: ${MEMBER_SMS_DELIVERY:disabled}
 
 spring.lifecycle.timeout-per-shutdown-phase: 30s
