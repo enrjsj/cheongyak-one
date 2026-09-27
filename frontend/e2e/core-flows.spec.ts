@@ -123,6 +123,19 @@ test("Render 기동 중 첫 공고 요청이 실패하면 자동으로 다시 �
   await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible({ timeout: 7_000 });
 });
 
+test("기본 목록은 모집 중·예정 공고를 우선하고 최근 검색과 상세 정렬을 제공한다", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/");
+
+  await expect(page.getByRole("tab", { name: /모집 중·예정/ })).toBeVisible();
+  await page.getByRole("combobox", { name: "청약 공고 정렬" }).selectOption("PRICE_ASC");
+  await page.getByRole("textbox", { name: "청약 검색어" }).fill("서울");
+  await page.getByRole("button", { name: /청약 찾기/ }).click();
+  await expect(page.getByLabel("최근 검색").getByRole("button", { name: "서울", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "마감 공고 포함" }).click();
+  await expect(page.getByText(/마감 공고를 포함한 공고/)).toBeVisible();
+});
+
 test("회원가입 후 사전점검 답변을 계정에 저장한다", async ({ page }) => {
   await mockApi(page);
   await page.goto("/");
@@ -140,7 +153,7 @@ test("저장 조건을 수정하고 신규 공고 알림을 개별로 끈다", a
   await mockApi(page);
   await page.goto("/");
   await signup(page);
-  await page.getByRole("button", { name: /지역·유형·예산 필터/ }).click();
+  await page.getByRole("button", { name: /청약 필터 열기/ }).click();
   await expect(page.getByText("서울 기본 조건")).toBeVisible();
   await page.getByRole("button", { name: "수정", exact: true }).click();
   await expect(page.getByRole("heading", { name: "저장 조건 수정" })).toBeVisible();

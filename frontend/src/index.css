@@ -98,6 +98,10 @@ a { color: inherit; text-decoration: none; }
 .clear-search .icon { width: 13px; }
 .search-submit { height: 48px; padding: 0 20px; border: 0; border-radius: 10px; background: var(--blue); color: white; display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 750; cursor: pointer; box-shadow: 0 7px 16px rgba(53,106,244,.24); }
 .search-submit .icon { width: 17px; }
+.recent-searches { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 11px; color: #aebbd0; font-size: 11px; }
+.recent-searches > span { margin-right: 2px; font-weight: 700; }
+.recent-searches button { max-width: 142px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; height: 27px; padding: 0 9px; border: 1px solid rgba(213, 222, 234, .75); border-radius: 14px; background: rgba(255,255,255,.08); color: #dce8f9; font: inherit; cursor: pointer; }
+.recent-searches .recent-searches-clear { color: #aebbd0; border-color: transparent; background: transparent; }
 .quick-filters { margin-top: 16px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .quick-filters span { color: #8a93a2; font-size: 12px; margin-right: 3px; }
 .quick-filters button { height: 30px; padding: 0 11px; border: 1px solid #dde3eb; border-radius: 8px; background: rgba(255,255,255,.72); color: #5e6878; font-size: 12px; font-weight: 650; cursor: pointer; }
@@ -154,6 +158,9 @@ a { color: inherit; text-decoration: none; }
 .calendar-button .icon { width: 15px; }
 .search-share-button { height: 38px; padding: 0 12px; display: flex; align-items: center; gap: 6px; border: 1px solid #dce2ea; border-radius: 9px; background: white; color: #5d6777; font-size: 12px; font-weight: 650; cursor: pointer; }
 .search-share-button .icon { width: 14px; transform: rotate(-45deg); }
+.closed-notice-toggle { height: 38px; padding: 0 11px; border: 1px solid #dce2ea; border-radius: 9px; background: white; color: #5d6777; font-size: 12px; font-weight: 650; cursor: pointer; }
+.closed-notice-toggle.selected { border-color: #9eb7ff; background: #eef3ff; color: #2859d5; }
+.active-filter-summary { margin: -4px 0 16px; color: #64758c; font-size: 12px; font-weight: 650; }
 .filter-button { height: 38px; padding: 0 12px; display: flex; align-items: center; gap: 5px; border: 1px solid #dce2ea; border-radius: 9px; background: white; color: #5d6777; font-size: 12px; font-weight: 650; cursor: pointer; }
 .filter-button .icon { width: 15px; }
 .filter-button:disabled { opacity: .55; cursor: wait; }
@@ -819,6 +826,8 @@ footer { background: var(--navy); color: white; }
   .search-field { padding: 0 8px; font-size: 12px; }
   .search-field input { font-size: 12px; }
   .search-submit { width: 48px; padding: 0; justify-content: center; font-size: 0; }
+  .recent-searches { margin-top: 10px; }
+  .recent-searches button { max-width: 108px; }
   .week-card { padding: 22px; border-radius: 20px; }
   .dashboard { padding: 0 18px 70px; }
   .status-tabs { top: 64px; overflow-x: auto; margin: 0 -18px; padding: 0 10px; }
@@ -829,6 +838,7 @@ footer { background: var(--navy); color: white; }
   .section-actions { width: 100%; justify-content: flex-start; }
   .sort-control { margin-right: auto; }
   .sort-control select { width: 116px; }
+  .closed-notice-toggle { height: 38px; padding: 0 10px; font-size: 11px; }
   .calendar-button { width: 40px; padding: 0; justify-content: center; font-size: 0; }
   .search-share-button { width: 40px; padding: 0; justify-content: center; font-size: 0; }
   .filter-button { width: 40px; padding: 0; justify-content: center; font-size: 0; }

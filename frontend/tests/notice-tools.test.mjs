@@ -10,6 +10,8 @@ import {
   sortNotices,
   updateComparison,
   updateRecentNoticeIds,
+  normalizeRecentNoticeSearches,
+  updateRecentNoticeSearches,
 } from "../src/noticeTools.ts";
 import {
   cacheNoticePage,
@@ -65,6 +67,7 @@ test("notice search URL restores valid filters and drops invalid values", () => 
     category: "APARTMENT",
     minPriceManwon: 30000,
     maxPriceManwon: 60000,
+    includeClosed: true,
     sort: "DEADLINE",
   });
   const restored = noticeSearchStateFromSearch(new URL(sharedUrl).search);
@@ -76,16 +79,26 @@ test("notice search URL restores valid filters and drops invalid values", () => 
     category: "APARTMENT",
     minPriceManwon: 30000,
     maxPriceManwon: 60000,
+    includeClosed: true,
     sort: "DEADLINE",
   });
   assert.equal(new URL(sharedUrl).searchParams.get("notice"), "7");
   assert.deepEqual(noticeSearchStateFromSearch("?status=closed&category=HOUSE&sort=NEW"), {
     query: "",
     status: "all",
+    includeClosed: false,
     region: undefined,
     category: undefined,
     sort: "LATEST",
   });
+});
+
+test("recent searches keep normalized distinct conditions and remove invalid values", () => {
+  const state = { query: "서울", status: "all", region: "서울", category: undefined, includeClosed: false, sort: "APPLY_START" };
+  const updated = updateRecentNoticeSearches([], state, 100);
+  assert.deepEqual(updated, [{ state, usedAt: 100 }]);
+  assert.deepEqual(updateRecentNoticeSearches(updated, state, 200), [{ state, usedAt: 200 }]);
+  assert.deepEqual(normalizeRecentNoticeSearches([{ state: { ...state, sort: "BAD" }, usedAt: 1 }, { state, usedAt: 2 }]), [{ state, usedAt: 2 }]);
 });
 
 test("recent notices are deduplicated, validated, and limited", () => {

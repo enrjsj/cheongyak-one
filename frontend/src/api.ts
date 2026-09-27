@@ -87,7 +87,8 @@ export interface NoticeSearchRequest {
   maxPrice?: number;
   ids?: number[];
   endingToday?: boolean;
-  sort?: "LATEST" | "DEADLINE";
+  activeOnly?: boolean;
+  sort?: "LATEST" | "DEADLINE" | "APPLY_START" | "WINNER_ANNOUNCEMENT" | "PRICE_ASC" | "SUPPLY_DESC";
   page?: number;
   size?: number;
 }
@@ -268,7 +269,7 @@ export interface MemberRecommendationList {
 }
 
 export type SearchPreferenceStatus = "ALL" | "TODAY" | "OPEN" | "UPCOMING";
-export type SearchPreferenceSort = "LATEST" | "DEADLINE";
+export type SearchPreferenceSort = "LATEST" | "DEADLINE" | "APPLY_START" | "WINNER_ANNOUNCEMENT" | "PRICE_ASC" | "SUPPLY_DESC";
 export type FavoriteProgress = "SAVED" | "CHECKING" | "READY" | "APPLIED";
 export type FavoriteApplicationResult = "PENDING" | "SELECTED" | "WAITLISTED" | "NOT_SELECTED";
 
@@ -468,6 +469,7 @@ export function noticeSearchParams(request: NoticeSearchRequest): URLSearchParam
   if (request.maxPrice !== undefined) params.set("maxPrice", String(request.maxPrice));
   if (request.ids?.length) request.ids.forEach((id) => params.append("ids", String(id)));
   if (request.endingToday) params.set("endingToday", "true");
+  if (request.activeOnly) params.set("activeOnly", "true");
   return params;
 }
 

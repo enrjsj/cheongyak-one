@@ -48,6 +48,7 @@ public class NoticeQueryService {
             BigDecimal maxPrice,
             List<Long> ids,
             boolean endingToday,
+            boolean activeOnly,
             String sort,
             int page,
             int size
@@ -55,9 +56,7 @@ public class NoticeQueryService {
         var pageable = PageRequest.of(
                 Math.max(page, 0),
                 Math.min(Math.max(size, 1), 100),
-                "LATEST".equalsIgnoreCase(sort)
-                        ? Sort.by(Sort.Order.desc("noticeDate"), Sort.Order.desc("id"))
-                        : Sort.by(Sort.Order.asc("applyEndDate"), Sort.Order.desc("noticeDate"), Sort.Order.desc("id"))
+                sortFor(sort)
         );
 
         Specification<SubscriptionNotice> specification = searchSpecification(category, keyword, region, minPrice, maxPrice);
@@ -65,6 +64,12 @@ public class NoticeQueryService {
             specification = specification.and(
                     (root, query, cb) -> cb.equal(root.get("status"), status)
             );
+        }
+        if (activeOnly && status == null && !endingToday) {
+            specification = specification.and((root, query, cb) -> root.get("status").in(
+                    NoticeStatus.OPEN,
+                    NoticeStatus.UPCOMING
+            ));
         }
         if (ids != null && !ids.isEmpty()) {
             List<Long> safeIds = ids.stream().filter(id -> id != null && id > 0).distinct().limit(100).toList();
@@ -75,6 +80,17 @@ public class NoticeQueryService {
         }
 
         return noticeRepository.findAll(specification, pageable).map(NoticeSummaryResponse::from);
+    }
+
+    private Sort sortFor(String sort) {
+        return switch (sort == null ? "" : sort.toUpperCase()) {
+            case "APPLY_START" -> Sort.by(Sort.Order.asc("applyStartDate").nullsLast(), Sort.Order.desc("noticeDate"), Sort.Order.desc("id"));
+            case "WINNER_ANNOUNCEMENT" -> Sort.by(Sort.Order.asc("winnerAnnounceDate").nullsLast(), Sort.Order.desc("noticeDate"), Sort.Order.desc("id"));
+            case "PRICE_ASC" -> Sort.by(Sort.Order.asc("minPrice").nullsLast(), Sort.Order.desc("noticeDate"), Sort.Order.desc("id"));
+            case "SUPPLY_DESC" -> Sort.by(Sort.Order.desc("totalUnits").nullsLast(), Sort.Order.desc("noticeDate"), Sort.Order.desc("id"));
+            case "LATEST" -> Sort.by(Sort.Order.desc("noticeDate"), Sort.Order.desc("id"));
+            default -> Sort.by(Sort.Order.asc("applyEndDate").nullsLast(), Sort.Order.desc("noticeDate"), Sort.Order.desc("id"));
+        };
     }
 
     public NoticeSearchFacetsResponse findFacets(HousingCategory category, String keyword, String region, BigDecimal minPrice, BigDecimal maxPrice) {

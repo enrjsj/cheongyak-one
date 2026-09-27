@@ -9,6 +9,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.Clock;
@@ -17,6 +18,7 @@ import java.time.ZoneOffset;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,7 +41,7 @@ class NoticeQueryServiceTest {
         NoticeQueryService service = new NoticeQueryService(noticeRepository, changeHistoryRepository, unitTypeRepository,
                 Clock.fixed(Instant.parse("2026-09-08T00:00:00Z"), ZoneOffset.UTC));
 
-        var notices = service.findNotices(null, null, null, null, null, null, null, false, "DEADLINE", 0, 20);
+        var notices = service.findNotices(null, null, null, null, null, null, null, false, true, "APPLY_START", 0, 20);
 
         assertThat(notices).isEmpty();
     }
@@ -56,6 +58,21 @@ class NoticeQueryServiceTest {
         assertThat(facets.endingToday()).isEqualTo(1);
         assertThat(facets.open()).isEqualTo(3);
         assertThat(facets.upcoming()).isEqualTo(2);
+    }
+
+    @Test
+    void supportsAdditionalServerSideSortOptions() {
+        when(noticeRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(Page.empty());
+        NoticeQueryService service = new NoticeQueryService(noticeRepository, changeHistoryRepository, unitTypeRepository,
+                Clock.fixed(Instant.parse("2026-09-08T00:00:00Z"), ZoneOffset.UTC));
+
+        service.findNotices(null, null, null, null, null, null, null, false, false, "PRICE_ASC", 0, 20);
+
+        var pageable = forClass(Pageable.class);
+        verify(noticeRepository).findAll(any(Specification.class), pageable.capture());
+        assertThat(pageable.getValue().getSort().getOrderFor("minPrice"))
+                .isEqualTo(Sort.Order.asc("minPrice").nullsLast());
     }
 
     @Test
