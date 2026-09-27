@@ -36,11 +36,12 @@ public class NoticeController {
             @RequestParam(required = false) BigDecimal maxPrice,
             @RequestParam(required = false) List<Long> ids,
             @RequestParam(defaultValue = "false") boolean endingToday,
+            @RequestParam(defaultValue = "false") boolean activeOnly,
             @RequestParam(defaultValue = "DEADLINE") String sort,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return noticeQueryService.findNotices(category, status, keyword, region, minPrice, maxPrice, ids, endingToday, sort, page, size);
+        return noticeQueryService.findNotices(category, status, keyword, region, minPrice, maxPrice, ids, endingToday, activeOnly, sort, page, size);
     }
 
     @GetMapping("/facets")

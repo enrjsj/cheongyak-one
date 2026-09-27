@@ -1,7 +1,7 @@
 // URL과 브라우저 저장소에만 존재하는 공고 탐색 상태를 정규화하는 순수 함수 모음이다.
 import type { NoticeSummary } from "./api";
 
-export type NoticeSortKey = "LATEST" | "DEADLINE";
+export type NoticeSortKey = "LATEST" | "DEADLINE" | "APPLY_START" | "WINNER_ANNOUNCEMENT" | "PRICE_ASC" | "SUPPLY_DESC";
 export type NoticeFilterStatus = "all" | "today" | "open" | "upcoming";
 export type NoticeFilterCategory = "APARTMENT" | "PUBLIC_RENTAL" | "OFFICETEL";
 
@@ -12,7 +12,13 @@ export interface NoticeSearchState {
   category?: NoticeFilterCategory;
   minPriceManwon?: number;
   maxPriceManwon?: number;
+  includeClosed: boolean;
   sort: NoticeSortKey;
+}
+
+export interface RecentNoticeSearch {
+  state: NoticeSearchState;
+  usedAt: number;
 }
 
 type SortableNotice = Pick<
@@ -60,7 +66,8 @@ export function noticeSearchStateFromSearch(search: string): NoticeSearchState {
       : undefined,
     ...(minPriceManwon ? { minPriceManwon } : {}),
     ...(maxPriceManwon ? { maxPriceManwon } : {}),
-    sort: params.get("sort") === "DEADLINE" ? "DEADLINE" : "LATEST",
+    includeClosed: params.get("includeClosed") === "true",
+    sort: isNoticeSortKey(params.get("sort")) ? params.get("sort") as NoticeSortKey : "LATEST",
   };
 }
 
@@ -74,6 +81,7 @@ export function noticeSearchUrl(currentUrl: string, state: NoticeSearchState): s
     ["category", state.category],
     ["minPriceManwon", state.minPriceManwon ? String(state.minPriceManwon) : undefined],
     ["maxPriceManwon", state.maxPriceManwon ? String(state.maxPriceManwon) : undefined],
+    ["includeClosed", state.includeClosed ? "true" : undefined],
     ["sort", state.sort === "LATEST" ? undefined : state.sort],
   ];
   for (const [name, value] of values) {
@@ -81,6 +89,59 @@ export function noticeSearchUrl(currentUrl: string, state: NoticeSearchState): s
     else url.searchParams.delete(name);
   }
   return url.toString();
+}
+
+function isNoticeSortKey(value: string | null): value is NoticeSortKey {
+  return ["LATEST", "DEADLINE", "APPLY_START", "WINNER_ANNOUNCEMENT", "PRICE_ASC", "SUPPLY_DESC"].includes(value ?? "");
+}
+
+function normalizeNoticeSearchState(value: unknown): NoticeSearchState | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const state = value as Partial<NoticeSearchState>;
+  if (state.sort !== undefined && !isNoticeSortKey(state.sort)) return undefined;
+  const status = ["all", "today", "open", "upcoming"].includes(state.status ?? "") ? state.status as NoticeFilterStatus : "all";
+  const category = ["APARTMENT", "PUBLIC_RENTAL", "OFFICETEL"].includes(state.category ?? "") ? state.category as NoticeFilterCategory : undefined;
+  const minPriceManwon = typeof state.minPriceManwon === "number" && Number.isSafeInteger(state.minPriceManwon) && state.minPriceManwon > 0 ? state.minPriceManwon : undefined;
+  const maxPriceManwon = typeof state.maxPriceManwon === "number" && Number.isSafeInteger(state.maxPriceManwon) && state.maxPriceManwon > 0 ? state.maxPriceManwon : undefined;
+  return {
+    query: typeof state.query === "string" ? state.query.trim().slice(0, 100) : "",
+    status,
+    region: typeof state.region === "string" ? state.region.trim().slice(0, 30) || undefined : undefined,
+    category,
+    ...(minPriceManwon ? { minPriceManwon } : {}),
+    ...(maxPriceManwon ? { maxPriceManwon } : {}),
+    includeClosed: state.includeClosed === true,
+    sort: state.sort ?? "LATEST",
+  };
+}
+
+/** 최근 실행한 탐색 조건을 손상된 값 없이 최대 다섯 개까지 복원한다. */
+export function normalizeRecentNoticeSearches(value: unknown, maxSize = 5): RecentNoticeSearch[] {
+  if (!Array.isArray(value)) return [];
+  const result: RecentNoticeSearch[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const entry = item as Partial<RecentNoticeSearch>;
+    const state = normalizeNoticeSearchState(entry.state);
+    if (!state || typeof entry.usedAt !== "number" || !Number.isSafeInteger(entry.usedAt)) continue;
+    const key = JSON.stringify(state);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({ state, usedAt: entry.usedAt });
+    if (result.length >= Math.max(0, maxSize)) break;
+  }
+  return result;
+}
+
+/** 검색어 또는 조건이 있는 탐색만 최근 목록에 기록한다. */
+export function updateRecentNoticeSearches(current: RecentNoticeSearch[], state: NoticeSearchState, usedAt = Date.now(), maxSize = 5): RecentNoticeSearch[] {
+  const normalized = normalizeNoticeSearchState(state);
+  if (!normalized) return normalizeRecentNoticeSearches(current, maxSize);
+  const meaningful = Boolean(normalized.query || normalized.region || normalized.category || normalized.minPriceManwon || normalized.maxPriceManwon || normalized.includeClosed || normalized.status !== "all" || normalized.sort !== "LATEST");
+  if (!meaningful) return normalizeRecentNoticeSearches(current, maxSize);
+  const key = JSON.stringify(normalized);
+  return [{ state: normalized, usedAt }, ...normalizeRecentNoticeSearches(current, maxSize).filter((entry) => JSON.stringify(entry.state) !== key)].slice(0, Math.max(0, maxSize));
 }
 
 function positiveInteger(value: string | null): number | undefined {
