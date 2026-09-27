@@ -1899,7 +1899,7 @@ export default function Home() {
                 {savedOnly && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={() => setFavoriteCalendarOpen(true)}><Icon name="calendar" /> 전체 일정 보기</button>}
                 {savedOnly && member && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={downloadFavoriteResults}>내 기록 CSV</button>}
                 <button className="search-share-button" type="button" onClick={() => void copySearchLink()}><Icon name="arrow" /> 검색 공유</button>
-                <button className="filter-button" type="button" onClick={() => setFilterOpen(true)} disabled={loading} aria-label={`지역·유형·예산 필터${activeFilterCount > 0 ? ` ${activeFilterCount}개 적용됨` : ""}`}><Icon name="filter" /> 지역·유형·예산 필터 {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button>
+                <button className="filter-button" type="button" onClick={() => setFilterOpen(true)} disabled={loading} aria-label={`청약 필터 열기${activeFilterCount > 0 ? ` ${activeFilterCount}개 적용됨` : ""}`}><Icon name="filter" /> 지역·유형·예산 필터 {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button>
               </div>
             </div>
             {!savedOnly && activeFilterLabels.length > 0 && <p className="active-filter-summary" aria-live="polite">적용 중: {activeFilterLabels.join(" · ")}</p>}

@@ -131,7 +131,7 @@ test("기본 목록은 모집 중·예정 공고를 우선하고 최근 검색�
   await page.getByRole("combobox", { name: "청약 공고 정렬" }).selectOption("PRICE_ASC");
   await page.getByRole("textbox", { name: "청약 검색어" }).fill("서울");
   await page.getByRole("button", { name: /청약 찾기/ }).click();
-  await expect(page.getByRole("button", { name: "서울", exact: true })).toBeVisible();
+  await expect(page.getByLabel("최근 검색").getByRole("button", { name: "서울", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "마감 공고 포함" }).click();
   await expect(page.getByText(/마감 공고를 포함한 공고/)).toBeVisible();
 });
