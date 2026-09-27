@@ -153,7 +153,7 @@ test("저장 조건을 수정하고 신규 공고 알림을 개별로 끈다", a
   await mockApi(page);
   await page.goto("/");
   await signup(page);
-  await page.getByRole("button", { name: /지역·유형·예산 필터/ }).click();
+  await page.getByRole("button", { name: /청약 필터 열기/ }).click();
   await expect(page.getByText("서울 기본 조건")).toBeVisible();
   await page.getByRole("button", { name: "수정", exact: true }).click();
   await expect(page.getByRole("heading", { name: "저장 조건 수정" })).toBeVisible();
