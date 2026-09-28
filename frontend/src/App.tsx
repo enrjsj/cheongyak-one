@@ -41,6 +41,7 @@ import {
   mergeComparisonIds,
   NoticeDetail,
   NoticeChange,
+  NoticeUnitType,
   NoticeSummary,
   NoticeStatus,
   NoticeSearchFacets,
@@ -343,6 +344,19 @@ function formatHousingType(value: string): string {
   if (!match) return value;
   const size = Number(match[1]).toLocaleString("ko-KR", { maximumFractionDigits: 2 });
   return `${size}${match[2] ?? ""}`;
+}
+
+/** 상세 표를 읽기 전에 공고 전체의 가격·공급 규모를 빠르게 파악할 수 있게 계산한다. */
+function unitTypeSummary(unitTypes: NoticeUnitType[]) {
+  const prices = unitTypes.map(({ maxPrice }) => maxPrice).filter((value): value is number => value !== undefined && value !== null);
+  const totalSupply = unitTypes.reduce((sum, { totalSupplyCount }) => sum + (totalSupplyCount ?? 0), 0);
+  const areas = unitTypes.map(({ supplyArea }) => supplyArea).filter((value): value is number => value !== undefined && value !== null);
+
+  return {
+    priceRange: prices.length === 0 ? undefined : { min: Math.min(...prices), max: Math.max(...prices) },
+    totalSupply: totalSupply || undefined,
+    areaRange: areas.length === 0 ? undefined : { min: Math.min(...areas), max: Math.max(...areas) },
+  };
 }
 
 function statusPresentation(status: NoticeStatus, applyEndDate?: string): {
@@ -1771,6 +1785,10 @@ export default function Home() {
   };
 
   const detailApplication = selected ? (selectedDetail ? toApplication(selectedDetail) : selected) : null;
+  const selectedUnitTypeSummary = useMemo(
+    () => unitTypeSummary(selectedDetail?.unitTypes ?? []),
+    [selectedDetail?.unitTypes],
+  );
   const filterDialogRef = useDialogAccessibility<HTMLElement>(filterOpen, () => setFilterOpen(false));
   const savedSearchProfileEditorRef = useDialogAccessibility<HTMLElement>(Boolean(editingSavedSearchProfile), () => setEditingSavedSearchProfile(undefined));
   const detailDialogRef = useDialogAccessibility<HTMLElement>(Boolean(detailApplication), closeDetail);
@@ -2250,6 +2268,12 @@ export default function Home() {
             {selectedDetail && (selectedDetail.unitTypes?.length ?? 0) > 0 && (
               <section className="notice-unit-types" aria-labelledby="notice-unit-types-title">
                 <div><h3 id="notice-unit-types-title">주택형별 공급·분양가</h3><p>최고 분양가 기준이며, 최종 금액은 공식 공고문을 확인하세요.</p></div>
+                <dl className="notice-unit-types-summary" aria-label="주택형 공급 요약">
+                  <div><dt>주택형</dt><dd>{selectedDetail.unitTypes?.length.toLocaleString("ko-KR")}개</dd></div>
+                  <div><dt>공급 세대</dt><dd>{selectedUnitTypeSummary.totalSupply?.toLocaleString("ko-KR") ?? "공고문 확인"}</dd></div>
+                  <div><dt>공급면적</dt><dd>{selectedUnitTypeSummary.areaRange ? `${formatArea(selectedUnitTypeSummary.areaRange.min)} ~ ${formatArea(selectedUnitTypeSummary.areaRange.max)}` : "공고문 확인"}</dd></div>
+                  <div><dt>최고 분양가 범위</dt><dd>{selectedUnitTypeSummary.priceRange ? `${formatWon(selectedUnitTypeSummary.priceRange.min)} ~ ${formatWon(selectedUnitTypeSummary.priceRange.max)}` : "공고문 확인"}</dd></div>
+                </dl>
                 <div className="notice-unit-types-table-wrap"><table><thead><tr><th scope="col">주택형</th><th scope="col">공급면적</th><th scope="col">일반</th><th scope="col">특별</th><th scope="col">합계</th><th scope="col">최고 분양가</th></tr></thead><tbody>
                   {selectedDetail.unitTypes?.map((unitType) => <tr key={unitType.modelId}><th scope="row">{formatHousingType(unitType.housingTypeName)}</th><td>{formatArea(unitType.supplyArea)}{formatPyeong(unitType.supplyArea) && <small>{formatPyeong(unitType.supplyArea)}</small>}</td><td>{unitType.generalSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{unitType.specialSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{unitType.totalSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td className="notice-unit-types-price">{formatWon(unitType.maxPrice) ?? "공고문 확인"}</td></tr>)}
                 </tbody></table></div>
