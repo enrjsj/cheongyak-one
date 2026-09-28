@@ -68,6 +68,8 @@ test("notice search URL restores valid filters and drops invalid values", () => 
     supplyType: "SALE",
     minPriceManwon: 30000,
     maxPriceManwon: 60000,
+    minArea: 59,
+    maxArea: 84,
     includeClosed: true,
     sort: "DEADLINE",
   });
@@ -81,6 +83,8 @@ test("notice search URL restores valid filters and drops invalid values", () => 
     supplyType: "SALE",
     minPriceManwon: 30000,
     maxPriceManwon: 60000,
+    minArea: 59,
+    maxArea: 84,
     includeClosed: true,
     sort: "DEADLINE",
   });
