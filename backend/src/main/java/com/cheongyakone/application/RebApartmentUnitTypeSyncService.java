@@ -29,17 +29,35 @@ public class RebApartmentUnitTypeSyncService {
         this.unitTypeRepository = unitTypeRepository;
     }
 
-    public void synchronize(List<String> sourceNoticeIds, Instant syncTime) {
-        if (!client.enabled()) return;
-        sourceNoticeIds.stream().distinct().forEach(sourceNoticeId -> {
-            try { synchronizeOne(sourceNoticeId, syncTime); }
-            catch (RuntimeException exception) { log.warn("APT unit type sync skipped for {}: {}", sourceNoticeId, exception.getMessage()); }
-        });
+    public UnitTypeSyncResult synchronize(List<String> sourceNoticeIds, Instant syncTime) {
+        if (!client.enabled()) {
+            log.info("APT unit type synchronization was skipped because REB_API_KEY is not configured");
+            return UnitTypeSyncResult.notConfigured();
+        }
+
+        int attempted = 0;
+        int synchronizedNoticeCount = 0;
+        int savedUnitTypeCount = 0;
+        int failed = 0;
+        for (String sourceNoticeId : sourceNoticeIds.stream().distinct().toList()) {
+            attempted++;
+            try {
+                savedUnitTypeCount += synchronizeOne(sourceNoticeId, syncTime);
+                synchronizedNoticeCount++;
+            } catch (RuntimeException exception) {
+                failed++;
+                log.warn("APT unit type sync skipped for {}: {}", sourceNoticeId, exception.getMessage());
+            }
+        }
+        UnitTypeSyncResult result = new UnitTypeSyncResult(attempted, synchronizedNoticeCount, savedUnitTypeCount, failed, false);
+        log.info("APT unit type synchronization completed: attempted={}, synchronized={}, saved={}, failed={}",
+                result.attemptedNoticeCount(), result.synchronizedNoticeCount(), result.savedUnitTypeCount(), result.failedNoticeCount());
+        return result;
     }
 
-    void synchronizeOne(String sourceNoticeId, Instant syncTime) {
+    int synchronizeOne(String sourceNoticeId, Instant syncTime) {
         SubscriptionNotice notice = noticeRepository.findBySourceSystemAndSourceNoticeId(SourceSystem.REB_APT, sourceNoticeId).orElse(null);
-        if (notice == null) return;
+        if (notice == null) return 0;
         List<RebApartmentUnitTypeSnapshot> models = client.fetch(sourceNoticeId);
         for (RebApartmentUnitTypeSnapshot model : models) {
             SubscriptionNoticeUnitType unitType = unitTypeRepository.findByNoticeIdAndSourceModelId(notice.getId(), model.modelId())
@@ -51,5 +69,6 @@ public class RebApartmentUnitTypeSyncService {
         BigDecimal max = models.stream().map(RebApartmentUnitTypeSnapshot::maxPrice).filter(value -> value != null).max(BigDecimal::compareTo).orElse(null);
         notice.updatePriceRange(min, max);
         noticeRepository.save(notice);
+        return models.size();
     }
 }

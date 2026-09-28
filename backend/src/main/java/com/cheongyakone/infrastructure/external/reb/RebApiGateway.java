@@ -166,6 +166,7 @@ class RebApiGateway {
             }
             JsonNode data = response.path("data");
             for (JsonNode item : data) mapApartmentUnitType(item).ifPresent(result::add);
+            log.info("REB {} model page {} fetched: response={}, accepted={}", noticeType, page, data.size(), result.size());
             if (data.size() < properties.pageSize()) break;
         }
         return result;

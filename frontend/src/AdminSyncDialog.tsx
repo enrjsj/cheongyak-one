@@ -3,6 +3,7 @@ import {
   AdminSyncDashboard,
   fetchAdminSyncDashboard,
   requestAdminNoticeSynchronization,
+  requestAdminUnitTypeBackfill,
   SyncExecutionStatus,
 } from "./api";
 import AdminMembersPanel from "./AdminMembersPanel";
@@ -87,6 +88,21 @@ export default function AdminSyncDialog({ open, onClose, currentMemberId }: Admi
     }
   };
 
+  const requestUnitTypeBackfill = async () => {
+    if (!window.confirm("저장된 전체 공고의 타입·평수·분양가를 다시 수집할까요? 공고 수에 따라 몇 분 걸릴 수 있습니다.")) return;
+    setRequestingSync(true);
+    setError("");
+    setSyncNotice("");
+    try {
+      await requestAdminUnitTypeBackfill();
+      setSyncNotice("주택형·분양가 재수집을 시작했습니다. 완료 후 공고 상세를 새로고침해 확인하세요.");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "주택형·분양가 재수집을 시작하지 못했습니다.");
+    } finally {
+      setRequestingSync(false);
+    }
+  };
+
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
@@ -114,7 +130,7 @@ export default function AdminSyncDialog({ open, onClose, currentMemberId }: Admi
               <div className={dashboard.failuresLast24Hours > 0 ? "danger" : ""}><span>24시간 오류</span><strong>{dashboard.failuresLast24Hours}</strong></div>
               <div><span>최근 성공</span><strong>{formatDate(dashboard.lastSuccessfulAt)}</strong></div>
             </div>
-            <div className="admin-sync-headline"><b>최근 실행 50건</b><span><button type="button" className="admin-sync-trigger" onClick={() => void requestSynchronization()} disabled={requestingSync}>{requestingSync ? "요청 중…" : "지금 동기화"}</button><button type="button" onClick={() => setVersion((value) => value + 1)} disabled={loading}>{loading ? "갱신 중…" : "새로고침"}</button></span></div>
+            <div className="admin-sync-headline"><b>최근 실행 50건</b><span><button type="button" className="admin-sync-trigger" onClick={() => void requestSynchronization()} disabled={requestingSync}>{requestingSync ? "요청 중…" : "지금 동기화"}</button><button type="button" className="admin-sync-trigger" onClick={() => void requestUnitTypeBackfill()} disabled={requestingSync}>{requestingSync ? "요청 중…" : "타입·분양가 재수집"}</button><button type="button" onClick={() => setVersion((value) => value + 1)} disabled={loading}>{loading ? "갱신 중…" : "새로고침"}</button></span></div>
             {syncNotice && <p className="admin-member-message success" role="status">{syncNotice}</p>}
             <div className="admin-sync-list">
               {dashboard.executions.map((execution) => (

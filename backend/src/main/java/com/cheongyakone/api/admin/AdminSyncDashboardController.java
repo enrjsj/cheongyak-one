@@ -34,4 +34,10 @@ public class AdminSyncDashboardController {
         dashboardService.requestSynchronization(cookieSupport.read(request));
         return ResponseEntity.accepted().build();
     }
+
+    @PostMapping("/unit-types")
+    public ResponseEntity<Void> requestUnitTypeBackfill(HttpServletRequest request) {
+        dashboardService.requestUnitTypeBackfill(cookieSupport.read(request));
+        return ResponseEntity.accepted().build();
+    }
 }
