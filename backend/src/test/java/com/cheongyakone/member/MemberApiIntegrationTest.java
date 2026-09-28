@@ -469,6 +469,25 @@ class MemberApiIntegrationTest {
     }
 
     @Test
+    void filtersNoticesBySupplyTypeWithoutChangingHousingTypeFilter() throws Exception {
+        noticeRepository.save(noticeWithProfile("supply-sale", "공급방식 필터 분양", HousingCategory.APARTMENT, NoticeStatus.OPEN, "서울", LocalDate.now(), LocalDate.now().plusDays(2)));
+        noticeRepository.save(noticeWithProfile("supply-rental", "공급방식 필터 임대", HousingCategory.PUBLIC_RENTAL, NoticeStatus.OPEN, "서울", LocalDate.now(), LocalDate.now().plusDays(2)));
+
+        mockMvc.perform(get("/api/v1/notices")
+                        .param("keyword", "공급방식 필터")
+                        .param("supplyType", "SALE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].housingCategory").value("APARTMENT"));
+
+        mockMvc.perform(get("/api/v1/notices/facets")
+                        .param("keyword", "공급방식 필터")
+                        .param("supplyType", "PUBLIC_RENTAL"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(1));
+    }
+
+    @Test
     void protectsAndPersistsMemberSearchPreference() throws Exception {
         signup("preference@example.com", "맞춤회원");
         AuthenticatedSession session = authenticatedSession(login("preference@example.com", PASSWORD).andReturn());

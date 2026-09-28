@@ -10,6 +10,7 @@ import com.cheongyakone.domain.notice.NoticeStatus;
 import com.cheongyakone.domain.notice.SubscriptionNotice;
 import com.cheongyakone.domain.notice.SubscriptionNoticeRepository;
 import com.cheongyakone.domain.notice.SubscriptionNoticeUnitTypeRepository;
+import com.cheongyakone.domain.notice.SupplyType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -41,6 +42,7 @@ public class NoticeQueryService {
 
     public Page<NoticeSummaryResponse> findNotices(
             HousingCategory category,
+            SupplyType supplyType,
             NoticeStatus status,
             String keyword,
             String region,
@@ -59,7 +61,7 @@ public class NoticeQueryService {
                 sortFor(sort)
         );
 
-        Specification<SubscriptionNotice> specification = searchSpecification(category, keyword, region, minPrice, maxPrice);
+        Specification<SubscriptionNotice> specification = searchSpecification(category, supplyType, keyword, region, minPrice, maxPrice);
         if (status != null) {
             specification = specification.and(
                     (root, query, cb) -> cb.equal(root.get("status"), status)
@@ -93,8 +95,8 @@ public class NoticeQueryService {
         };
     }
 
-    public NoticeSearchFacetsResponse findFacets(HousingCategory category, String keyword, String region, BigDecimal minPrice, BigDecimal maxPrice) {
-        Specification<SubscriptionNotice> base = searchSpecification(category, keyword, region, minPrice, maxPrice);
+    public NoticeSearchFacetsResponse findFacets(HousingCategory category, SupplyType supplyType, String keyword, String region, BigDecimal minPrice, BigDecimal maxPrice) {
+        Specification<SubscriptionNotice> base = searchSpecification(category, supplyType, keyword, region, minPrice, maxPrice);
         long total = noticeRepository.count(base);
         long endingToday = noticeRepository.count(base.and(
                 (root, query, cb) -> cb.equal(root.get("applyEndDate"), LocalDate.now(clock))));
@@ -105,11 +107,20 @@ public class NoticeQueryService {
         return new NoticeSearchFacetsResponse(total, endingToday, open, upcoming);
     }
 
-    private Specification<SubscriptionNotice> searchSpecification(HousingCategory category, String keyword, String region, BigDecimal minPrice, BigDecimal maxPrice) {
+    private Specification<SubscriptionNotice> searchSpecification(HousingCategory category, SupplyType supplyType, String keyword, String region, BigDecimal minPrice, BigDecimal maxPrice) {
         // Spring Data JPA 4부터 null Specification 조합이 허용되지 않아 실제 조건만 순서대로 추가한다.
         Specification<SubscriptionNotice> specification = Specification.unrestricted();
         if (category != null) {
             specification = specification.and((root, query, cb) -> cb.equal(root.get("housingCategory"), category));
+        }
+        if (supplyType == SupplyType.SALE) {
+            // 현재 수집 범위에서 아파트·오피스텔은 분양 청약 공고다.
+            specification = specification.and((root, query, cb) -> root.get("housingCategory").in(
+                    HousingCategory.APARTMENT,
+                    HousingCategory.OFFICETEL
+            ));
+        } else if (supplyType == SupplyType.PUBLIC_RENTAL) {
+            specification = specification.and((root, query, cb) -> cb.equal(root.get("housingCategory"), HousingCategory.PUBLIC_RENTAL));
         }
         if (StringUtils.hasText(keyword)) {
             String normalizedKeyword = keyword.trim().toLowerCase();

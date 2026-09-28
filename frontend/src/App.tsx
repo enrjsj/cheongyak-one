@@ -24,6 +24,7 @@ import {
   fetchPolicyConsents,
   fetchEligibilityProfile,
   HousingCategory,
+  SupplyType,
   FavoriteProgress,
   FavoriteApplicationResult,
   FavoriteTracker,
@@ -183,6 +184,11 @@ const CATEGORY_LABELS: Record<HousingCategory, string> = {
   APARTMENT: "아파트",
   PUBLIC_RENTAL: "공공임대",
   OFFICETEL: "오피스텔",
+};
+
+const SUPPLY_TYPE_LABELS: Record<SupplyType, string> = {
+  SALE: "분양",
+  PUBLIC_RENTAL: "공공임대",
 };
 
 const STATUS_LABELS: Record<StatusKey, string> = {
@@ -511,6 +517,7 @@ export default function Home() {
   const [includeClosed, setIncludeClosed] = useState(initialSearch.includeClosed);
   const [region, setRegion] = useState(initialSearch.region ?? "전체");
   const [category, setCategory] = useState(initialSearch.category ? CATEGORY_LABELS[initialSearch.category] : "전체");
+  const [supplyType, setSupplyType] = useState<SupplyType | undefined>(initialSearch.supplyType);
   const [sortKey, setSortKey] = useState<NoticeSortKey>(initialSearch.sort);
   const [minPriceManwon, setMinPriceManwon] = useState(initialSearch.minPriceManwon ? String(initialSearch.minPriceManwon) : "");
   const [maxPriceManwon, setMaxPriceManwon] = useState(initialSearch.maxPriceManwon ? String(initialSearch.maxPriceManwon) : "");
@@ -607,6 +614,7 @@ export default function Home() {
   const applySearchPreference = (preference: MemberSearchPreference) => {
     setRegion(preference.region ?? "전체");
     setCategory(preference.housingCategory ? CATEGORY_LABELS[preference.housingCategory] : "전체");
+    setSupplyType(undefined);
     setActiveStatus(preference.status.toLowerCase() as StatusKey);
     setIncludeClosed(false);
     setSortKey(preference.sort);
@@ -618,6 +626,7 @@ export default function Home() {
 
   const currentSearchRequest = () => ({
     category: categoryValue(category),
+    supplyType,
     status: activeStatus === "open" ? "OPEN" as const : activeStatus === "upcoming" ? "UPCOMING" as const : undefined,
     keyword: debouncedQuery,
     region: region === "전체" ? undefined : region,
@@ -635,6 +644,7 @@ export default function Home() {
     status: activeStatus,
     region: region === "전체" ? undefined : region,
     category: categoryValue(category),
+    supplyType,
     minPriceManwon: priceInManwon(minPriceManwon),
     maxPriceManwon: priceInManwon(maxPriceManwon),
     includeClosed,
@@ -659,6 +669,7 @@ export default function Home() {
     setActiveStatus(state.status);
     setRegion(state.region ?? "전체");
     setCategory(state.category ? CATEGORY_LABELS[state.category] : "전체");
+    setSupplyType(state.supplyType);
     setMinPriceManwon(state.minPriceManwon ? String(state.minPriceManwon) : "");
     setMaxPriceManwon(state.maxPriceManwon ? String(state.maxPriceManwon) : "");
     setIncludeClosed(state.includeClosed);
@@ -686,7 +697,7 @@ export default function Home() {
   useEffect(() => {
     // 검색 조건을 바꾼 뒤에는 새 요청으로 간주해 Render 기동 대기 재시도를 다시 허용한다.
     automaticLoadRetryCount.current = 0;
-  }, [activeStatus, category, debouncedQuery, includeClosed, maxPriceManwon, minPriceManwon, region, savedOnly, sortKey]);
+  }, [activeStatus, category, debouncedQuery, includeClosed, maxPriceManwon, minPriceManwon, region, savedOnly, sortKey, supplyType]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -759,7 +770,7 @@ export default function Home() {
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, 250);
     return () => { window.clearTimeout(timer); if (retryTimer) window.clearTimeout(retryTimer); controller.abort(); };
-  }, [activeStatus, category, debouncedQuery, includeClosed, loadVersion, maxPriceManwon, minPriceManwon, region, savedIds, savedOnly, sortKey]);
+  }, [activeStatus, category, debouncedQuery, includeClosed, loadVersion, maxPriceManwon, minPriceManwon, region, savedIds, savedOnly, sortKey, supplyType]);
 
   const loadMoreNotices = async () => {
     if (loadingMore || notices.length >= noticeTotal) return;
@@ -931,6 +942,7 @@ export default function Home() {
       setIncludeClosed(restored.includeClosed);
       setRegion(restored.region ?? "전체");
       setCategory(restored.category ? CATEGORY_LABELS[restored.category] : "전체");
+      setSupplyType(restored.supplyType);
       setSortKey(restored.sort);
       setSavedOnly(false);
       setVisibleCount(6);
@@ -1010,6 +1022,7 @@ export default function Home() {
       includeClosed,
       region: region === "전체" ? undefined : region,
       category: categoryValue(category),
+      supplyType,
       minPriceManwon: priceInManwon(minPriceManwon),
       maxPriceManwon: priceInManwon(maxPriceManwon),
       sort: sortKey,
@@ -1019,7 +1032,7 @@ export default function Home() {
     if (comparisonIds.length > 0) params.set("compare", comparisonIds.join(","));
     else params.delete("compare");
     window.history.replaceState(window.history.state, "", targetUrl.toString());
-  }, [activeStatus, category, comparisonIds, includeClosed, maxPriceManwon, member, minPriceManwon, query, region, sortKey]);
+  }, [activeStatus, category, comparisonIds, includeClosed, maxPriceManwon, member, minPriceManwon, query, region, sortKey, supplyType]);
 
   useEffect(() => {
     if (comparisonOpen && comparisonIds.length < 2) setComparisonOpen(false);
@@ -1108,10 +1121,11 @@ export default function Home() {
       return deadlineOrder;
     });
   }, [favoriteKeyword, favoriteProgressFilter, favoriteSortKey, favoriteTrackers, filtered, savedOnly]);
-  const activeFilterCount = Number(region !== "전체") + Number(category !== "전체") + Number(Boolean(minPriceManwon || maxPriceManwon)) + Number(includeClosed);
+  const activeFilterCount = Number(region !== "전체") + Number(category !== "전체") + Number(Boolean(supplyType)) + Number(Boolean(minPriceManwon || maxPriceManwon)) + Number(includeClosed);
   const activeFilterLabels = [
     region !== "전체" ? region : undefined,
     category !== "전체" ? category : undefined,
+    supplyType ? SUPPLY_TYPE_LABELS[supplyType] : undefined,
     minPriceManwon || maxPriceManwon ? `${minPriceManwon || "0"}~${maxPriceManwon || "무제한"}만원` : undefined,
     includeClosed ? "마감 공고 포함" : undefined,
   ].filter((value): value is string => Boolean(value));
@@ -1577,6 +1591,7 @@ export default function Home() {
       includeClosed,
       region: region === "전체" ? undefined : region,
       category: categoryValue(category),
+      supplyType,
       minPriceManwon: priceInManwon(minPriceManwon),
       maxPriceManwon: priceInManwon(maxPriceManwon),
       sort: sortKey,
@@ -1599,10 +1614,12 @@ export default function Home() {
     if (REGION_ORDER.includes(value)) {
       setRegion(value);
       setCategory("전체");
+      setSupplyType(undefined);
       rememberSearch({ query: "", status: "all", region: value, includeClosed: false, sort: sortKey });
     } else {
       setCategory(value);
       setRegion("전체");
+      setSupplyType(undefined);
       rememberSearch({ query: "", status: "all", category: categoryValue(value), includeClosed: false, sort: sortKey });
     }
     scrollToResults();
@@ -2140,6 +2157,7 @@ export default function Home() {
             <div className="modal-head"><div><span>FILTER</span><h2 id="filter-title">청약 조건 선택</h2></div><button type="button" onClick={() => setFilterOpen(false)} aria-label="닫기"><Icon name="close" /></button></div>
             <div className="filter-group"><h3>지역</h3><div className="choice-grid">{["전체", ...availableRegions].map((item) => <button className={region === item ? "active" : ""} type="button" key={item} onClick={() => { setRegion(item); resetVisible(); }}>{item}</button>)}</div></div>
             <div className="filter-group"><h3>주택 유형</h3><div className="choice-grid">{["전체", ...availableCategories].map((item) => <button className={category === item ? "active" : ""} type="button" key={item} onClick={() => { setCategory(item); resetVisible(); }}>{item}</button>)}</div></div>
+            <div className="filter-group"><h3>공급 방식</h3><div className="choice-grid">{([undefined, "SALE", "PUBLIC_RENTAL"] as const).map((item) => <button className={supplyType === item ? "active" : ""} type="button" key={item ?? "ALL"} onClick={() => { setSupplyType(item); resetVisible(); }}>{item ? SUPPLY_TYPE_LABELS[item] : "전체"}</button>)}</div><p className="price-help">분양은 아파트·오피스텔 청약 공고이며, 일반 부동산 매매 매물은 포함하지 않습니다.</p></div>
             <div className="filter-group"><h3>분양가 예산 <small>(만원 · 주택형 가격대 기준)</small></h3><div className="price-range"><label>최소<input type="number" min="0" max="1000000" inputMode="numeric" value={minPriceManwon} onChange={(event) => { setMinPriceManwon(event.target.value); resetVisible(); }} placeholder="예: 30000" /></label><span>~</span><label>최대<input type="number" min="0" max="1000000" inputMode="numeric" value={maxPriceManwon} onChange={(event) => { setMaxPriceManwon(event.target.value); resetVisible(); }} placeholder="예: 60000" /></label></div><p className="price-help">입력한 예산과 주택형 분양가 범위가 겹치는 공고를 보여줍니다. 가격 정보가 없는 공고는 제외됩니다.</p></div>
             <div className="search-preference-box">
               <div><b>내 맞춤 검색조건</b><span>지역·유형·예산·상태·정렬을 계정에 저장합니다.</span></div>
