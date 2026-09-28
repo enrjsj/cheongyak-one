@@ -6,7 +6,9 @@ spring:
   datasource:
     hikari:
       maximum-pool-size: ${DB_POOL_MAX_SIZE:5}
-      minimum-idle: ${DB_POOL_MIN_IDLE:1}
+      # Render Free의 첫 기동에는 웹 요청 전까지 유휴 연결을 만들 필요가 없다.
+      # Flyway/JPA가 필요한 연결만 먼저 열고, 나머지는 실제 트래픽 때 확장한다.
+      minimum-idle: ${DB_POOL_MIN_IDLE:0}
       connection-timeout: 30000
       validation-timeout: 5000
       max-lifetime: 840000
@@ -30,10 +32,11 @@ management:
 
 app:
   notice-sync:
-    # Render Free 인스턴스는 유휴 상태에서 멈춰 정기 스케줄 실행을 보장할 수 없다.
-    # 첫 배포 직후 빈 공고 목록이 노출되지 않도록 기동 시 한 번 수집하되,
-    # 장애 대응 시 NOTICE_SYNC_RUN_ON_STARTUP=false로 즉시 비활성화할 수 있다.
-    run-on-startup: ${NOTICE_SYNC_RUN_ON_STARTUP:true}
+    # 공고 전체 수집(특히 주택형·분양가 보강)은 외부 API를 여러 번 호출하므로
+    # Render Free의 콜드 스타트 경로에서는 실행하지 않는다. 일일 동기화는 GitHub
+    # Actions의 예약 요청과 관리자의 수동 실행으로 처리한다. 긴급하게 필요할 때만
+    # Render 환경변수 NOTICE_SYNC_RUN_ON_STARTUP=true를 명시적으로 설정한다.
+    run-on-startup: ${NOTICE_SYNC_RUN_ON_STARTUP:false}
   auth:
     secure-cookie: ${AUTH_SECURE_COOKIE:true}
     # Vercel과 Render가 서로 다른 도메인이므로 브라우저 로그인 테스트에는 None이 필요하다.
