@@ -185,6 +185,7 @@ GitHub Actions의 `CI / real-data` 작업은 Repository Secret인 `REB_API_KEY`�
 | DB_PASSWORD | 애플리케이션 DB 비밀번호 |
 | REB_API_KEY | 한국부동산원 청약홈 API 키 |
 | MYHOME_API_KEY | 마이홈포털 API 키 |
+| NOTICE_SYNC_RUN_ON_STARTUP | `true`일 때만 서버 기동 직후 전체 공고·주택형 동기화를 실행한다. Render 공개 테스트 기본값은 `false`이며, 일일 GitHub Actions 동기화를 사용한다. |
 | NOTICE_SYNC_CRON | 공고 동기화 실행 시각 |
 | MEMBER_NOTIFICATION_CRON | 관심청약 알림 생성 시각(기본: 매시 5분) |
 | MEMBER_NOTIFICATION_EMAIL_CRON | 대기 중인 알림 이메일 발송 시각(기본: 5분마다) |
