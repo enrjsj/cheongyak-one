@@ -791,6 +791,10 @@ export function requestAdminNoticeSynchronization(): Promise<void> {
   return requestJson<void>("/api/v1/admin/sync-executions", { method: "POST" });
 }
 
+export function requestAdminUnitTypeBackfill(): Promise<void> {
+  return requestJson<void>("/api/v1/admin/sync-executions/unit-types", { method: "POST" });
+}
+
 export function fetchAdminMembers(
   query: string,
   status: AdminMemberStatus | "",

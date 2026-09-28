@@ -15,6 +15,8 @@ public interface SubscriptionNoticeRepository
             String sourceNoticeId
     );
 
+    List<SubscriptionNotice> findAllBySourceSystem(SourceSystem sourceSystem);
+
     List<SubscriptionNotice> findAllByFirstSeenAtGreaterThanEqualAndFirstSeenAtLessThan(
             Instant from,
             Instant to

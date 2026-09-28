@@ -69,4 +69,15 @@ public class AdminSyncDashboardService {
             );
         }
     }
+
+    public void requestUnitTypeBackfill(String rawToken) {
+        memberService.requireAdmin(rawToken);
+        if (!noticeSyncCoordinator.requestUnitTypeBackfillAsync()) {
+            throw new MemberApiException(
+                    HttpStatus.CONFLICT,
+                    "NOTICE_SYNC_ALREADY_RUNNING",
+                    "이미 공고 또는 주택형 동기화가 실행 중입니다. 완료 후 다시 시도해주세요."
+            );
+        }
+    }
 }

@@ -33,6 +33,7 @@ import {
   requestPasswordReset,
   reactivateAdminMember,
   requestAdminNoticeSynchronization,
+  requestAdminUnitTypeBackfill,
   resetPasswordWithToken,
   revokeAdminMemberSessions,
   markAllNotificationsRead,
@@ -581,6 +582,30 @@ test("manual notice synchronization uses the CSRF-protected admin endpoint", asy
   assert.equal(request.init.method, "POST");
   assert.equal(request.init.credentials, "include");
   assert.equal(new Headers(request.init.headers).get("X-CSRF-Token"), "sync-token");
+});
+
+test("unit type backfill uses the CSRF-protected admin endpoint", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalDocument = globalThis.document;
+  globalThis.document = { cookie: "CHEONGYAK_CSRF=unit-type-token" };
+  let request;
+  globalThis.fetch = async (url, init) => {
+    request = { url: String(url), init };
+    return new Response(null, { status: 202 });
+  };
+
+  try {
+    await requestAdminUnitTypeBackfill();
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+
+  assert.equal(request.url, "/api/v1/admin/sync-executions/unit-types");
+  assert.equal(request.init.method, "POST");
+  assert.equal(request.init.credentials, "include");
+  assert.equal(new Headers(request.init.headers).get("X-CSRF-Token"), "unit-type-token");
 });
 
 test("admin member management searches, unlocks, revokes, and changes status with CSRF", async () => {

@@ -15,9 +15,18 @@ class NoticeSyncCoordinatorTest {
     @Test
     void acceptsOnlyOneManualSynchronizationUntilQueuedWorkFinishes() {
         NoticeSyncService syncService = mock(NoticeSyncService.class);
+        com.cheongyakone.domain.notice.SubscriptionNoticeRepository noticeRepository = mock(com.cheongyakone.domain.notice.SubscriptionNoticeRepository.class);
+        RebApartmentUnitTypeSyncService apartmentUnitTypeSyncService = mock(RebApartmentUnitTypeSyncService.class);
+        RebOfficetelUnitTypeSyncService officetelUnitTypeSyncService = mock(RebOfficetelUnitTypeSyncService.class);
         List<Runnable> queuedTasks = new ArrayList<>();
         TaskExecutor executor = queuedTasks::add;
-        NoticeSyncCoordinator coordinator = new NoticeSyncCoordinator(syncService, executor);
+        NoticeSyncCoordinator coordinator = new NoticeSyncCoordinator(
+                syncService,
+                noticeRepository,
+                apartmentUnitTypeSyncService,
+                officetelUnitTypeSyncService,
+                executor
+        );
 
         assertThat(coordinator.requestAsync()).isTrue();
         assertThat(coordinator.requestAsync()).isFalse();
