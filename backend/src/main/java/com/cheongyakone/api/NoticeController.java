@@ -36,6 +36,8 @@ public class NoticeController {
             @RequestParam(required = false) String region,
             @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice,
+            @RequestParam(required = false) BigDecimal minArea,
+            @RequestParam(required = false) BigDecimal maxArea,
             @RequestParam(required = false) List<Long> ids,
             @RequestParam(defaultValue = "false") boolean endingToday,
             @RequestParam(defaultValue = "false") boolean activeOnly,
@@ -43,7 +45,7 @@ public class NoticeController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return noticeQueryService.findNotices(category, supplyType, status, keyword, region, minPrice, maxPrice, ids, endingToday, activeOnly, sort, page, size);
+        return noticeQueryService.findNotices(category, supplyType, status, keyword, region, minPrice, maxPrice, minArea, maxArea, ids, endingToday, activeOnly, sort, page, size);
     }
 
     @GetMapping("/facets")
@@ -53,9 +55,11 @@ public class NoticeController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String region,
             @RequestParam(required = false) BigDecimal minPrice,
-            @RequestParam(required = false) BigDecimal maxPrice
+            @RequestParam(required = false) BigDecimal maxPrice,
+            @RequestParam(required = false) BigDecimal minArea,
+            @RequestParam(required = false) BigDecimal maxArea
     ) {
-        return noticeQueryService.findFacets(category, supplyType, keyword, region, minPrice, maxPrice);
+        return noticeQueryService.findFacets(category, supplyType, keyword, region, minPrice, maxPrice, minArea, maxArea);
     }
 
     @GetMapping("/freshness")
