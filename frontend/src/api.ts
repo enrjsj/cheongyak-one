@@ -19,6 +19,8 @@ export interface NoticeSummary {
   totalUnits?: number;
   minPrice?: number;
   maxPrice?: number;
+  minArea?: number;
+  maxArea?: number;
   officialUrl?: string;
   syncedAt: string;
 }
@@ -87,6 +89,8 @@ export interface NoticeSearchRequest {
   region?: string;
   minPrice?: number;
   maxPrice?: number;
+  minArea?: number;
+  maxArea?: number;
   ids?: number[];
   endingToday?: boolean;
   activeOnly?: boolean;
@@ -470,6 +474,8 @@ export function noticeSearchParams(request: NoticeSearchRequest): URLSearchParam
   if (request.region?.trim()) params.set("region", request.region.trim());
   if (request.minPrice !== undefined) params.set("minPrice", String(request.minPrice));
   if (request.maxPrice !== undefined) params.set("maxPrice", String(request.maxPrice));
+  if (request.minArea !== undefined) params.set("minArea", String(request.minArea));
+  if (request.maxArea !== undefined) params.set("maxArea", String(request.maxArea));
   if (request.ids?.length) request.ids.forEach((id) => params.append("ids", String(id)));
   if (request.endingToday) params.set("endingToday", "true");
   if (request.activeOnly) params.set("activeOnly", "true");
@@ -480,7 +486,7 @@ export function fetchNoticePage(request: NoticeSearchRequest, signal?: AbortSign
   return fetchNotices(noticeSearchParams(request), signal);
 }
 
-export function fetchNoticeFacets(request: Pick<NoticeSearchRequest, "category" | "keyword" | "region" | "minPrice" | "maxPrice">, signal?: AbortSignal): Promise<NoticeSearchFacets> {
+export function fetchNoticeFacets(request: Pick<NoticeSearchRequest, "category" | "supplyType" | "keyword" | "region" | "minPrice" | "maxPrice" | "minArea" | "maxArea">, signal?: AbortSignal): Promise<NoticeSearchFacets> {
   const params = noticeSearchParams({ ...request, page: 0, size: 1 });
   params.delete("page");
   params.delete("size");
