@@ -89,6 +89,12 @@ SCHEDULED_NOTICE_SYNC_API_KEY=<Render에 넣은 같은 값>
 
 전용 엔드포인트는 `SCHEDULED_NOTICE_SYNC_ENABLED=true`일 때만 만들어지고, `X-Scheduled-Sync-Key`가 일치하지 않으면 `401`을 반환한다. 관리자 로그인 API와 분리되어 있으며, 브라우저 CORS 대상도 아니다.
 
+### Render Free 첫 요청 지연 줄이기
+
+`Keep Render API awake` 워크플로는 같은 `RENDER_API_BASE_URL` Secret을 사용해 10분마다 `/actuator/health`만 호출한다. 실제 동기화 엔드포인트를 호출하지 않으므로 공공 API 수집이나 알림 생성이 반복되지 않는다.
+
+`main` 반영 뒤 GitHub **Actions → Keep Render API awake → Run workflow**를 한 번 실행해 `UP` 응답을 확인한다. GitHub 예약 실행은 혼잡할 때 지연될 수 있으므로 완전한 가용성 보장은 아니며, 실패하면 Actions 실행 이력에서 확인한다. 작업을 중단하려면 GitHub Actions 화면에서 워크플로를 비활성화하면 된다.
+
 ## 5. 최초 관리자 지정
 
 테스트 계정을 가입한 뒤 Supabase SQL Editor에서 해당 계정만 승격한다. 이메일과 닉네임을 먼저 조회하고 실행한다.
