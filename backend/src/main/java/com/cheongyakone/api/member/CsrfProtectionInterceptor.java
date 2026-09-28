@@ -44,6 +44,9 @@ public class CsrfProtectionInterceptor implements HandlerInterceptor {
         if (rawSession == null || rawSession.isBlank()) {
             return true;
         }
+        // Vercel 프런트는 Render 도메인의 비 HttpOnly CSRF 쿠키를 읽을 수 없다.
+        // 허용된 CORS 출처에만 노출되는 응답 헤더로 토큰을 전달해, 다음 상태 변경 요청에 사용한다.
+        response.setHeader(CSRF_HEADER, tokenCodec.csrfToken(rawSession));
         if (!tokenCodec.csrfTokenMatches(rawSession, request.getHeader(CSRF_HEADER))) {
             throw new MemberApiException(
                     HttpStatus.FORBIDDEN,

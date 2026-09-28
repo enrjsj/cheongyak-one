@@ -361,6 +361,7 @@ class ApiError extends Error {
 const DEMO_MODE = import.meta.env?.VITE_DEMO_MODE === "true";
 // Vercel은 빌드 시 이 값을 주입한다. 비어 있으면 Vite 개발 프록시와 같은 출처 API를 그대로 사용한다.
 const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
+let responseCsrfToken: string | undefined;
 
 function apiUrl(path: string): string {
   return /^https?:\/\//.test(path) ? path : `${API_BASE_URL}${path}`;
@@ -423,6 +424,12 @@ function cookieValue(name: string): string | undefined {
     ?.slice(prefix.length);
 }
 
+function csrfToken(): string | undefined {
+  // 로컬 동일 출처 개발에서는 기존 쿠키 방식을 유지한다. 배포 환경에서는 Render
+  // 응답 헤더로 받은 값을 사용한다. Vercel에서 Render 쿠키는 document.cookie로 읽을 수 없다.
+  return cookieValue("CHEONGYAK_CSRF") ?? responseCsrfToken;
+}
+
 async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   const requestUrl = apiUrl(url);
   if (DEMO_MODE) return demoJson<T>(requestUrl, init);
@@ -431,8 +438,8 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   if (init.body) headers.set("Content-Type", "application/json");
   const method = (init.method ?? "GET").toUpperCase();
   if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
-    const csrfToken = cookieValue("CHEONGYAK_CSRF");
-    if (csrfToken) headers.set("X-CSRF-Token", csrfToken);
+    const token = csrfToken();
+    if (token) headers.set("X-CSRF-Token", token);
   }
   const response = await fetch(requestUrl, {
     ...init,
@@ -440,6 +447,9 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
     // HttpOnly 회원 세션을 동일 출처 API 요청에 자동으로 포함한다.
     credentials: "include",
   });
+
+  const issuedCsrfToken = response.headers.get("X-CSRF-Token");
+  if (issuedCsrfToken) responseCsrfToken = issuedCsrfToken;
 
   if (!response.ok) {
     const problem = await response.json().catch(() => undefined) as { detail?: string } | undefined;
@@ -529,8 +539,9 @@ export function loginMember(email: string, password: string): Promise<MemberProf
   });
 }
 
-export function logoutMember(): Promise<void> {
-  return requestJson<void>("/api/v1/auth/logout", { method: "POST" });
+export async function logoutMember(): Promise<void> {
+  await requestJson<void>("/api/v1/auth/logout", { method: "POST" });
+  responseCsrfToken = undefined;
 }
 
 export function requestEmailVerification(email: string): Promise<void> {
