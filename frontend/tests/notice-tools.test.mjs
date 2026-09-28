@@ -65,6 +65,7 @@ test("notice search URL restores valid filters and drops invalid values", () => 
     status: "open",
     region: "서울",
     category: "APARTMENT",
+    supplyType: "SALE",
     minPriceManwon: 30000,
     maxPriceManwon: 60000,
     includeClosed: true,
@@ -77,6 +78,7 @@ test("notice search URL restores valid filters and drops invalid values", () => 
     status: "open",
     region: "서울",
     category: "APARTMENT",
+    supplyType: "SALE",
     minPriceManwon: 30000,
     maxPriceManwon: 60000,
     includeClosed: true,
@@ -89,12 +91,13 @@ test("notice search URL restores valid filters and drops invalid values", () => 
     includeClosed: false,
     region: undefined,
     category: undefined,
+    supplyType: undefined,
     sort: "LATEST",
   });
 });
 
 test("recent searches keep normalized distinct conditions and remove invalid values", () => {
-  const state = { query: "서울", status: "all", region: "서울", category: undefined, includeClosed: false, sort: "APPLY_START" };
+  const state = { query: "서울", status: "all", region: "서울", category: undefined, supplyType: "PUBLIC_RENTAL", includeClosed: false, sort: "APPLY_START" };
   const updated = updateRecentNoticeSearches([], state, 100);
   assert.deepEqual(updated, [{ state, usedAt: 100 }]);
   assert.deepEqual(updateRecentNoticeSearches(updated, state, 200), [{ state, usedAt: 200 }]);

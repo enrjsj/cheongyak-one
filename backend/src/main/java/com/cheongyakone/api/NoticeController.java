@@ -4,6 +4,7 @@ import com.cheongyakone.application.NoticeQueryService;
 import com.cheongyakone.application.NoticeFreshnessService;
 import com.cheongyakone.domain.notice.HousingCategory;
 import com.cheongyakone.domain.notice.NoticeStatus;
+import com.cheongyakone.domain.notice.SupplyType;
 import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,6 +30,7 @@ public class NoticeController {
     @GetMapping
     public Page<NoticeSummaryResponse> findNotices(
             @RequestParam(required = false) HousingCategory category,
+            @RequestParam(required = false) SupplyType supplyType,
             @RequestParam(required = false) NoticeStatus status,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String region,
@@ -41,18 +43,19 @@ public class NoticeController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return noticeQueryService.findNotices(category, status, keyword, region, minPrice, maxPrice, ids, endingToday, activeOnly, sort, page, size);
+        return noticeQueryService.findNotices(category, supplyType, status, keyword, region, minPrice, maxPrice, ids, endingToday, activeOnly, sort, page, size);
     }
 
     @GetMapping("/facets")
     public NoticeSearchFacetsResponse findFacets(
             @RequestParam(required = false) HousingCategory category,
+            @RequestParam(required = false) SupplyType supplyType,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String region,
             @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice
     ) {
-        return noticeQueryService.findFacets(category, keyword, region, minPrice, maxPrice);
+        return noticeQueryService.findFacets(category, supplyType, keyword, region, minPrice, maxPrice);
     }
 
     @GetMapping("/freshness")

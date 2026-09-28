@@ -1,6 +1,7 @@
 // 백엔드 계약을 한곳에서 관리한다. 인증 요청은 아래 공통 요청 함수가 쿠키와 CSRF 헤더를 처리한다.
 export type SourceSystem = "REB_APT" | "REB_OFFICETEL" | "MYHOME_PUBLIC_RENTAL";
 export type HousingCategory = "APARTMENT" | "PUBLIC_RENTAL" | "OFFICETEL";
+export type SupplyType = "SALE" | "PUBLIC_RENTAL";
 export type NoticeStatus = "UPCOMING" | "OPEN" | "CLOSED" | "ANNOUNCED";
 
 export interface NoticeSummary {
@@ -80,6 +81,7 @@ export interface NoticeFreshness {
 
 export interface NoticeSearchRequest {
   category?: HousingCategory;
+  supplyType?: SupplyType;
   status?: NoticeStatus;
   keyword?: string;
   region?: string;
@@ -462,6 +464,7 @@ export function noticeSearchParams(request: NoticeSearchRequest): URLSearchParam
     sort: request.sort ?? "LATEST",
   });
   if (request.category) params.set("category", request.category);
+  if (request.supplyType) params.set("supplyType", request.supplyType);
   if (request.status) params.set("status", request.status);
   if (request.keyword?.trim()) params.set("keyword", request.keyword.trim());
   if (request.region?.trim()) params.set("region", request.region.trim());

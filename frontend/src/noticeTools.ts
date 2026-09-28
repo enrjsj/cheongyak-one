@@ -4,12 +4,14 @@ import type { NoticeSummary } from "./api";
 export type NoticeSortKey = "LATEST" | "DEADLINE" | "APPLY_START" | "WINNER_ANNOUNCEMENT" | "PRICE_ASC" | "SUPPLY_DESC";
 export type NoticeFilterStatus = "all" | "today" | "open" | "upcoming";
 export type NoticeFilterCategory = "APARTMENT" | "PUBLIC_RENTAL" | "OFFICETEL";
+export type NoticeFilterSupplyType = "SALE" | "PUBLIC_RENTAL";
 
 export interface NoticeSearchState {
   query: string;
   status: NoticeFilterStatus;
   region?: string;
   category?: NoticeFilterCategory;
+  supplyType?: NoticeFilterSupplyType;
   minPriceManwon?: number;
   maxPriceManwon?: number;
   includeClosed: boolean;
@@ -53,6 +55,7 @@ export function noticeSearchStateFromSearch(search: string): NoticeSearchState {
   const params = new URLSearchParams(search);
   const statusValue = params.get("status");
   const categoryValue = params.get("category");
+  const supplyTypeValue = params.get("supplyType");
   const minPriceManwon = positiveInteger(params.get("minPriceManwon"));
   const maxPriceManwon = positiveInteger(params.get("maxPriceManwon"));
   return {
@@ -63,6 +66,9 @@ export function noticeSearchStateFromSearch(search: string): NoticeSearchState {
     region: (params.get("region") ?? "").trim().slice(0, 30) || undefined,
     category: (["APARTMENT", "PUBLIC_RENTAL", "OFFICETEL"] as const).includes(categoryValue as NoticeFilterCategory)
       ? categoryValue as NoticeFilterCategory
+      : undefined,
+    supplyType: (["SALE", "PUBLIC_RENTAL"] as const).includes(supplyTypeValue as NoticeFilterSupplyType)
+      ? supplyTypeValue as NoticeFilterSupplyType
       : undefined,
     ...(minPriceManwon ? { minPriceManwon } : {}),
     ...(maxPriceManwon ? { maxPriceManwon } : {}),
@@ -79,6 +85,7 @@ export function noticeSearchUrl(currentUrl: string, state: NoticeSearchState): s
     ["status", state.status === "all" ? undefined : state.status],
     ["region", state.region?.trim().slice(0, 30) || undefined],
     ["category", state.category],
+    ["supplyType", state.supplyType],
     ["minPriceManwon", state.minPriceManwon ? String(state.minPriceManwon) : undefined],
     ["maxPriceManwon", state.maxPriceManwon ? String(state.maxPriceManwon) : undefined],
     ["includeClosed", state.includeClosed ? "true" : undefined],
@@ -101,6 +108,7 @@ function normalizeNoticeSearchState(value: unknown): NoticeSearchState | undefin
   if (state.sort !== undefined && !isNoticeSortKey(state.sort)) return undefined;
   const status = ["all", "today", "open", "upcoming"].includes(state.status ?? "") ? state.status as NoticeFilterStatus : "all";
   const category = ["APARTMENT", "PUBLIC_RENTAL", "OFFICETEL"].includes(state.category ?? "") ? state.category as NoticeFilterCategory : undefined;
+  const supplyType = ["SALE", "PUBLIC_RENTAL"].includes(state.supplyType ?? "") ? state.supplyType as NoticeFilterSupplyType : undefined;
   const minPriceManwon = typeof state.minPriceManwon === "number" && Number.isSafeInteger(state.minPriceManwon) && state.minPriceManwon > 0 ? state.minPriceManwon : undefined;
   const maxPriceManwon = typeof state.maxPriceManwon === "number" && Number.isSafeInteger(state.maxPriceManwon) && state.maxPriceManwon > 0 ? state.maxPriceManwon : undefined;
   return {
@@ -108,6 +116,7 @@ function normalizeNoticeSearchState(value: unknown): NoticeSearchState | undefin
     status,
     region: typeof state.region === "string" ? state.region.trim().slice(0, 30) || undefined : undefined,
     category,
+    supplyType,
     ...(minPriceManwon ? { minPriceManwon } : {}),
     ...(maxPriceManwon ? { maxPriceManwon } : {}),
     includeClosed: state.includeClosed === true,
@@ -138,7 +147,7 @@ export function normalizeRecentNoticeSearches(value: unknown, maxSize = 5): Rece
 export function updateRecentNoticeSearches(current: RecentNoticeSearch[], state: NoticeSearchState, usedAt = Date.now(), maxSize = 5): RecentNoticeSearch[] {
   const normalized = normalizeNoticeSearchState(state);
   if (!normalized) return normalizeRecentNoticeSearches(current, maxSize);
-  const meaningful = Boolean(normalized.query || normalized.region || normalized.category || normalized.minPriceManwon || normalized.maxPriceManwon || normalized.includeClosed || normalized.status !== "all" || normalized.sort !== "LATEST");
+  const meaningful = Boolean(normalized.query || normalized.region || normalized.category || normalized.supplyType || normalized.minPriceManwon || normalized.maxPriceManwon || normalized.includeClosed || normalized.status !== "all" || normalized.sort !== "LATEST");
   if (!meaningful) return normalizeRecentNoticeSearches(current, maxSize);
   const key = JSON.stringify(normalized);
   return [{ state: normalized, usedAt }, ...normalizeRecentNoticeSearches(current, maxSize).filter((entry) => JSON.stringify(entry.state) !== key)].slice(0, Math.max(0, maxSize));

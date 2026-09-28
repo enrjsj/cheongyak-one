@@ -41,7 +41,7 @@ class NoticeQueryServiceTest {
         NoticeQueryService service = new NoticeQueryService(noticeRepository, changeHistoryRepository, unitTypeRepository,
                 Clock.fixed(Instant.parse("2026-09-08T00:00:00Z"), ZoneOffset.UTC));
 
-        var notices = service.findNotices(null, null, null, null, null, null, null, false, true, "APPLY_START", 0, 20);
+        var notices = service.findNotices(null, null, null, null, null, null, null, null, false, true, "APPLY_START", 0, 20);
 
         assertThat(notices).isEmpty();
     }
@@ -52,7 +52,7 @@ class NoticeQueryServiceTest {
         NoticeQueryService service = new NoticeQueryService(noticeRepository, changeHistoryRepository, unitTypeRepository,
                 Clock.fixed(Instant.parse("2026-09-08T00:00:00Z"), ZoneOffset.UTC));
 
-        var facets = service.findFacets(null, "서울", null, null, null);
+        var facets = service.findFacets(null, null, "서울", null, null);
 
         assertThat(facets.total()).isEqualTo(10);
         assertThat(facets.endingToday()).isEqualTo(1);
@@ -67,7 +67,7 @@ class NoticeQueryServiceTest {
         NoticeQueryService service = new NoticeQueryService(noticeRepository, changeHistoryRepository, unitTypeRepository,
                 Clock.fixed(Instant.parse("2026-09-08T00:00:00Z"), ZoneOffset.UTC));
 
-        service.findNotices(null, null, null, null, null, null, null, false, false, "PRICE_ASC", 0, 20);
+        service.findNotices(null, null, null, null, null, null, null, null, false, false, "PRICE_ASC", 0, 20);
 
         var pageable = forClass(Pageable.class);
         verify(noticeRepository).findAll(any(Specification.class), pageable.capture());

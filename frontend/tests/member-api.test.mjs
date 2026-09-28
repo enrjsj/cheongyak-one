@@ -102,8 +102,8 @@ test("notice search sends server filters and fetches matching counts", async () 
     return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
   };
   try {
-    await fetchNoticePage({ category: "APARTMENT", status: "OPEN", keyword: " 은평 ", region: "서울", minPrice: 300000000, maxPrice: 600000000, sort: "DEADLINE", page: 1 });
-    await fetchNoticeFacets({ category: "APARTMENT", keyword: "은평", region: "서울", minPrice: 300000000, maxPrice: 600000000 });
+    await fetchNoticePage({ category: "APARTMENT", supplyType: "SALE", status: "OPEN", keyword: " 은평 ", region: "서울", minPrice: 300000000, maxPrice: 600000000, sort: "DEADLINE", page: 1 });
+    await fetchNoticeFacets({ category: "APARTMENT", supplyType: "SALE", keyword: "은평", region: "서울", minPrice: 300000000, maxPrice: 600000000 });
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -113,6 +113,7 @@ test("notice search sends server filters and fetches matching counts", async () 
   assert.equal(pageUrl.searchParams.get("size"), "24");
   assert.equal(pageUrl.searchParams.get("sort"), "DEADLINE");
   assert.equal(pageUrl.searchParams.get("category"), "APARTMENT");
+  assert.equal(pageUrl.searchParams.get("supplyType"), "SALE");
   assert.equal(pageUrl.searchParams.get("status"), "OPEN");
   assert.equal(pageUrl.searchParams.get("keyword"), "은평");
   assert.equal(pageUrl.searchParams.get("minPrice"), "300000000");
