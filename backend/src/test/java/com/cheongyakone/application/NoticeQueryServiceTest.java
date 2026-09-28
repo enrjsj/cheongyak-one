@@ -52,7 +52,7 @@ class NoticeQueryServiceTest {
         NoticeQueryService service = new NoticeQueryService(noticeRepository, changeHistoryRepository, unitTypeRepository,
                 Clock.fixed(Instant.parse("2026-09-08T00:00:00Z"), ZoneOffset.UTC));
 
-        var facets = service.findFacets(null, null, "서울", null, null);
+        var facets = service.findFacets(null, null, "서울", null, null, null);
 
         assertThat(facets.total()).isEqualTo(10);
         assertThat(facets.endingToday()).isEqualTo(1);
