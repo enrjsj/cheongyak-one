@@ -566,16 +566,20 @@ public class MemberService {
                 && request.minPriceManwon() > request.maxPriceManwon()) {
             throw new MemberApiException(HttpStatus.BAD_REQUEST, "PRICE_RANGE_INVALID", "최소 예산은 최대 예산보다 클 수 없습니다.");
         }
+        validateAreaRange(request.minArea(), request.maxArea());
         Instant now = clock.instant();
         MemberSearchPreference preference = searchPreferenceRepository.findByMember_Id(member.getId())
                 .orElseGet(() -> new MemberSearchPreference(member, now));
         preference.change(
                 request.region(),
                 request.housingCategory(),
+                request.supplyType(),
                 request.status(),
                 request.sort(),
                 request.minPriceManwon(),
                 request.maxPriceManwon(),
+                request.minArea(),
+                request.maxArea(),
                 now
         );
         return SearchPreferenceResponse.from(searchPreferenceRepository.save(preference));
@@ -597,12 +601,13 @@ public class MemberService {
     public SavedSearchProfileResponse saveSearchProfile(String rawToken, Long profileId, MemberRequests.SavedSearchProfile request) {
         Member member = requireMember(rawToken);
         validatePriceRange(request.minPriceManwon(), request.maxPriceManwon());
+        validateAreaRange(request.minArea(), request.maxArea());
         Instant now = clock.instant();
         MemberSavedSearchProfile profile = profileId == null
                 ? new MemberSavedSearchProfile(member, request.name(), now)
                 : savedSearchProfileRepository.findByIdAndMember_Id(profileId, member.getId()).orElseThrow(() -> new MemberApiException(HttpStatus.NOT_FOUND, "SAVED_SEARCH_PROFILE_NOT_FOUND", "저장한 검색 조건을 찾을 수 없습니다."));
         if (profileId == null && savedSearchProfileRepository.countByMember_Id(member.getId()) >= MAXIMUM_SAVED_SEARCH_PROFILES) throw new MemberApiException(HttpStatus.BAD_REQUEST, "SAVED_SEARCH_PROFILE_LIMIT_EXCEEDED", "저장 검색조건은 최대 10개까지 만들 수 있습니다.");
-        profile.change(request.name(), request.region(), request.housingCategory(), request.status(), request.sort(), request.minPriceManwon(), request.maxPriceManwon(), now);
+        profile.change(request.name(), request.region(), request.housingCategory(), request.supplyType(), request.status(), request.sort(), request.minPriceManwon(), request.maxPriceManwon(), request.minArea(), request.maxArea(), now);
         try { return SavedSearchProfileResponse.from(savedSearchProfileRepository.save(profile)); }
         catch (DataIntegrityViolationException exception) { throw new MemberApiException(HttpStatus.CONFLICT, "SAVED_SEARCH_PROFILE_NAME_DUPLICATED", "같은 이름의 저장 조건이 이미 있습니다."); }
     }
@@ -641,12 +646,16 @@ public class MemberService {
         MemberSavedSearchProfile source = savedSearchProfileRepository.findByIdAndMember_Id(profileId, member.getId()).orElseThrow(() -> new MemberApiException(HttpStatus.NOT_FOUND, "SAVED_SEARCH_PROFILE_NOT_FOUND", "저장한 검색 조건을 찾을 수 없습니다."));
         Instant now = clock.instant();
         MemberSavedSearchProfile copy = new MemberSavedSearchProfile(member, source.getName() + " 복사본", now);
-        copy.change(copy.getName(), source.getRegion(), source.getHousingCategory(), source.getStatus(), source.getSort(), source.getMinPriceManwon(), source.getMaxPriceManwon(), now);
+        copy.change(copy.getName(), source.getRegion(), source.getHousingCategory(), source.getSupplyType(), source.getStatus(), source.getSort(), source.getMinPriceManwon(), source.getMaxPriceManwon(), source.getMinArea(), source.getMaxArea(), now);
         return SavedSearchProfileResponse.from(savedSearchProfileRepository.save(copy));
     }
 
     private void validatePriceRange(Integer minPriceManwon, Integer maxPriceManwon) {
         if (minPriceManwon != null && maxPriceManwon != null && minPriceManwon > maxPriceManwon) throw new MemberApiException(HttpStatus.BAD_REQUEST, "PRICE_RANGE_INVALID", "최소 예산은 최대 예산보다 클 수 없습니다.");
+    }
+
+    private void validateAreaRange(java.math.BigDecimal minArea, java.math.BigDecimal maxArea) {
+        if (minArea != null && maxArea != null && minArea.compareTo(maxArea) > 0) throw new MemberApiException(HttpStatus.BAD_REQUEST, "AREA_RANGE_INVALID", "최소 공급면적은 최대 공급면적보다 클 수 없습니다.");
     }
 
     @Transactional(readOnly = true)

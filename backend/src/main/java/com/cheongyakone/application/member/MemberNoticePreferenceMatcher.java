@@ -4,7 +4,9 @@ import com.cheongyakone.domain.member.MemberSearchPreference;
 import com.cheongyakone.domain.member.MemberSavedSearchProfile;
 import com.cheongyakone.domain.member.SearchPreferenceStatus;
 import com.cheongyakone.domain.notice.NoticeStatus;
+import com.cheongyakone.domain.notice.SupplyType;
 import com.cheongyakone.domain.notice.SubscriptionNotice;
+import com.cheongyakone.domain.notice.SubscriptionNoticeUnitType;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDate;
@@ -77,13 +79,28 @@ final class MemberNoticePreferenceMatcher {
     }
 
     /** 저장 프로필도 단일 검색조건과 같은 규칙으로 신규 공고를 매칭한다. */
-    static boolean matches(SubscriptionNotice notice, MemberSavedSearchProfile profile, LocalDate today) {
+    static boolean matches(SubscriptionNotice notice, MemberSavedSearchProfile profile, LocalDate today, java.util.List<SubscriptionNoticeUnitType> unitTypes) {
         if (profile.getHousingCategory() != null && profile.getHousingCategory() != notice.getHousingCategory()) return false;
+        if (!matchesSupplyType(notice, profile.getSupplyType())) return false;
         if (profile.getRegion() != null && !matchesRegion(notice, profile.getRegion())) return false;
         if (profile.getMinPriceManwon() != null && (notice.getMinPrice() == null || notice.getMinPrice().compareTo(won(profile.getMinPriceManwon())) < 0)) return false;
         if (profile.getMaxPriceManwon() != null && (notice.getMinPrice() == null || notice.getMinPrice().compareTo(won(profile.getMaxPriceManwon())) > 0)) return false;
+        if (!matchesArea(unitTypes, profile.getMinArea(), profile.getMaxArea())) return false;
         if (!matchesStatus(notice, profile.getStatus(), today)) return false;
         return notice.getApplyEndDate() == null || !notice.getApplyEndDate().isBefore(today);
+    }
+
+    private static boolean matchesSupplyType(SubscriptionNotice notice, SupplyType supplyType) {
+        if (supplyType == null) return true;
+        return supplyType == SupplyType.SALE
+                ? notice.getHousingCategory() == com.cheongyakone.domain.notice.HousingCategory.APARTMENT || notice.getHousingCategory() == com.cheongyakone.domain.notice.HousingCategory.OFFICETEL
+                : notice.getHousingCategory() == com.cheongyakone.domain.notice.HousingCategory.PUBLIC_RENTAL;
+    }
+
+    private static boolean matchesArea(java.util.List<SubscriptionNoticeUnitType> unitTypes, BigDecimal minArea, BigDecimal maxArea) {
+        if (minArea == null && maxArea == null) return true;
+        return unitTypes.stream().map(SubscriptionNoticeUnitType::getSupplyArea).filter(java.util.Objects::nonNull).anyMatch(area ->
+                (minArea == null || area.compareTo(minArea) >= 0) && (maxArea == null || area.compareTo(maxArea) <= 0));
     }
 
     private static boolean matchesRegion(SubscriptionNotice notice, String rawRegion) {

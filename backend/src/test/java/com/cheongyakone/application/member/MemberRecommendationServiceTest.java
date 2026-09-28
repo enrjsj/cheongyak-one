@@ -57,8 +57,11 @@ class MemberRecommendationServiceTest {
         preference.change(
                 null,
                 HousingCategory.APARTMENT,
+                null,
                 SearchPreferenceStatus.OPEN,
                 SearchPreferenceSort.DEADLINE,
+                null,
+                null,
                 null,
                 null,
                 NOW

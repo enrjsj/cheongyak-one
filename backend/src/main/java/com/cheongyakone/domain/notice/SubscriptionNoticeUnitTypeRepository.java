@@ -6,5 +6,6 @@ import java.util.Optional;
 
 public interface SubscriptionNoticeUnitTypeRepository extends JpaRepository<SubscriptionNoticeUnitType, Long> {
     List<SubscriptionNoticeUnitType> findAllByNoticeIdOrderBySupplyAreaAscHousingTypeNameAsc(Long noticeId);
+    List<SubscriptionNoticeUnitType> findAllByNoticeIdIn(List<Long> noticeIds);
     Optional<SubscriptionNoticeUnitType> findByNoticeIdAndSourceModelId(Long noticeId, String sourceModelId);
 }

@@ -307,20 +307,26 @@ export interface FavoriteTrackerInput {
 export interface MemberSearchPreference {
   region?: string;
   housingCategory?: HousingCategory;
+  supplyType?: SupplyType;
   status: SearchPreferenceStatus;
   sort: SearchPreferenceSort;
   minPriceManwon?: number;
   maxPriceManwon?: number;
+  minArea?: number;
+  maxArea?: number;
   updatedAt: string;
 }
 
 export interface SearchPreferenceInput {
   region?: string;
   housingCategory?: HousingCategory;
+  supplyType?: SupplyType;
   status: SearchPreferenceStatus;
   sort: SearchPreferenceSort;
   minPriceManwon?: number;
   maxPriceManwon?: number;
+  minArea?: number;
+  maxArea?: number;
 }
 
 export interface SavedSearchProfile extends SearchPreferenceInput {
