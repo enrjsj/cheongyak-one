@@ -535,6 +535,8 @@ export default function Home() {
   const [sortKey, setSortKey] = useState<NoticeSortKey>(initialSearch.sort);
   const [minPriceManwon, setMinPriceManwon] = useState(initialSearch.minPriceManwon ? String(initialSearch.minPriceManwon) : "");
   const [maxPriceManwon, setMaxPriceManwon] = useState(initialSearch.maxPriceManwon ? String(initialSearch.maxPriceManwon) : "");
+  const [minArea, setMinArea] = useState(initialSearch.minArea ? String(initialSearch.minArea) : "");
+  const [maxArea, setMaxArea] = useState(initialSearch.maxArea ? String(initialSearch.maxArea) : "");
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [favoriteTrackers, setFavoriteTrackers] = useState<Map<number, FavoriteTracker>>(new Map());
   const [favoriteTrackerPendingId, setFavoriteTrackerPendingId] = useState<number>();
@@ -634,6 +636,8 @@ export default function Home() {
     setSortKey(preference.sort);
     setMinPriceManwon(preference.minPriceManwon ? String(preference.minPriceManwon) : "");
     setMaxPriceManwon(preference.maxPriceManwon ? String(preference.maxPriceManwon) : "");
+    setMinArea("");
+    setMaxArea("");
     setSavedOnly(false);
     setVisibleCount(6);
   };
@@ -646,6 +650,8 @@ export default function Home() {
     region: region === "전체" ? undefined : region,
     minPrice: priceInWon(minPriceManwon),
     maxPrice: priceInWon(maxPriceManwon),
+    minArea: priceInManwon(minArea),
+    maxArea: priceInManwon(maxArea),
     ids: savedOnly ? [...savedIds] : undefined,
     endingToday: activeStatus === "today",
     activeOnly: activeStatus === "all" && !includeClosed,
@@ -661,6 +667,8 @@ export default function Home() {
     supplyType,
     minPriceManwon: priceInManwon(minPriceManwon),
     maxPriceManwon: priceInManwon(maxPriceManwon),
+    minArea: priceInManwon(minArea),
+    maxArea: priceInManwon(maxArea),
     includeClosed,
     sort: sortKey,
   });
@@ -686,6 +694,8 @@ export default function Home() {
     setSupplyType(state.supplyType);
     setMinPriceManwon(state.minPriceManwon ? String(state.minPriceManwon) : "");
     setMaxPriceManwon(state.maxPriceManwon ? String(state.maxPriceManwon) : "");
+    setMinArea(state.minArea ? String(state.minArea) : "");
+    setMaxArea(state.maxArea ? String(state.maxArea) : "");
     setIncludeClosed(state.includeClosed);
     setSortKey(state.sort);
     setSavedOnly(false);
@@ -711,7 +721,7 @@ export default function Home() {
   useEffect(() => {
     // 검색 조건을 바꾼 뒤에는 새 요청으로 간주해 Render 기동 대기 재시도를 다시 허용한다.
     automaticLoadRetryCount.current = 0;
-  }, [activeStatus, category, debouncedQuery, includeClosed, maxPriceManwon, minPriceManwon, region, savedOnly, sortKey, supplyType]);
+  }, [activeStatus, category, debouncedQuery, includeClosed, maxArea, maxPriceManwon, minArea, minPriceManwon, region, savedOnly, sortKey, supplyType]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -784,7 +794,7 @@ export default function Home() {
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, 250);
     return () => { window.clearTimeout(timer); if (retryTimer) window.clearTimeout(retryTimer); controller.abort(); };
-  }, [activeStatus, category, debouncedQuery, includeClosed, loadVersion, maxPriceManwon, minPriceManwon, region, savedIds, savedOnly, sortKey, supplyType]);
+  }, [activeStatus, category, debouncedQuery, includeClosed, loadVersion, maxArea, maxPriceManwon, minArea, minPriceManwon, region, savedIds, savedOnly, sortKey, supplyType]);
 
   const loadMoreNotices = async () => {
     if (loadingMore || notices.length >= noticeTotal) return;
@@ -1039,6 +1049,8 @@ export default function Home() {
       supplyType,
       minPriceManwon: priceInManwon(minPriceManwon),
       maxPriceManwon: priceInManwon(maxPriceManwon),
+      minArea: priceInManwon(minArea),
+      maxArea: priceInManwon(maxArea),
       sort: sortKey,
     });
     const targetUrl = new URL(searchUrl);
@@ -1046,7 +1058,7 @@ export default function Home() {
     if (comparisonIds.length > 0) params.set("compare", comparisonIds.join(","));
     else params.delete("compare");
     window.history.replaceState(window.history.state, "", targetUrl.toString());
-  }, [activeStatus, category, comparisonIds, includeClosed, maxPriceManwon, member, minPriceManwon, query, region, sortKey, supplyType]);
+  }, [activeStatus, category, comparisonIds, includeClosed, maxArea, maxPriceManwon, member, minArea, minPriceManwon, query, region, sortKey, supplyType]);
 
   useEffect(() => {
     if (comparisonOpen && comparisonIds.length < 2) setComparisonOpen(false);
@@ -1135,12 +1147,13 @@ export default function Home() {
       return deadlineOrder;
     });
   }, [favoriteKeyword, favoriteProgressFilter, favoriteSortKey, favoriteTrackers, filtered, savedOnly]);
-  const activeFilterCount = Number(region !== "전체") + Number(category !== "전체") + Number(Boolean(supplyType)) + Number(Boolean(minPriceManwon || maxPriceManwon)) + Number(includeClosed);
+  const activeFilterCount = Number(region !== "전체") + Number(category !== "전체") + Number(Boolean(supplyType)) + Number(Boolean(minPriceManwon || maxPriceManwon)) + Number(Boolean(minArea || maxArea)) + Number(includeClosed);
   const activeFilterLabels = [
     region !== "전체" ? region : undefined,
     category !== "전체" ? category : undefined,
     supplyType ? SUPPLY_TYPE_LABELS[supplyType] : undefined,
     minPriceManwon || maxPriceManwon ? `${minPriceManwon || "0"}~${maxPriceManwon || "무제한"}만원` : undefined,
+    minArea || maxArea ? `${minArea || "0"}~${maxArea || "무제한"}㎡` : undefined,
     includeClosed ? "마감 공고 포함" : undefined,
   ].filter((value): value is string => Boolean(value));
   const todayCount = noticeFacets.endingToday;
@@ -2177,6 +2190,7 @@ export default function Home() {
             <div className="filter-group"><h3>주택 유형</h3><div className="choice-grid">{["전체", ...availableCategories].map((item) => <button className={category === item ? "active" : ""} type="button" key={item} onClick={() => { setCategory(item); resetVisible(); }}>{item}</button>)}</div></div>
             <div className="filter-group"><h3>공급 방식</h3><div className="choice-grid">{([undefined, "SALE", "PUBLIC_RENTAL"] as const).map((item) => <button className={supplyType === item ? "active" : ""} type="button" key={item ?? "ALL"} onClick={() => { setSupplyType(item); resetVisible(); }}>{item ? SUPPLY_TYPE_LABELS[item] : "전체"}</button>)}</div><p className="price-help">분양은 아파트·오피스텔 청약 공고이며, 일반 부동산 매매 매물은 포함하지 않습니다.</p></div>
             <div className="filter-group"><h3>분양가 예산 <small>(만원 · 주택형 가격대 기준)</small></h3><div className="price-range"><label>최소<input type="number" min="0" max="1000000" inputMode="numeric" value={minPriceManwon} onChange={(event) => { setMinPriceManwon(event.target.value); resetVisible(); }} placeholder="예: 30000" /></label><span>~</span><label>최대<input type="number" min="0" max="1000000" inputMode="numeric" value={maxPriceManwon} onChange={(event) => { setMaxPriceManwon(event.target.value); resetVisible(); }} placeholder="예: 60000" /></label></div><p className="price-help">입력한 예산과 주택형 분양가 범위가 겹치는 공고를 보여줍니다. 가격 정보가 없는 공고는 제외됩니다.</p></div>
+            <div className="filter-group"><h3>공급면적 <small>(㎡ · 주택형 기준)</small></h3><div className="price-range"><label>최소<input type="number" min="0" max="1000" inputMode="numeric" value={minArea} onChange={(event) => { setMinArea(event.target.value); resetVisible(); }} placeholder="예: 59" /></label><span>~</span><label>최대<input type="number" min="0" max="1000" inputMode="numeric" value={maxArea} onChange={(event) => { setMaxArea(event.target.value); resetVisible(); }} placeholder="예: 84" /></label></div><p className="price-help">입력한 면적 범위에 해당하는 주택형이 하나라도 있는 공고만 보여줍니다. 면적 데이터가 없는 공고는 제외됩니다.</p></div>
             <div className="search-preference-box">
               <div><b>내 맞춤 검색조건</b><span>지역·유형·예산·상태·정렬을 계정에 저장합니다.</span></div>
               {member ? (

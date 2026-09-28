@@ -102,8 +102,8 @@ test("notice search sends server filters and fetches matching counts", async () 
     return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
   };
   try {
-    await fetchNoticePage({ category: "APARTMENT", supplyType: "SALE", status: "OPEN", keyword: " 은평 ", region: "서울", minPrice: 300000000, maxPrice: 600000000, sort: "DEADLINE", page: 1 });
-    await fetchNoticeFacets({ category: "APARTMENT", supplyType: "SALE", keyword: "은평", region: "서울", minPrice: 300000000, maxPrice: 600000000 });
+    await fetchNoticePage({ category: "APARTMENT", supplyType: "SALE", status: "OPEN", keyword: " 은평 ", region: "서울", minPrice: 300000000, maxPrice: 600000000, minArea: 59, maxArea: 84, sort: "DEADLINE", page: 1 });
+    await fetchNoticeFacets({ category: "APARTMENT", supplyType: "SALE", keyword: "은평", region: "서울", minPrice: 300000000, maxPrice: 600000000, minArea: 59, maxArea: 84 });
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -118,8 +118,11 @@ test("notice search sends server filters and fetches matching counts", async () 
   assert.equal(pageUrl.searchParams.get("keyword"), "은평");
   assert.equal(pageUrl.searchParams.get("minPrice"), "300000000");
   assert.equal(pageUrl.searchParams.get("maxPrice"), "600000000");
+  assert.equal(pageUrl.searchParams.get("minArea"), "59");
+  assert.equal(pageUrl.searchParams.get("maxArea"), "84");
   assert.ok(urls[1].startsWith("/api/v1/notices/facets?"));
   assert.ok(urls[1].includes("minPrice=300000000"));
+  assert.ok(urls[1].includes("minArea=59"));
   assert.ok(!urls[1].includes("page="));
 });
 

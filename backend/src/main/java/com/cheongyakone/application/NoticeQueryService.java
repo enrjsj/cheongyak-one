@@ -10,6 +10,7 @@ import com.cheongyakone.domain.notice.NoticeStatus;
 import com.cheongyakone.domain.notice.SubscriptionNotice;
 import com.cheongyakone.domain.notice.SubscriptionNoticeRepository;
 import com.cheongyakone.domain.notice.SubscriptionNoticeUnitTypeRepository;
+import com.cheongyakone.domain.notice.SubscriptionNoticeUnitType;
 import com.cheongyakone.domain.notice.SupplyType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -48,6 +49,8 @@ public class NoticeQueryService {
             String region,
             BigDecimal minPrice,
             BigDecimal maxPrice,
+            BigDecimal minArea,
+            BigDecimal maxArea,
             List<Long> ids,
             boolean endingToday,
             boolean activeOnly,
@@ -61,7 +64,7 @@ public class NoticeQueryService {
                 sortFor(sort)
         );
 
-        Specification<SubscriptionNotice> specification = searchSpecification(category, supplyType, keyword, region, minPrice, maxPrice);
+        Specification<SubscriptionNotice> specification = searchSpecification(category, supplyType, keyword, region, minPrice, maxPrice, minArea, maxArea);
         if (status != null) {
             specification = specification.and(
                     (root, query, cb) -> cb.equal(root.get("status"), status)
@@ -95,8 +98,8 @@ public class NoticeQueryService {
         };
     }
 
-    public NoticeSearchFacetsResponse findFacets(HousingCategory category, SupplyType supplyType, String keyword, String region, BigDecimal minPrice, BigDecimal maxPrice) {
-        Specification<SubscriptionNotice> base = searchSpecification(category, supplyType, keyword, region, minPrice, maxPrice);
+    public NoticeSearchFacetsResponse findFacets(HousingCategory category, SupplyType supplyType, String keyword, String region, BigDecimal minPrice, BigDecimal maxPrice, BigDecimal minArea, BigDecimal maxArea) {
+        Specification<SubscriptionNotice> base = searchSpecification(category, supplyType, keyword, region, minPrice, maxPrice, minArea, maxArea);
         long total = noticeRepository.count(base);
         long endingToday = noticeRepository.count(base.and(
                 (root, query, cb) -> cb.equal(root.get("applyEndDate"), LocalDate.now(clock))));
@@ -107,7 +110,7 @@ public class NoticeQueryService {
         return new NoticeSearchFacetsResponse(total, endingToday, open, upcoming);
     }
 
-    private Specification<SubscriptionNotice> searchSpecification(HousingCategory category, SupplyType supplyType, String keyword, String region, BigDecimal minPrice, BigDecimal maxPrice) {
+    private Specification<SubscriptionNotice> searchSpecification(HousingCategory category, SupplyType supplyType, String keyword, String region, BigDecimal minPrice, BigDecimal maxPrice, BigDecimal minArea, BigDecimal maxArea) {
         // Spring Data JPA 4부터 null Specification 조합이 허용되지 않아 실제 조건만 순서대로 추가한다.
         Specification<SubscriptionNotice> specification = Specification.unrestricted();
         if (category != null) {
@@ -153,6 +156,18 @@ public class NoticeQueryService {
         if (maxPrice != null && maxPrice.signum() >= 0) {
             specification = specification.and((root, query, cb) ->
                     cb.lessThanOrEqualTo(root.<BigDecimal>get("minPrice"), maxPrice));
+        }
+        if ((minArea != null && minArea.signum() >= 0) || (maxArea != null && maxArea.signum() >= 0)) {
+            specification = specification.and((root, query, cb) -> {
+                var matchingUnitType = query.subquery(Long.class);
+                var matchingRoot = matchingUnitType.from(SubscriptionNoticeUnitType.class);
+                var matchingPredicates = new java.util.ArrayList<jakarta.persistence.criteria.Predicate>();
+                matchingPredicates.add(cb.equal(matchingRoot.get("notice").get("id"), root.get("id")));
+                if (minArea != null && minArea.signum() >= 0) matchingPredicates.add(cb.greaterThanOrEqualTo(matchingRoot.<BigDecimal>get("supplyArea"), minArea));
+                if (maxArea != null && maxArea.signum() >= 0) matchingPredicates.add(cb.lessThanOrEqualTo(matchingRoot.<BigDecimal>get("supplyArea"), maxArea));
+                matchingUnitType.select(matchingRoot.get("id")).where(matchingPredicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
+                return cb.exists(matchingUnitType);
+            });
         }
         return specification;
     }
