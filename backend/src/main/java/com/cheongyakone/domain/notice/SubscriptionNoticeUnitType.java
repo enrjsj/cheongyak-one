@@ -50,6 +50,7 @@ public class SubscriptionNoticeUnitType {
         this.syncedAt = syncedAt;
     }
     public String getSourceModelId() { return sourceModelId; }
+    public SubscriptionNotice getNotice() { return notice; }
     public String getHousingTypeName() { return housingTypeName; }
     public BigDecimal getSupplyArea() { return supplyArea; }
     public Integer getGeneralSupplyCount() { return generalSupplyCount; }

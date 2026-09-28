@@ -9,6 +9,7 @@ import com.cheongyakone.domain.member.SearchPreferenceStatus;
 import com.cheongyakone.domain.member.FavoriteApplicationResult;
 import com.cheongyakone.domain.member.FavoriteProgress;
 import com.cheongyakone.domain.notice.HousingCategory;
+import com.cheongyakone.domain.notice.SupplyType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
@@ -116,10 +117,13 @@ public final class MemberRequests {
     public record SearchPreference(
             @Size(max = 40) String region,
             HousingCategory housingCategory,
+            SupplyType supplyType,
             @NotNull SearchPreferenceStatus status,
             @NotNull SearchPreferenceSort sort,
             @PositiveOrZero @Max(1000000) Integer minPriceManwon,
-            @PositiveOrZero @Max(1000000) Integer maxPriceManwon
+            @PositiveOrZero @Max(1000000) Integer maxPriceManwon,
+            @PositiveOrZero @Max(1000) java.math.BigDecimal minArea,
+            @PositiveOrZero @Max(1000) java.math.BigDecimal maxArea
     ) {
     }
 
@@ -127,10 +131,13 @@ public final class MemberRequests {
             @NotBlank @Size(max = 40) String name,
             @Size(max = 40) String region,
             HousingCategory housingCategory,
+            SupplyType supplyType,
             @NotNull SearchPreferenceStatus status,
             @NotNull SearchPreferenceSort sort,
             @PositiveOrZero @Max(1000000) Integer minPriceManwon,
-            @PositiveOrZero @Max(1000000) Integer maxPriceManwon
+            @PositiveOrZero @Max(1000000) Integer maxPriceManwon,
+            @PositiveOrZero @Max(1000) java.math.BigDecimal minArea,
+            @PositiveOrZero @Max(1000) java.math.BigDecimal maxArea
     ) { }
 
     public record EligibilityProfile(

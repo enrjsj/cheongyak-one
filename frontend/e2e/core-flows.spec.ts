@@ -162,7 +162,7 @@ test("저장 조건을 수정하고 신규 공고 알림을 개별로 끈다", a
   await page.getByLabel("최소 예산 (만원)").fill("30000");
   await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByText("저장 조건을 수정했습니다.")).toBeVisible();
-  await expect(page.getByText(/경기 · 아파트 · 30,000만원 이상/)).toBeVisible();
+  await expect(page.getByText(/경기 · 아파트 · 전체 공급 · 30,000만원 이상/)).toBeVisible();
   await page.getByRole("button", { name: "신규 알림 켜짐", exact: true }).click();
   await expect(page.getByRole("button", { name: "신규 알림 꺼짐", exact: true })).toBeVisible();
 });

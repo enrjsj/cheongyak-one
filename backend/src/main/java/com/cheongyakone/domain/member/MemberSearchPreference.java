@@ -1,6 +1,7 @@
 package com.cheongyakone.domain.member;
 
 import com.cheongyakone.domain.notice.HousingCategory;
+import com.cheongyakone.domain.notice.SupplyType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -15,6 +16,7 @@ import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.Objects;
 
 @Entity
@@ -42,6 +44,10 @@ public class MemberSearchPreference {
     private HousingCategory housingCategory;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "SUPPLY_TYPE", length = 20)
+    private SupplyType supplyType;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "STATUS_FILTER", nullable = false, length = 20)
     private SearchPreferenceStatus status;
 
@@ -54,6 +60,12 @@ public class MemberSearchPreference {
 
     @Column(name = "MAX_PRICE_MANWON")
     private Integer maxPriceManwon;
+
+    @Column(name = "MIN_AREA", precision = 10, scale = 2)
+    private BigDecimal minArea;
+
+    @Column(name = "MAX_AREA", precision = 10, scale = 2)
+    private BigDecimal maxArea;
 
     @Column(name = "CREATED_AT", nullable = false)
     private Instant createdAt;
@@ -73,18 +85,24 @@ public class MemberSearchPreference {
     public void change(
             String region,
             HousingCategory housingCategory,
+            SupplyType supplyType,
             SearchPreferenceStatus status,
             SearchPreferenceSort sort,
             Integer minPriceManwon,
             Integer maxPriceManwon,
+            BigDecimal minArea,
+            BigDecimal maxArea,
             Instant now
     ) {
         this.region = region == null || region.isBlank() ? null : region.trim();
         this.housingCategory = housingCategory;
+        this.supplyType = supplyType;
         this.status = Objects.requireNonNull(status);
         this.sort = Objects.requireNonNull(sort);
         this.minPriceManwon = minPriceManwon;
         this.maxPriceManwon = maxPriceManwon;
+        this.minArea = minArea;
+        this.maxArea = maxArea;
         this.updatedAt = Objects.requireNonNull(now);
     }
 
@@ -108,6 +126,8 @@ public class MemberSearchPreference {
         return housingCategory;
     }
 
+    public SupplyType getSupplyType() { return supplyType; }
+
     public SearchPreferenceStatus getStatus() {
         return status;
     }
@@ -119,6 +139,10 @@ public class MemberSearchPreference {
     public Integer getMinPriceManwon() { return minPriceManwon; }
 
     public Integer getMaxPriceManwon() { return maxPriceManwon; }
+
+    public BigDecimal getMinArea() { return minArea; }
+
+    public BigDecimal getMaxArea() { return maxArea; }
 
     public Instant getUpdatedAt() {
         return updatedAt;

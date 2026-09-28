@@ -499,6 +499,13 @@ function formatPricePreference(preference: MemberSearchPreference): string {
   return "전체 예산";
 }
 
+function formatAreaPreference(preference: MemberSearchPreference): string {
+  if (preference.minArea && preference.maxArea) return `${preference.minArea}~${preference.maxArea}㎡`;
+  if (preference.minArea) return `${preference.minArea}㎡ 이상`;
+  if (preference.maxArea) return `${preference.maxArea}㎡ 이하`;
+  return "전체 면적";
+}
+
 function formatNoticeSort(sort: NoticeSortKey): string {
   return ({
     LATEST: "최신 공고순",
@@ -630,14 +637,14 @@ export default function Home() {
   const applySearchPreference = (preference: MemberSearchPreference) => {
     setRegion(preference.region ?? "전체");
     setCategory(preference.housingCategory ? CATEGORY_LABELS[preference.housingCategory] : "전체");
-    setSupplyType(undefined);
+    setSupplyType(preference.supplyType);
     setActiveStatus(preference.status.toLowerCase() as StatusKey);
     setIncludeClosed(false);
     setSortKey(preference.sort);
     setMinPriceManwon(preference.minPriceManwon ? String(preference.minPriceManwon) : "");
     setMaxPriceManwon(preference.maxPriceManwon ? String(preference.maxPriceManwon) : "");
-    setMinArea("");
-    setMaxArea("");
+    setMinArea(preference.minArea ? String(preference.minArea) : "");
+    setMaxArea(preference.maxArea ? String(preference.maxArea) : "");
     setSavedOnly(false);
     setVisibleCount(6);
   };
@@ -1418,10 +1425,13 @@ export default function Home() {
       const preference = await saveSearchPreference({
         region: region === "전체" ? undefined : region,
         housingCategory: category === "전체" ? undefined : categoryValue(category),
+        supplyType,
         status: activeStatus.toUpperCase() as MemberSearchPreference["status"],
         sort: sortKey,
         minPriceManwon: priceInManwon(minPriceManwon),
         maxPriceManwon: priceInManwon(maxPriceManwon),
+        minArea: priceInManwon(minArea),
+        maxArea: priceInManwon(maxArea),
       });
       setSearchPreference(preference);
       setToast("현재 검색조건을 계정에 저장했습니다.");
@@ -1448,10 +1458,13 @@ export default function Home() {
   const currentSearchInput = (): SearchPreferenceInput => ({
     region: region === "전체" ? undefined : region,
     housingCategory: category === "전체" ? undefined : categoryValue(category),
+    supplyType,
     status: activeStatus.toUpperCase() as SearchPreferenceInput["status"],
     sort: sortKey,
     minPriceManwon: priceInManwon(minPriceManwon),
     maxPriceManwon: priceInManwon(maxPriceManwon),
+    minArea: priceInManwon(minArea),
+    maxArea: priceInManwon(maxArea),
   });
 
   const handleCreateSavedSearchProfile = async () => {
@@ -1475,7 +1488,7 @@ export default function Home() {
 
   const openSavedSearchProfileEditor = (profile: SavedSearchProfile) => {
     setSavedSearchProfileName(profile.name);
-    setSavedSearchProfileDraft({ region: profile.region, housingCategory: profile.housingCategory, status: profile.status, sort: profile.sort, minPriceManwon: profile.minPriceManwon, maxPriceManwon: profile.maxPriceManwon });
+    setSavedSearchProfileDraft({ region: profile.region, housingCategory: profile.housingCategory, supplyType: profile.supplyType, status: profile.status, sort: profile.sort, minPriceManwon: profile.minPriceManwon, maxPriceManwon: profile.maxPriceManwon, minArea: profile.minArea, maxArea: profile.maxArea });
     setEditingSavedSearchProfile(profile);
   };
 
@@ -1621,6 +1634,8 @@ export default function Home() {
       supplyType,
       minPriceManwon: priceInManwon(minPriceManwon),
       maxPriceManwon: priceInManwon(maxPriceManwon),
+      minArea: priceInManwon(minArea),
+      maxArea: priceInManwon(maxArea),
       sort: sortKey,
     }));
     sharedUrl.searchParams.delete("notice");
@@ -2197,7 +2212,7 @@ export default function Home() {
                 <>
                   {searchPreference && (
                     <div className="saved-preference">
-                      <p>{searchPreference.region ?? "전국"} · {searchPreference.housingCategory ? CATEGORY_LABELS[searchPreference.housingCategory] : "전체 유형"} · {formatPricePreference(searchPreference)} · {STATUS_LABELS[searchPreference.status.toLowerCase() as StatusKey]} · {formatNoticeSort(searchPreference.sort)}</p>
+                      <p>{searchPreference.region ?? "전국"} · {searchPreference.housingCategory ? CATEGORY_LABELS[searchPreference.housingCategory] : "전체 유형"} · {searchPreference.supplyType ? SUPPLY_TYPE_LABELS[searchPreference.supplyType] : "전체 공급"} · {formatPricePreference(searchPreference)} · {formatAreaPreference(searchPreference)} · {STATUS_LABELS[searchPreference.status.toLowerCase() as StatusKey]} · {formatNoticeSort(searchPreference.sort)}</p>
                       <button type="button" onClick={() => { applySearchPreference(searchPreference); setToast("저장된 검색조건을 적용했습니다."); }} disabled={preferenceBusy}>불러오기</button>
                       <button type="button" onClick={() => void handleDeleteSearchPreference()} disabled={preferenceBusy}>삭제</button>
                     </div>
@@ -2206,7 +2221,7 @@ export default function Home() {
                   <div className="saved-search-profiles">
                     <div><b>내 저장 조건</b><button type="button" onClick={() => void handleCreateSavedSearchProfile()} disabled={preferenceBusy}>새 이름으로 저장</button></div>
                     {savedSearchProfiles.length === 0 ? <p>여러 조건을 이름으로 저장해 빠르게 다시 적용할 수 있어요.</p> : savedSearchProfiles.map((profile) => (
-                      <article key={profile.id}><span><b>{profile.name}{profile.defaultProfile && <em>기본</em>}</b><small>{profile.region ?? "전국"} · {profile.housingCategory ? CATEGORY_LABELS[profile.housingCategory] : "전체 유형"} · {formatPricePreference(profile)}</small></span><div><button className={profile.newNoticeEnabled ? "profile-notice-on" : "profile-notice-off"} type="button" onClick={() => void handleSavedSearchProfileNoticeToggle(profile)} disabled={preferenceBusy}>{profile.newNoticeEnabled ? "신규 알림 켜짐" : "신규 알림 꺼짐"}</button><button type="button" onClick={() => { applySearchPreference(profile); setToast(`'${profile.name}' 조건을 적용했습니다.`); }} disabled={preferenceBusy}>적용</button><button type="button" onClick={() => openSavedSearchProfileEditor(profile)} disabled={preferenceBusy}>수정</button><button type="button" onClick={() => void handleDuplicateSavedSearchProfile(profile)} disabled={preferenceBusy}>복제</button>{!profile.defaultProfile && <button type="button" onClick={() => void handleDefaultSavedSearchProfile(profile)} disabled={preferenceBusy}>기본 설정</button>}<button type="button" onClick={() => void handleDeleteSavedSearchProfile(profile)} disabled={preferenceBusy}>삭제</button></div></article>
+                      <article key={profile.id}><span><b>{profile.name}{profile.defaultProfile && <em>기본</em>}</b><small>{profile.region ?? "전국"} · {profile.housingCategory ? CATEGORY_LABELS[profile.housingCategory] : "전체 유형"} · {profile.supplyType ? SUPPLY_TYPE_LABELS[profile.supplyType] : "전체 공급"} · {formatPricePreference(profile)} · {formatAreaPreference(profile)}</small></span><div><button className={profile.newNoticeEnabled ? "profile-notice-on" : "profile-notice-off"} type="button" onClick={() => void handleSavedSearchProfileNoticeToggle(profile)} disabled={preferenceBusy}>{profile.newNoticeEnabled ? "신규 알림 켜짐" : "신규 알림 꺼짐"}</button><button type="button" onClick={() => { applySearchPreference(profile); setToast(`'${profile.name}' 조건을 적용했습니다.`); }} disabled={preferenceBusy}>적용</button><button type="button" onClick={() => openSavedSearchProfileEditor(profile)} disabled={preferenceBusy}>수정</button><button type="button" onClick={() => void handleDuplicateSavedSearchProfile(profile)} disabled={preferenceBusy}>복제</button>{!profile.defaultProfile && <button type="button" onClick={() => void handleDefaultSavedSearchProfile(profile)} disabled={preferenceBusy}>기본 설정</button>}<button type="button" onClick={() => void handleDeleteSavedSearchProfile(profile)} disabled={preferenceBusy}>삭제</button></div></article>
                     ))}
                   </div>
                 </>
@@ -2214,7 +2229,7 @@ export default function Home() {
                 <button className="save-preference-button" type="button" onClick={() => void handleSaveSearchPreference()}>로그인하고 조건 저장</button>
               )}
             </div>
-            <div className="modal-actions"><button className="reset-button" type="button" onClick={() => { setRegion("전체"); setCategory("전체"); setMinPriceManwon(""); setMaxPriceManwon(""); setIncludeClosed(false); resetVisible(); }}>초기화</button><button className="primary-button" type="button" onClick={() => { rememberSearch(); setFilterOpen(false); setSavedOnly(false); }}>공고 {noticeTotal}건 보기</button></div>
+            <div className="modal-actions"><button className="reset-button" type="button" onClick={() => { setRegion("전체"); setCategory("전체"); setSupplyType(undefined); setMinPriceManwon(""); setMaxPriceManwon(""); setMinArea(""); setMaxArea(""); setIncludeClosed(false); resetVisible(); }}>초기화</button><button className="primary-button" type="button" onClick={() => { rememberSearch(); setFilterOpen(false); setSavedOnly(false); }}>공고 {noticeTotal}건 보기</button></div>
           </section>
         </div>
       )}
@@ -2228,10 +2243,13 @@ export default function Home() {
               <div className="profile-editor-fields">
                 <label>지역<select value={savedSearchProfileDraft.region ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, region: event.target.value || undefined }))}><option value="">전국</option>{availableRegions.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
                 <label>주택 유형<select value={savedSearchProfileDraft.housingCategory ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, housingCategory: event.target.value as HousingCategory || undefined }))}><option value="">전체 유형</option>{(Object.entries(CATEGORY_LABELS) as Array<[HousingCategory, string]>).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+                <label>공급 방식<select value={savedSearchProfileDraft.supplyType ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, supplyType: event.target.value as SupplyType || undefined }))}><option value="">전체 공급</option>{(Object.entries(SUPPLY_TYPE_LABELS) as Array<[SupplyType, string]>).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
                 <label>공고 상태<select value={savedSearchProfileDraft.status} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, status: event.target.value as SearchPreferenceInput["status"] }))}>{(["ALL", "TODAY", "OPEN", "UPCOMING"] as const).map((value) => <option value={value} key={value}>{STATUS_LABELS[value.toLowerCase() as StatusKey]}</option>)}</select></label>
                 <label>정렬<select value={savedSearchProfileDraft.sort} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, sort: event.target.value as SearchPreferenceInput["sort"] }))}><option value="LATEST">최신 공고순</option><option value="DEADLINE">마감 임박순</option><option value="APPLY_START">접수 시작일순</option><option value="WINNER_ANNOUNCEMENT">당첨 발표일순</option><option value="PRICE_ASC">낮은 분양가순</option><option value="SUPPLY_DESC">공급 세대 많은순</option></select></label>
                 <label>최소 예산 (만원)<input type="number" min="0" max="1000000" inputMode="numeric" value={savedSearchProfileDraft.minPriceManwon ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, minPriceManwon: priceInManwon(event.target.value) }))} placeholder="예: 30000" /></label>
                 <label>최대 예산 (만원)<input type="number" min="0" max="1000000" inputMode="numeric" value={savedSearchProfileDraft.maxPriceManwon ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, maxPriceManwon: priceInManwon(event.target.value) }))} placeholder="예: 60000" /></label>
+                <label>최소 면적 (㎡)<input type="number" min="0" max="1000" inputMode="decimal" value={savedSearchProfileDraft.minArea ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, minArea: priceInManwon(event.target.value) }))} placeholder="예: 59" /></label>
+                <label>최대 면적 (㎡)<input type="number" min="0" max="1000" inputMode="decimal" value={savedSearchProfileDraft.maxArea ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, maxArea: priceInManwon(event.target.value) }))} placeholder="예: 84" /></label>
               </div>
               <div className="modal-actions"><button className="reset-button" type="button" onClick={() => setEditingSavedSearchProfile(undefined)}>취소</button><button className="primary-button" type="submit" disabled={preferenceBusy}>{preferenceBusy ? "저장 중…" : "저장"}</button></div>
             </form>

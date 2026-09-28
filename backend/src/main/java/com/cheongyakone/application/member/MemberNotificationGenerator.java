@@ -9,6 +9,8 @@ import com.cheongyakone.domain.member.MemberSavedSearchProfileRepository;
 import com.cheongyakone.domain.member.NotificationType;
 import com.cheongyakone.domain.notice.SubscriptionNotice;
 import com.cheongyakone.domain.notice.SubscriptionNoticeRepository;
+import com.cheongyakone.domain.notice.SubscriptionNoticeUnitType;
+import com.cheongyakone.domain.notice.SubscriptionNoticeUnitTypeRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -38,6 +40,7 @@ public class MemberNotificationGenerator {
     private final MemberSearchPreferenceRepository searchPreferenceRepository;
     private final MemberSavedSearchProfileRepository savedSearchProfileRepository;
     private final SubscriptionNoticeRepository noticeRepository;
+    private final SubscriptionNoticeUnitTypeRepository unitTypeRepository;
     private final MemberNotificationRepository notificationRepository;
     private final MemberNotificationWriter notificationWriter;
     private final Clock clock;
@@ -48,6 +51,7 @@ public class MemberNotificationGenerator {
             MemberSearchPreferenceRepository searchPreferenceRepository,
             MemberSavedSearchProfileRepository savedSearchProfileRepository,
             SubscriptionNoticeRepository noticeRepository,
+            SubscriptionNoticeUnitTypeRepository unitTypeRepository,
             MemberNotificationRepository notificationRepository,
             MemberNotificationWriter notificationWriter,
             Clock clock
@@ -57,6 +61,7 @@ public class MemberNotificationGenerator {
         this.searchPreferenceRepository = searchPreferenceRepository;
         this.savedSearchProfileRepository = savedSearchProfileRepository;
         this.noticeRepository = noticeRepository;
+        this.unitTypeRepository = unitTypeRepository;
         this.notificationRepository = notificationRepository;
         this.notificationWriter = notificationWriter;
         this.clock = clock;
@@ -132,6 +137,7 @@ public class MemberNotificationGenerator {
         return createdCount;
     }
 
+    @Transactional
     public int generateMatchingFor(LocalDate today) {
         Instant dayStart = today.atStartOfDay(KOREA_ZONE).toInstant();
         Instant dayEnd = today.plusDays(1).atStartOfDay(KOREA_ZONE).toInstant();
@@ -140,6 +146,9 @@ public class MemberNotificationGenerator {
         if (notices.isEmpty() || savedProfiles.isEmpty()) {
             return 0;
         }
+        Map<Long, List<SubscriptionNoticeUnitType>> unitTypesByNotice = unitTypeRepository
+                .findAllByNoticeIdIn(notices.stream().map(SubscriptionNotice::getId).toList())
+                .stream().collect(Collectors.groupingBy(item -> item.getNotice().getId()));
 
         Set<Long> memberIds = savedProfiles.stream()
                 .map(preference -> preference.getMemberId())
@@ -163,7 +172,7 @@ public class MemberNotificationGenerator {
                 continue;
             }
             for (SubscriptionNotice notice : notices) {
-                if (!MemberNoticePreferenceMatcher.matches(notice, savedProfile, today)) {
+                if (!MemberNoticePreferenceMatcher.matches(notice, savedProfile, today, unitTypesByNotice.getOrDefault(notice.getId(), List.of()))) {
                     continue;
                 }
                 try {

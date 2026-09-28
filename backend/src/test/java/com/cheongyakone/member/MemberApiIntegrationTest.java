@@ -510,10 +510,13 @@ class MemberApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.region").value("서울"))
                 .andExpect(jsonPath("$.housingCategory").value("APARTMENT"))
+                .andExpect(jsonPath("$.supplyType").value("SALE"))
                 .andExpect(jsonPath("$.status").value("OPEN"))
                 .andExpect(jsonPath("$.sort").value("DEADLINE"))
                 .andExpect(jsonPath("$.minPriceManwon").value(30000))
-                .andExpect(jsonPath("$.maxPriceManwon").value(60000));
+                .andExpect(jsonPath("$.maxPriceManwon").value(60000))
+                .andExpect(jsonPath("$.minArea").value(59))
+                .andExpect(jsonPath("$.maxArea").value(84));
 
         mockMvc.perform(get("/api/v1/members/me/search-preference").cookie(session.cookie()))
                 .andExpect(status().isOk())
@@ -1262,7 +1265,7 @@ class MemberApiIntegrationTest {
 
     private String searchPreferenceJson() {
         return """
-                {"region":"서울","housingCategory":"APARTMENT","status":"OPEN","sort":"DEADLINE","minPriceManwon":30000,"maxPriceManwon":60000}
+                {"region":"서울","housingCategory":"APARTMENT","supplyType":"SALE","status":"OPEN","sort":"DEADLINE","minPriceManwon":30000,"maxPriceManwon":60000,"minArea":59,"maxArea":84}
                 """;
     }
 
