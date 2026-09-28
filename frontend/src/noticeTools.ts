@@ -14,6 +14,8 @@ export interface NoticeSearchState {
   supplyType?: NoticeFilterSupplyType;
   minPriceManwon?: number;
   maxPriceManwon?: number;
+  minArea?: number;
+  maxArea?: number;
   includeClosed: boolean;
   sort: NoticeSortKey;
 }
@@ -58,6 +60,8 @@ export function noticeSearchStateFromSearch(search: string): NoticeSearchState {
   const supplyTypeValue = params.get("supplyType");
   const minPriceManwon = positiveInteger(params.get("minPriceManwon"));
   const maxPriceManwon = positiveInteger(params.get("maxPriceManwon"));
+  const minArea = positiveInteger(params.get("minArea"));
+  const maxArea = positiveInteger(params.get("maxArea"));
   return {
     query: (params.get("q") ?? "").trim().slice(0, 100),
     status: (["today", "open", "upcoming"] as const).includes(statusValue as "today" | "open" | "upcoming")
@@ -72,6 +76,8 @@ export function noticeSearchStateFromSearch(search: string): NoticeSearchState {
       : undefined,
     ...(minPriceManwon ? { minPriceManwon } : {}),
     ...(maxPriceManwon ? { maxPriceManwon } : {}),
+    ...(minArea ? { minArea } : {}),
+    ...(maxArea ? { maxArea } : {}),
     includeClosed: params.get("includeClosed") === "true",
     sort: isNoticeSortKey(params.get("sort")) ? params.get("sort") as NoticeSortKey : "LATEST",
   };
@@ -88,6 +94,8 @@ export function noticeSearchUrl(currentUrl: string, state: NoticeSearchState): s
     ["supplyType", state.supplyType],
     ["minPriceManwon", state.minPriceManwon ? String(state.minPriceManwon) : undefined],
     ["maxPriceManwon", state.maxPriceManwon ? String(state.maxPriceManwon) : undefined],
+    ["minArea", state.minArea ? String(state.minArea) : undefined],
+    ["maxArea", state.maxArea ? String(state.maxArea) : undefined],
     ["includeClosed", state.includeClosed ? "true" : undefined],
     ["sort", state.sort === "LATEST" ? undefined : state.sort],
   ];
@@ -111,6 +119,8 @@ function normalizeNoticeSearchState(value: unknown): NoticeSearchState | undefin
   const supplyType = ["SALE", "PUBLIC_RENTAL"].includes(state.supplyType ?? "") ? state.supplyType as NoticeFilterSupplyType : undefined;
   const minPriceManwon = typeof state.minPriceManwon === "number" && Number.isSafeInteger(state.minPriceManwon) && state.minPriceManwon > 0 ? state.minPriceManwon : undefined;
   const maxPriceManwon = typeof state.maxPriceManwon === "number" && Number.isSafeInteger(state.maxPriceManwon) && state.maxPriceManwon > 0 ? state.maxPriceManwon : undefined;
+  const minArea = typeof state.minArea === "number" && Number.isSafeInteger(state.minArea) && state.minArea > 0 ? state.minArea : undefined;
+  const maxArea = typeof state.maxArea === "number" && Number.isSafeInteger(state.maxArea) && state.maxArea > 0 ? state.maxArea : undefined;
   return {
     query: typeof state.query === "string" ? state.query.trim().slice(0, 100) : "",
     status,
@@ -119,6 +129,8 @@ function normalizeNoticeSearchState(value: unknown): NoticeSearchState | undefin
     supplyType,
     ...(minPriceManwon ? { minPriceManwon } : {}),
     ...(maxPriceManwon ? { maxPriceManwon } : {}),
+    ...(minArea ? { minArea } : {}),
+    ...(maxArea ? { maxArea } : {}),
     includeClosed: state.includeClosed === true,
     sort: state.sort ?? "LATEST",
   };
@@ -147,7 +159,7 @@ export function normalizeRecentNoticeSearches(value: unknown, maxSize = 5): Rece
 export function updateRecentNoticeSearches(current: RecentNoticeSearch[], state: NoticeSearchState, usedAt = Date.now(), maxSize = 5): RecentNoticeSearch[] {
   const normalized = normalizeNoticeSearchState(state);
   if (!normalized) return normalizeRecentNoticeSearches(current, maxSize);
-  const meaningful = Boolean(normalized.query || normalized.region || normalized.category || normalized.supplyType || normalized.minPriceManwon || normalized.maxPriceManwon || normalized.includeClosed || normalized.status !== "all" || normalized.sort !== "LATEST");
+  const meaningful = Boolean(normalized.query || normalized.region || normalized.category || normalized.supplyType || normalized.minPriceManwon || normalized.maxPriceManwon || normalized.minArea || normalized.maxArea || normalized.includeClosed || normalized.status !== "all" || normalized.sort !== "LATEST");
   if (!meaningful) return normalizeRecentNoticeSearches(current, maxSize);
   const key = JSON.stringify(normalized);
   return [{ state: normalized, usedAt }, ...normalizeRecentNoticeSearches(current, maxSize).filter((entry) => JSON.stringify(entry.state) !== key)].slice(0, Math.max(0, maxSize));
