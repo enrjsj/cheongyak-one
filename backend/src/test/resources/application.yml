@@ -27,3 +27,6 @@ app:
     email-cron: "-"
     cleanup-cron: "-"
     zone: Asia/Seoul
+  member-notification-channel:
+    kakao-alimtalk-delivery: disabled
+    sms-delivery: disabled

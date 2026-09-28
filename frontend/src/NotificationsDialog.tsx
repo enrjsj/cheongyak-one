@@ -17,7 +17,10 @@ import {
   notificationFilterOptions,
 } from "./notificationTools";
 import type { NotificationFilter } from "./notificationTools";
+import { fetchNotificationChannelAvailability } from "./notificationChannelsApi";
+import type { NotificationChannelAvailability } from "./notificationChannelsApi";
 import "./notificationInbox.css";
+import "./notificationChannelStatus.css";
 
 interface NotificationsDialogProps {
   open: boolean;
@@ -37,6 +40,11 @@ const DEFAULT_PREFERENCE: NotificationPreference = {
   emailEnabled: false,
   appPushEnabled: true,
 };
+
+const DEFAULT_OUTBOUND_CHANNELS: NotificationChannelAvailability[] = [
+  { id: "KAKAO_ALIMTALK", label: "카카오 알림톡", available: false, message: "사업자 채널·승인 템플릿을 연결한 뒤 사용할 수 있어요." },
+  { id: "SMS", label: "문자", available: false, message: "발신번호와 문자 발송사를 연결한 뒤 사용할 수 있어요." },
+];
 
 const PREFERENCE_OPTIONS: Array<{ key: Exclude<keyof Omit<NotificationPreference, "updatedAt">, "emailEnabled">; label: string }> = [
   { key: "applyStartEnabled", label: "접수 시작일" },
@@ -70,6 +78,7 @@ export default function NotificationsDialog({
   const [filter, setFilter] = useState<NotificationFilter>("ALL");
   const [inbox, setInbox] = useState<NotificationInbox>({ notifications: [], unreadCount: 0 });
   const [preference, setPreference] = useState<NotificationPreference>(DEFAULT_PREFERENCE);
+  const [channels, setChannels] = useState<NotificationChannelAvailability[]>(DEFAULT_OUTBOUND_CHANNELS);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<number>();
   const [saving, setSaving] = useState(false);
@@ -100,8 +109,8 @@ export default function NotificationsDialog({
     setError("");
     setNotice("");
     setFilter("ALL");
-    Promise.allSettled([fetchNotificationInbox(), fetchNotificationPreference()])
-      .then(([inboxResult, preferenceResult]) => {
+    Promise.allSettled([fetchNotificationInbox(), fetchNotificationPreference(), fetchNotificationChannelAvailability()])
+      .then(([inboxResult, preferenceResult, channelResult]) => {
         if (cancelled) return;
         if (inboxResult.status === "fulfilled") {
           setInbox(inboxResult.value);
@@ -115,6 +124,9 @@ export default function NotificationsDialog({
           setPreference({ ...DEFAULT_PREFERENCE, ...preferenceResult.value });
         } else if (inboxResult.status === "fulfilled") {
           setError("알림은 불러왔지만 알림 설정을 확인하지 못했습니다.");
+        }
+        if (channelResult.status === "fulfilled") {
+          setChannels(channelResult.value.channels);
         }
       })
       .finally(() => {
@@ -255,6 +267,16 @@ export default function NotificationsDialog({
               <span><b>앱 푸시로 받기</b><small>하이브리드 앱에서 알림 권한과 기기를 등록한 경우에만 발송돼요.</small></span>
               <input type="checkbox" checked={preference.appPushEnabled} onChange={(event) => setPreference((current) => ({ ...current, appPushEnabled: event.target.checked }))} />
             </label>
+            <div className="notification-channel-status" aria-label="외부 알림 채널 상태">
+              <b>추가 알림 채널</b>
+              <p>공개 테스트에서는 유료 발송을 실행하지 않아요.</p>
+              {channels.filter((channel) => channel.id === "KAKAO_ALIMTALK" || channel.id === "SMS").map((channel) => (
+                <div key={channel.id}>
+                  <span>{channel.label}</span><em className={channel.available ? "ready" : "pending"}>{channel.available ? "연결됨" : "준비 중"}</em>
+                  <small>{channel.message}</small>
+                </div>
+              ))}
+            </div>
             <button className="primary-button" type="submit" disabled={saving}>{saving ? "저장 중…" : "알림 설정 저장"}</button>
           </form>
         )}
