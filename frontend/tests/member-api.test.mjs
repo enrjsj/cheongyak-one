@@ -161,6 +161,37 @@ test("member requests include the HttpOnly session cookie and expected methods",
   assert.equal(new Headers(requests[1].init.headers).get("X-CSRF-Token"), "csrf-token");
 });
 
+test("uses the CSRF token returned by the cross-origin API response", async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  const originalDocument = globalThis.document;
+  globalThis.document = { cookie: "" };
+  globalThis.fetch = async (url, init) => {
+    requests.push({ url: String(url), init });
+    if (String(url).includes("/auth/login")) {
+      return new Response(JSON.stringify({ id: 1, email: "admin@example.com", nickname: "관리자" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": "response-token" },
+      });
+    }
+    return new Response(JSON.stringify({ noticeIds: [11] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    await loginMember("admin@example.com", "password-1234");
+    await mergeFavoriteIds([11]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+
+  assert.equal(new Headers(requests[1].init.headers).get("X-CSRF-Token"), "response-token");
+});
+
 test("signup and profile update send optional recommendation profile fields", async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;

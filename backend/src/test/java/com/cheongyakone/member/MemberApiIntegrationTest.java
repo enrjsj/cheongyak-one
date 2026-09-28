@@ -88,6 +88,7 @@ class MemberApiIntegrationTest {
         MvcResult login = login("MEMBER1@example.com", PASSWORD)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("member1@example.com"))
+                .andExpect(header().exists("X-CSRF-Token"))
                 .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("HttpOnly")))
                 .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("SameSite=Lax")))
                 .andReturn();
@@ -95,6 +96,7 @@ class MemberApiIntegrationTest {
 
         mockMvc.perform(get("/api/v1/members/me").cookie(session.cookie()))
                 .andExpect(status().isOk())
+                .andExpect(header().exists("X-CSRF-Token"))
                 .andExpect(jsonPath("$.nickname").value("첫회원"));
 
         mockMvc.perform(authenticated(patch("/api/v1/members/me"), session)

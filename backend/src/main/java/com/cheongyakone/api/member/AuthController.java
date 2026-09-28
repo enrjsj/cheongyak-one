@@ -57,6 +57,7 @@ public class AuthController {
     ) {
         MemberService.LoginResult result = memberService.login(request, servletRequest.getHeader(HttpHeaders.USER_AGENT));
         return ResponseEntity.ok()
+                .header(CsrfProtectionInterceptor.CSRF_HEADER, tokenCodec.csrfToken(result.rawToken()))
                 .header(
                         HttpHeaders.SET_COOKIE,
                         cookieSupport.create(result.rawToken(), result.expiresAt(), clock.instant()).toString(),
