@@ -32,7 +32,7 @@ public class RebOfficetelUnitTypeSyncService {
     public UnitTypeSyncResult synchronize(List<String> sourceNoticeIds, Instant syncTime) {
         if (!client.enabled()) {
             log.info("Officetel unit type synchronization was skipped because REB_API_KEY is not configured");
-            return UnitTypeSyncResult.disabled();
+            return UnitTypeSyncResult.notConfigured();
         }
 
         int attempted = 0;

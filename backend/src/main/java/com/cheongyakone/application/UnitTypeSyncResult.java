@@ -8,7 +8,7 @@ public record UnitTypeSyncResult(
         int failedNoticeCount,
         boolean disabled
 ) {
-    public static UnitTypeSyncResult disabled() {
+    public static UnitTypeSyncResult notConfigured() {
         return new UnitTypeSyncResult(0, 0, 0, 0, true);
     }
 }
