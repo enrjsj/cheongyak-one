@@ -107,6 +107,8 @@ type FavoriteSortKey = "PREPARATION" | "DEADLINE" | "RESULT";
 // 처음 화면에 너무 많은 카드를 만들지 않아 Render Free 기동 뒤의 체감 시간을 줄인다.
 const NOTICE_PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
+const STATUS_KEYS: StatusKey[] = ["all", "today", "open", "upcoming"];
+const noticePagePrefetches = new Map<string, ReturnType<typeof fetchNoticePage>>();
 
 const FAVORITE_PROGRESS_LABELS: Record<FavoriteProgress, string> = {
   SAVED: "저장만 함",
@@ -649,10 +651,10 @@ export default function Home() {
     setVisibleCount(6);
   };
 
-  const currentSearchRequest = () => ({
+  const currentSearchRequest = (statusKey: StatusKey = activeStatus) => ({
     category: categoryValue(category),
     supplyType,
-    status: activeStatus === "open" ? "OPEN" as const : activeStatus === "upcoming" ? "UPCOMING" as const : undefined,
+    status: statusKey === "open" ? "OPEN" as const : statusKey === "upcoming" ? "UPCOMING" as const : undefined,
     keyword: debouncedQuery,
     region: region === "전체" ? undefined : region,
     minPrice: priceInWon(minPriceManwon),
@@ -660,8 +662,8 @@ export default function Home() {
     minArea: priceInManwon(minArea),
     maxArea: priceInManwon(maxArea),
     ids: savedOnly ? [...savedIds] : undefined,
-    endingToday: activeStatus === "today",
-    activeOnly: activeStatus === "all" && !includeClosed,
+    endingToday: statusKey === "today",
+    activeOnly: statusKey === "all" && !includeClosed,
     sort: sortKey,
     size: NOTICE_PAGE_SIZE,
   });
@@ -732,35 +734,85 @@ export default function Home() {
 
   useEffect(() => {
     const controller = new AbortController();
+    const request = currentSearchRequest("all");
+    setFacetsLoading(true);
+    void fetchNoticeFacets({
+      category: request.category,
+      supplyType: request.supplyType,
+      keyword: request.keyword,
+      region: request.region,
+      minPrice: request.minPrice,
+      maxPrice: request.maxPrice,
+      minArea: request.minArea,
+      maxArea: request.maxArea,
+    }, controller.signal)
+      .then((facets) => setNoticeFacets(facets))
+      .catch(() => undefined)
+      .finally(() => { if (!controller.signal.aborted) setFacetsLoading(false); });
+    return () => controller.abort();
+  }, [category, debouncedQuery, maxArea, maxPriceManwon, minArea, minPriceManwon, region, supplyType]);
+
+  useEffect(() => {
+    const controller = new AbortController();
     let retryTimer: number | undefined;
     const timer = window.setTimeout(() => {
-      setLoading(true);
-      setFacetsLoading(true);
-      setCachedListShownAt(undefined);
-      setLoadError("");
       const request = currentSearchRequest();
       if (savedOnly && request.ids?.length === 0) {
         setNotices([]);
         setNoticeTotal(0);
-        setFacetsLoading(false);
         setLoading(false);
         return;
       }
       const cacheKey = noticePageCacheKey({ ...request, page: 0 });
       const cached = savedOnly ? undefined : readCachedNoticePage(window.sessionStorage, cacheKey);
+      setLoading(!cached);
+      setCachedListShownAt(cached?.cachedAt);
+      setLoadError("");
       if (cached) {
         setNotices(cached.page.content);
         setNoticePage(cached.page.number);
         setNoticeTotal(cached.page.totalElements);
-        setCachedListShownAt(cached.cachedAt);
         setKnownNotices((known) => {
           const next = new Map(known);
           cached.page.content.forEach((notice) => next.set(notice.id, notice));
           return next;
         });
       }
-      fetchNoticePage({ ...request, page: 0 }, controller.signal)
-      .then((page) => {
+
+      const activePageRequest = cached
+        ? undefined
+        : noticePagePrefetches.get(cacheKey) ?? fetchNoticePage({ ...request, page: 0 }, controller.signal);
+
+      // 첫 화면이 표시되는 동안 다른 상태 탭의 첫 페이지도 받아 두어 탭 전환을 즉시 처리한다.
+      if (!savedOnly) {
+        STATUS_KEYS.filter((statusKey) => statusKey !== activeStatus).forEach((statusKey) => {
+          const prefetchRequest = { ...currentSearchRequest(statusKey), page: 0 };
+          const prefetchCacheKey = noticePageCacheKey(prefetchRequest);
+          if (readCachedNoticePage(window.sessionStorage, prefetchCacheKey) || noticePagePrefetches.has(prefetchCacheKey)) return;
+          const prefetch = fetchNoticePage(prefetchRequest);
+          noticePagePrefetches.set(prefetchCacheKey, prefetch);
+          void prefetch
+            .then((page) => cacheNoticePage(window.sessionStorage, prefetchCacheKey, page))
+            // 사전 요청 실패는 현재 탭의 목록 사용을 막지 않는다.
+            .catch(() => undefined)
+            .finally(() => noticePagePrefetches.delete(prefetchCacheKey));
+        });
+      }
+
+      if (cached) {
+        if (!freshnessLoaded.current) {
+          freshnessLoaded.current = true;
+          void fetchNoticeFreshness(controller.signal)
+            .then((freshness) => setNoticeFreshness(freshness))
+            .catch(() => { freshnessLoaded.current = false; });
+        }
+        setLoading(false);
+        return;
+      }
+
+      activePageRequest!
+        .then((page) => {
+        if (controller.signal.aborted) return;
         automaticLoadRetryCount.current = 0;
         if (!savedOnly) cacheNoticePage(window.sessionStorage, cacheKey, page);
         setNotices(page.content);
@@ -772,12 +824,6 @@ export default function Home() {
           page.content.forEach((notice) => next.set(notice.id, notice));
           return next;
         });
-
-        // 목록이 먼저 보이면 상태 집계·기준 시각이 약간 늦어도 화면은 바로 사용할 수 있다.
-        void fetchNoticeFacets(request, controller.signal)
-          .then((facets) => setNoticeFacets(facets))
-          .catch(() => undefined)
-          .finally(() => { if (!controller.signal.aborted) setFacetsLoading(false); });
 
         if (!freshnessLoaded.current) {
           freshnessLoaded.current = true;
