@@ -16,7 +16,7 @@ concurrency:
 jobs:
   synchronize:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       RENDER_API_BASE_URL: ${{ secrets.RENDER_API_BASE_URL }}
       SCHEDULED_NOTICE_SYNC_API_KEY: ${{ secrets.SCHEDULED_NOTICE_SYNC_API_KEY }}
@@ -29,7 +29,8 @@ jobs:
           test -n "$SCHEDULED_NOTICE_SYNC_API_KEY"
 
           curl --fail-with-body --show-error --silent \
-            --retry 3 --retry-all-errors --retry-delay 10 \
-            --connect-timeout 30 --max-time 300 \
+            --retry 3 --retry-delay 10 --retry-connrefused \
+            --retry-max-time 780 \
+            --connect-timeout 30 --max-time 780 \
             --request POST "${RENDER_API_BASE_URL%/}/internal/scheduled-notice-sync" \
             --header "X-Scheduled-Sync-Key: ${SCHEDULED_NOTICE_SYNC_API_KEY}"
