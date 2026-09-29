@@ -364,6 +364,14 @@ class ApiError extends Error {
   }
 }
 
+export class ApiRequestTimeoutError extends Error {
+  constructor() {
+    super("서버 응답이 지연되고 있어요. 잠시 후 다시 시도해주세요.");
+    this.name = "ApiRequestTimeoutError";
+  }
+}
+
+const API_REQUEST_TIMEOUT_MS = 12_000;
 const DEMO_MODE = import.meta.env?.VITE_DEMO_MODE === "true";
 // Vercel은 빌드 시 이 값을 주입한다. 비어 있으면 Vite 개발 프록시와 같은 출처 API를 그대로 사용한다.
 const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
@@ -447,12 +455,32 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
     const token = csrfToken();
     if (token) headers.set("X-CSRF-Token", token);
   }
-  const response = await fetch(requestUrl, {
-    ...init,
-    headers,
-    // HttpOnly 회원 세션을 동일 출처 API 요청에 자동으로 포함한다.
-    credentials: "include",
-  });
+  const controller = new AbortController();
+  let timedOut = false;
+  const abortFromCaller = () => controller.abort();
+  if (init.signal?.aborted) controller.abort();
+  else init.signal?.addEventListener("abort", abortFromCaller, { once: true });
+  const timeout = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, API_REQUEST_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(requestUrl, {
+      ...init,
+      headers,
+      signal: controller.signal,
+      // HttpOnly 회원 세션을 동일 출처 API 요청에 자동으로 포함한다.
+      credentials: "include",
+    });
+  } catch (error) {
+    if (timedOut) throw new ApiRequestTimeoutError();
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+    init.signal?.removeEventListener("abort", abortFromCaller);
+  }
 
   const issuedCsrfToken = response.headers.get("X-CSRF-Token");
   if (issuedCsrfToken) responseCsrfToken = issuedCsrfToken;
