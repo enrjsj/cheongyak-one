@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   synchronize:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       RENDER_API_BASE_URL: ${{ secrets.RENDER_API_BASE_URL }}
