@@ -2,6 +2,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   changeMemberPassword,
+  ApiRequestTimeoutError,
   clearComparisons,
   confirmEmailVerification,
   deleteSearchPreference,
@@ -480,7 +481,8 @@ function categoryValue(label: string): HousingCategory | undefined {
 }
 
 function isTemporaryApiConnectionError(error: unknown): boolean {
-  return error instanceof TypeError && /fetch|network/i.test(error.message);
+  return error instanceof ApiRequestTimeoutError
+    || (error instanceof TypeError && /fetch|network/i.test(error.message));
 }
 
 function priceInManwon(value: string): number | undefined {
