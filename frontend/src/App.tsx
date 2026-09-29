@@ -781,9 +781,9 @@ export default function Home() {
         });
       }
 
-      const activePageRequest = cached
-        ? undefined
-        : noticePagePrefetches.get(cacheKey) ?? fetchNoticePage({ ...request, page: 0 }, controller.signal);
+      // 캐시를 즉시 표시하되, 백그라운드에서 최신 목록으로 갱신한다.
+      const activePageRequest = noticePagePrefetches.get(cacheKey)
+        ?? fetchNoticePage({ ...request, page: 0 }, controller.signal);
 
       // 첫 화면이 표시되는 동안 다른 상태 탭의 첫 페이지도 받아 두어 탭 전환을 즉시 처리한다.
       if (!savedOnly) {
@@ -799,17 +799,6 @@ export default function Home() {
             .catch(() => undefined)
             .finally(() => noticePagePrefetches.delete(prefetchCacheKey));
         });
-      }
-
-      if (cached) {
-        if (!freshnessLoaded.current) {
-          freshnessLoaded.current = true;
-          void fetchNoticeFreshness(controller.signal)
-            .then((freshness) => setNoticeFreshness(freshness))
-            .catch(() => { freshnessLoaded.current = false; });
-        }
-        setLoading(false);
-        return;
       }
 
       activePageRequest!
