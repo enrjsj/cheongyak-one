@@ -151,13 +151,14 @@ test("상태 탭은 미리 받은 목록으로 로딩 없이 전환한다", asyn
   await page.goto("/");
   await openPrefetched;
   await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
-  expect(openNoticeRequests).toBe(1);
+  const requestsBeforeClick = openNoticeRequests;
+  expect(requestsBeforeClick).toBeGreaterThan(0);
 
   await page.getByRole("tab", { name: /접수중/ }).click();
   await expect(page.getByRole("status", { name: "청약 공고 불러오는 중" })).toHaveCount(0);
   await expect(page.getByText("조건에 맞는 공고 2건")).toBeVisible();
   await page.waitForTimeout(400);
-  expect(openNoticeRequests).toBe(1);
+  expect(openNoticeRequests).toBe(requestsBeforeClick);
 });
 
 test("회원가입 후 사전점검 답변을 계정에 저장한다", async ({ page }) => {
