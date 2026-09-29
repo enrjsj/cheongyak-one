@@ -460,7 +460,7 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   const abortFromCaller = () => controller.abort();
   if (init.signal?.aborted) controller.abort();
   else init.signal?.addEventListener("abort", abortFromCaller, { once: true });
-  const timeout = window.setTimeout(() => {
+  const timeout = globalThis.setTimeout(() => {
     timedOut = true;
     controller.abort();
   }, API_REQUEST_TIMEOUT_MS);
@@ -478,7 +478,7 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
     if (timedOut) throw new ApiRequestTimeoutError();
     throw error;
   } finally {
-    window.clearTimeout(timeout);
+    globalThis.clearTimeout(timeout);
     init.signal?.removeEventListener("abort", abortFromCaller);
   }
 
