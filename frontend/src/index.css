@@ -301,6 +301,10 @@ a { color: inherit; text-decoration: none; }
 .empty-state p { margin: 0; color: #8a93a2; font-size: 11px; }
 .empty-state button { margin-top: 18px; height: 38px; padding: 0 14px; border: 1px solid #d9e0e9; border-radius: 9px; background: white; color: #586477; font-size: 11px; font-weight: 700; cursor: pointer; }
 .list-loading { display: grid; gap: 13px; }
+.notice-load-status { margin-bottom: 16px; padding: 16px; border: 1px solid #dce5ee; border-radius: 12px; background: #f5f7fa; }
+.notice-load-status p { margin: 0 0 6px; font-weight: 600; }
+.notice-load-status small { display: block; color: #526477; line-height: 1.6; }
+.notice-load-status button { margin-top: 10px; min-height: 44px; padding: 8px 14px; border: 1px solid #c3d1df; border-radius: 8px; background: white; color: #24425e; cursor: pointer; }
 .list-skeleton { height: 185px; padding: 22px; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: white; }
 .list-skeleton > * { display: block; border-radius: 7px; background: linear-gradient(90deg, #edf0f4 25%, #f8f9fb 50%, #edf0f4 75%); background-size: 200% 100%; animation: skeleton-shine 1.4s ease-in-out infinite; }
 .list-skeleton i { width: 92px; height: 24px; }
