@@ -5,7 +5,7 @@ const notices = [
   { id: 2, sourceSystem: "MYHOME_PUBLIC_RENTAL", housingCategory: "PUBLIC_RENTAL", status: "UPCOMING", title: "E2E 경기 행복주택", regionCode: "경기", address: "경기도 고양시", noticeDate: "2026-09-02", applyStartDate: "2026-09-21", applyEndDate: "2026-09-25", winnerAnnounceDate: "2026-10-03", totalUnits: 80, officialUrl: "https://applyhome.example/2", syncedAt: "2026-09-01T00:00:00Z" },
 ];
 
-async function mockApi(page: Page, options: { failInitialNoticeLoad?: boolean } = {}) {
+async function mockApi(page: Page, options: { failInitialNoticeLoad?: boolean; failNoticeLoads?: number; noticeFailureStatus?: number } = {}) {
   let member: Record<string, unknown> | undefined;
   let favoriteIds: number[] = [];
   let failedNoticeRequests = 0;
@@ -31,8 +31,10 @@ async function mockApi(page: Page, options: { failInitialNoticeLoad?: boolean } 
     if (path === "/api/v1/notices/facets" || path === "/api/v1/notices") {
       // 목록이 첫 요청 실패 후 재시도되는 사용자 흐름을 검증한다.
       // 상태 집계는 목록 표시 뒤의 보조 요청이므로 실패 시나리오에 섞지 않는다.
-      if (path === "/api/v1/notices" && options.failInitialNoticeLoad && failedNoticeRequests < 1) {
+      if (path === "/api/v1/notices" && url.searchParams.get("activeOnly") === "true"
+        && failedNoticeRequests < (options.failNoticeLoads ?? (options.failInitialNoticeLoad ? 1 : 0))) {
         failedNoticeRequests += 1;
+        if (options.noticeFailureStatus) return json({ detail: "공고 요청을 처리하지 못했습니다." }, options.noticeFailureStatus);
         return route.abort("failed");
       }
       if (path === "/api/v1/notices/facets") return json({ total: notices.length, endingToday: 0, open: 1, upcoming: 1 });
@@ -121,6 +123,69 @@ test("Render 기동 중 첫 공고 요청이 실패하면 자동으로 다시 �
 
   await expect(page.getByText(/서버를 깨우는 중이에요/)).toBeVisible();
   await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible({ timeout: 7_000 });
+});
+
+test("503 응답이 세 번 이어져도 대기 안내를 유지하고 공고를 복구한다", async ({ page }) => {
+  await page.clock.install();
+  await mockApi(page, { failNoticeLoads: 3, noticeFailureStatus: 503 });
+  await page.goto("/");
+  await expect(page.getByText(/4초 후 자동으로 다시 시도/)).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await page.clock.fastForward(4_000);
+  await expect(page.getByText(/7초 후 자동으로 다시 시도/)).toBeVisible();
+  await page.clock.fastForward(8_000);
+  await expect(page.getByText(/14초 후 자동으로 다시 시도/)).toBeVisible();
+  await page.clock.fastForward(15_000);
+  await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
+  await expect(page.getByText(/서버를 깨우는 중이에요/)).toHaveCount(0);
+});
+
+test("자동 대기 시간이 지나면 중단하고 수동 재시도로 새 대기를 시작한다", async ({ page }) => {
+  await page.clock.install();
+  await mockApi(page, { failNoticeLoads: Infinity, noticeFailureStatus: 503 });
+  await page.goto("/");
+  await expect(page.getByText(/서버를 깨우는 중이에요/)).toBeVisible();
+  await page.clock.fastForward(5 * 60_000 + 1_000);
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByText(/서버를 깨우는 중이에요/)).toHaveCount(0);
+  await page.getByRole("button", { name: "다시 불러오기", exact: true }).click();
+  await expect(page.getByText(/서버를 깨우는 중이에요/)).toBeVisible();
+});
+
+test("요청 오류는 자동 재시도하지 않고 검색 조건 변경은 이전 대기를 취소한다", async ({ page }) => {
+  const options = { failNoticeLoads: Infinity, noticeFailureStatus: 400 };
+  let requests = 0;
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/v1/notices" && url.searchParams.get("activeOnly") === "true") requests += 1;
+  });
+  await page.clock.install();
+  await mockApi(page, options);
+  await page.goto("/");
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.clock.fastForward(30_000);
+  expect(requests).toBe(1);
+  options.noticeFailureStatus = 503;
+  await page.getByRole("button", { name: "다시 불러오기", exact: true }).click();
+  await expect(page.getByText(/서버를 깨우는 중이에요/)).toBeVisible();
+  await page.getByRole("tab", { name: /접수중/ }).click();
+  await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
+  await expect(page.getByText(/서버를 깨우는 중이에요/)).toHaveCount(0);
+  const completedRequests = requests;
+  await page.clock.fastForward(30_000);
+  expect(requests).toBe(completedRequests);
+});
+
+test("서버 응답을 기다리는 동안 최근에 불러온 목록을 유지한다", async ({ page }) => {
+  const options = { failNoticeLoads: 0, noticeFailureStatus: 503 };
+  await mockApi(page, options);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
+  options.failNoticeLoads = Infinity;
+  await page.reload();
+  await expect(page.getByText(/서버를 깨우는 중이에요/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
 test("기본 목록은 모집 중·예정 공고를 우선하고 최근 검색과 상세 정렬을 제공한다", async ({ page }) => {

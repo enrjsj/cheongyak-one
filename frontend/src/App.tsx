@@ -2,6 +2,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   changeMemberPassword,
+  ApiError,
   ApiRequestTimeoutError,
   clearComparisons,
   confirmEmailVerification,
@@ -482,8 +483,11 @@ function categoryValue(label: string): HousingCategory | undefined {
 
 function isTemporaryApiConnectionError(error: unknown): boolean {
   return error instanceof ApiRequestTimeoutError
+    || (error instanceof ApiError && [502, 503, 504].includes(error.status))
     || (error instanceof TypeError && /fetch|network/i.test(error.message));
 }
+
+const NOTICE_LOAD_RETRY_WINDOW_MS = 5 * 60_000;
 
 function priceInManwon(value: string): number | undefined {
   if (!/^\d+$/.test(value)) return undefined;
@@ -533,9 +537,11 @@ export default function Home() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [loadRetryPending, setLoadRetryPending] = useState(false);
   const [loadVersion, setLoadVersion] = useState(0);
   const [cachedListShownAt, setCachedListShownAt] = useState<number>();
   const automaticLoadRetryCount = useRef(0);
+  const noticeLoadStartedAt = useRef(Date.now());
   const [query, setQuery] = useState(initialSearch.query);
   const [debouncedQuery, setDebouncedQuery] = useState(initialSearch.query);
   const [activeStatus, setActiveStatus] = useState<StatusKey>(initialSearch.status);
@@ -732,7 +738,16 @@ export default function Home() {
   useEffect(() => {
     // 검색 조건을 바꾼 뒤에는 새 요청으로 간주해 Render 기동 대기 재시도를 다시 허용한다.
     automaticLoadRetryCount.current = 0;
-  }, [activeStatus, category, debouncedQuery, includeClosed, maxArea, maxPriceManwon, minArea, minPriceManwon, region, savedOnly, sortKey, supplyType]);
+    noticeLoadStartedAt.current = Date.now();
+    setLoadRetryPending(false);
+  }, [activeStatus, category, debouncedQuery, includeClosed, maxArea, maxPriceManwon, minArea, minPriceManwon, region, savedIds, savedOnly, sortKey, supplyType]);
+
+  const retryNoticeLoad = () => {
+    automaticLoadRetryCount.current = 0;
+    noticeLoadStartedAt.current = Date.now();
+    setLoadRetryPending(false);
+    setLoadVersion((version) => version + 1);
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -762,6 +777,8 @@ export default function Home() {
       if (savedOnly && request.ids?.length === 0) {
         setNotices([]);
         setNoticeTotal(0);
+        setLoadError("");
+        setLoadRetryPending(false);
         setLoading(false);
         return;
       }
@@ -769,7 +786,7 @@ export default function Home() {
       const cached = savedOnly ? undefined : readCachedNoticePage(window.sessionStorage, cacheKey);
       setLoading(!cached);
       setCachedListShownAt(cached?.cachedAt);
-      setLoadError("");
+      if (!loadRetryPending) setLoadError("");
       if (cached) {
         setNotices(cached.page.content);
         setNoticePage(cached.page.number);
@@ -805,6 +822,8 @@ export default function Home() {
         .then((page) => {
         if (controller.signal.aborted) return;
         automaticLoadRetryCount.current = 0;
+        setLoadRetryPending(false);
+        setLoadError("");
         if (!savedOnly) cacheNoticePage(window.sessionStorage, cacheKey, page);
         setNotices(page.content);
         setNoticePage(0);
@@ -825,14 +844,17 @@ export default function Home() {
         }
         })
         .catch((error: unknown) => {
-          if (error instanceof DOMException && error.name === "AbortError") return;
-          if (isTemporaryApiConnectionError(error) && automaticLoadRetryCount.current < 2) {
+          if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return;
+          const remainingWait = NOTICE_LOAD_RETRY_WINDOW_MS - (Date.now() - noticeLoadStartedAt.current);
+          if (isTemporaryApiConnectionError(error) && remainingWait > 0) {
             automaticLoadRetryCount.current += 1;
-            const attempt = automaticLoadRetryCount.current;
-            setLoadError(`서버를 깨우는 중이에요. 잠시 후 자동으로 다시 시도합니다. (${attempt}/2)`);
-            retryTimer = window.setTimeout(() => setLoadVersion((version) => version + 1), 3_500);
+            const retryDelay = Math.min(3_500 * 2 ** Math.min(automaticLoadRetryCount.current - 1, 3), 15_000, remainingWait);
+            setLoadRetryPending(true);
+            setLoadError(`서버를 깨우는 중이에요. ${Math.ceil(retryDelay / 1_000)}초 후 자동으로 다시 시도합니다.`);
+            retryTimer = window.setTimeout(() => setLoadVersion((version) => version + 1), retryDelay);
             return;
           }
+          setLoadRetryPending(false);
           setLoadError(error instanceof Error ? error.message : "청약 정보를 불러오지 못했습니다.");
         })
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -2004,14 +2026,27 @@ export default function Home() {
             </div>
             {!savedOnly && activeFilterLabels.length > 0 && <p className="active-filter-summary" aria-live="polite">적용 중: {activeFilterLabels.join(" · ")}</p>}
 
-            {loading && !cachedListShownAt ? (
+            {loadRetryPending && (
+              <div className="notice-load-status" role="status">
+                <p>{loadError}</p>
+                <small>첫 연결에는 시간이 걸릴 수 있어요. 약 5분 동안 자동으로 다시 시도합니다.</small>
+                <button type="button" onClick={retryNoticeLoad}>지금 다시 시도</button>
+              </div>
+            )}
+            {loadError && cachedListShownAt && !loadRetryPending && (
+              <div className="notice-load-status" role="status">
+                <p>최신 공고를 확인하지 못했어요. 이전에 불러온 목록을 표시합니다.</p>
+                <button type="button" onClick={retryNoticeLoad}>다시 불러오기</button>
+              </div>
+            )}
+            {(loading || loadRetryPending) && !cachedListShownAt ? (
               <div className="list-loading" role="status" aria-label="청약 공고 불러오는 중">
                 {[0, 1, 2].map((item) => <div className="list-skeleton" key={item}><i></i><strong></strong><span></span><small></small></div>)}
               </div>
             ) : loadError && !cachedListShownAt ? (
               <div className="inline-error" role="alert">
                 <span>!</span><h3>공고를 불러오지 못했어요</h3><p>{loadError}</p>
-                <button type="button" onClick={() => { automaticLoadRetryCount.current = 0; setLoadVersion((version) => version + 1); }}>다시 불러오기</button>
+                <button type="button" onClick={retryNoticeLoad}>다시 불러오기</button>
               </div>
             ) : visible.length > 0 ? (
               <>
