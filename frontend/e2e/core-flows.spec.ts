@@ -5,10 +5,11 @@ const notices = [
   { id: 2, sourceSystem: "MYHOME_PUBLIC_RENTAL", housingCategory: "PUBLIC_RENTAL", status: "UPCOMING", title: "E2E 경기 행복주택", regionCode: "경기", address: "경기도 고양시", noticeDate: "2026-09-02", applyStartDate: "2026-09-21", applyEndDate: "2026-09-25", winnerAnnounceDate: "2026-10-03", totalUnits: 80, officialUrl: "https://applyhome.example/2", syncedAt: "2026-09-01T00:00:00Z" },
 ];
 
-async function mockApi(page: Page, options: { failInitialNoticeLoad?: boolean; failNoticeLoads?: number; noticeFailureStatus?: number } = {}) {
+async function mockApi(page: Page, options: { failInitialNoticeLoad?: boolean; failNoticeLoads?: number; noticeFailureStatus?: number; failFacetLoads?: number; facetFailureStatus?: number } = {}) {
   let member: Record<string, unknown> | undefined;
   let favoriteIds: number[] = [];
   let failedNoticeRequests = 0;
+  let failedFacetRequests = 0;
   let savedSearchProfiles = [{ id: 11, name: "서울 기본 조건", region: "서울", housingCategory: "APARTMENT", status: "OPEN", sort: "DEADLINE", defaultProfile: true, newNoticeEnabled: true, updatedAt: "2026-09-01T00:00:00Z" }];
   const trackers = new Map<number, Record<string, unknown>>();
   await page.route("**/api/v1/**", async (route) => {
@@ -30,14 +31,20 @@ async function mockApi(page: Page, options: { failInitialNoticeLoad?: boolean; f
     if (path === "/api/v1/notices/freshness") return json({ generatedAt: "2026-09-01T00:00:00Z", lastCompletedAt: "2026-09-01T00:00:00Z" });
     if (path === "/api/v1/notices/facets" || path === "/api/v1/notices") {
       // 목록이 첫 요청 실패 후 재시도되는 사용자 흐름을 검증한다.
-      // 상태 집계는 목록 표시 뒤의 보조 요청이므로 실패 시나리오에 섞지 않는다.
+      // 목록과 집계의 실패 횟수를 분리해 각각의 복구 흐름을 검증한다.
       if (path === "/api/v1/notices" && url.searchParams.get("activeOnly") === "true"
         && failedNoticeRequests < (options.failNoticeLoads ?? (options.failInitialNoticeLoad ? 1 : 0))) {
         failedNoticeRequests += 1;
         if (options.noticeFailureStatus) return json({ detail: "공고 요청을 처리하지 못했습니다." }, options.noticeFailureStatus);
         return route.abort("failed");
       }
-      if (path === "/api/v1/notices/facets") return json({ total: notices.length, endingToday: 0, open: 1, upcoming: 1 });
+      if (path === "/api/v1/notices/facets") {
+        if (failedFacetRequests < (options.failFacetLoads ?? 0)) {
+          failedFacetRequests += 1;
+          return json({ detail: "집계를 불러오지 못했습니다." }, options.facetFailureStatus ?? 503);
+        }
+        return json({ total: notices.length, endingToday: 0, open: 1, upcoming: 1 });
+      }
       return json({ content: notices, number: 0, size: 24, totalElements: notices.length, totalPages: 1 });
     }
     const detail = path.match(/^\/api\/v1\/notices\/(\d+)$/);
@@ -188,6 +195,104 @@ test("서버 응답을 기다리는 동안 최근에 불러온 목록을 유지�
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
+test("집계가 연속 실패해도 목록을 표시하고 상태별 건수를 자동 복구한다", async ({ page }) => {
+  const options = { failFacetLoads: Infinity };
+  await page.clock.install();
+  await mockApi(page, options);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
+  const openCount = page.getByRole("tab", { name: /접수중/ }).locator("b");
+  await expect(openCount).toHaveText("–");
+  await expect(page.locator(".week-stats strong")).toHaveText(["–", "–", "–"]);
+  await page.clock.fastForward(4_000);
+  await expect(openCount).toHaveText("–");
+  await page.clock.fastForward(8_000);
+  await expect(openCount).toHaveText("–");
+  options.failFacetLoads = 0;
+  await page.clock.fastForward(15_000);
+  await expect(openCount).toHaveText("1");
+  await expect(page.locator(".week-stats strong")).toHaveText(["1", "0", "1"]);
+  await expect(page.locator(".facets-error")).toHaveCount(0);
+});
+
+test("집계 요청 오류는 0건으로 표시하거나 자동 반복하지 않고 수동으로 복구한다", async ({ page }) => {
+  const options = { failFacetLoads: Infinity, facetFailureStatus: 400 };
+  let facetRequests = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/v1/notices/facets") facetRequests += 1;
+  });
+  await page.clock.install();
+  await mockApi(page, options);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "건수 다시 불러오기" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /접수중/ }).locator("b")).toHaveText("–");
+  const failedRequests = facetRequests;
+  await page.clock.fastForward(30_000);
+  expect(facetRequests).toBe(failedRequests);
+  options.failFacetLoads = 0;
+  await page.getByRole("button", { name: "건수 다시 불러오기" }).click();
+  await expect(page.getByRole("tab", { name: /접수중/ }).locator("b")).toHaveText("1");
+  await expect(page.locator(".facets-error")).toHaveCount(0);
+});
+
+test("집계 자동 대기가 끝나면 멈추고 수동 요청으로 새 대기를 시작한다", async ({ page }) => {
+  const options = { failFacetLoads: Infinity };
+  let facetRequests = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/v1/notices/facets") facetRequests += 1;
+  });
+  await page.clock.install();
+  await mockApi(page, options);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
+  await page.clock.fastForward(5 * 60_000 + 1_000);
+  await expect(page.getByRole("button", { name: "건수 다시 불러오기" })).toBeVisible();
+  const stoppedRequests = facetRequests;
+  await page.clock.fastForward(30_000);
+  expect(facetRequests).toBe(stoppedRequests);
+  await page.getByRole("button", { name: "건수 다시 불러오기" }).click();
+  await expect.poll(() => facetRequests).toBe(stoppedRequests + 1);
+  options.failFacetLoads = 0;
+  await page.clock.fastForward(4_000);
+  await expect(page.getByRole("tab", { name: /접수중/ }).locator("b")).toHaveText("1");
+});
+
+test("검색 조건을 바꾸면 이전 집계 재시도를 취소하고 새 조건의 건수만 표시한다", async ({ page }) => {
+  await page.clock.install();
+  await mockApi(page);
+  let unfilteredRequests = 0;
+  await page.route("**/api/v1/notices/facets**", (route) => {
+    const keyword = new URL(route.request().url()).searchParams.get("keyword");
+    if (!keyword) unfilteredRequests += 1;
+    return route.fulfill({ status: keyword ? 200 : 503, contentType: "application/json",
+      body: JSON.stringify(keyword ? { total: 7, open: 5, upcoming: 2, endingToday: 0 } : {}) });
+  });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /접수중/ }).locator("b")).toHaveText("–");
+  await page.getByRole("textbox", { name: "청약 검색어" }).fill("서울");
+  await page.getByRole("button", { name: /청약 찾기/ }).click();
+  await expect(page.getByRole("tab", { name: /접수중/ }).locator("b")).toHaveText("5");
+  const previousRequests = unfilteredRequests;
+  await page.clock.fastForward(30_000);
+  expect(unfilteredRequests).toBe(previousRequests);
+  await expect(page.locator(".week-stats strong")).toHaveText(["5", "0", "2"]);
+});
+
+test("새 검색의 집계가 실패하면 이전 조건의 건수를 남기지 않는다", async ({ page }) => {
+  const options = { failFacetLoads: 0, facetFailureStatus: 400 };
+  await mockApi(page, options);
+  await page.goto("/");
+  await expect(page.getByRole("tab", { name: /접수중/ }).locator("b")).toHaveText("1");
+  options.failFacetLoads = Infinity;
+  await page.getByRole("textbox", { name: "청약 검색어" }).fill("부산");
+  await page.getByRole("button", { name: /청약 찾기/ }).click();
+  await expect(page.getByRole("button", { name: "건수 다시 불러오기" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /접수중/ }).locator("b")).toHaveText("–");
+  await expect(page.locator(".week-stats strong")).toHaveText(["–", "–", "–"]);
+});
+
 test("기본 목록은 모집 중·예정 공고를 우선하고 최근 검색과 상세 정렬을 제공한다", async ({ page }) => {
   await mockApi(page);
   await page.goto("/");
@@ -203,6 +308,10 @@ test("기본 목록은 모집 중·예정 공고를 우선하고 최근 검색�
 
 test("상태 탭은 미리 받은 목록으로 로딩 없이 전환한다", async ({ page }) => {
   await mockApi(page);
+  let facetRequests = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/v1/notices/facets") facetRequests += 1;
+  });
   const openPrefetched = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return url.pathname === "/api/v1/notices" && url.searchParams.get("status") === "OPEN";
@@ -211,10 +320,13 @@ test("상태 탭은 미리 받은 목록으로 로딩 없이 전환한다", asyn
   await page.goto("/");
   await openPrefetched;
   await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /접수중/ }).locator("b")).toHaveText("1");
+  const initialFacetRequests = facetRequests;
   await page.getByRole("tab", { name: /접수중/ }).click();
   await expect(page.getByRole("status", { name: "청약 공고 불러오는 중" })).toHaveCount(0);
   await expect(page.getByText("조건에 맞는 공고 2건")).toBeVisible();
   await page.waitForTimeout(400);
+  expect(facetRequests).toBe(initialFacetRequests);
 });
 
 test("회원가입 후 사전점검 답변을 계정에 저장한다", async ({ page }) => {

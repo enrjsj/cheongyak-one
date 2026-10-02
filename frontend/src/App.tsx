@@ -529,8 +529,10 @@ export default function Home() {
   const initialSearch = noticeSearchStateFromSearch(window.location.search);
   const [notices, setNotices] = useState<NoticeSummary[]>([]);
   const [knownNotices, setKnownNotices] = useState<Map<number, NoticeSummary>>(new Map());
-  const [noticeFacets, setNoticeFacets] = useState<NoticeSearchFacets>({ total: 0, endingToday: 0, open: 0, upcoming: 0 });
+  const [noticeFacets, setNoticeFacets] = useState<NoticeSearchFacets>();
   const [facetsLoading, setFacetsLoading] = useState(true);
+  const [facetsError, setFacetsError] = useState(false);
+  const [facetsVersion, setFacetsVersion] = useState(0);
   const [noticeFreshness, setNoticeFreshness] = useState<NoticeFreshness>();
   const [noticePage, setNoticePage] = useState(0);
   const [noticeTotal, setNoticeTotal] = useState(0);
@@ -752,22 +754,46 @@ export default function Home() {
   useEffect(() => {
     const controller = new AbortController();
     const request = currentSearchRequest("all");
+    const startedAt = Date.now();
+    let retryCount = 0;
+    let retryTimer: number | undefined;
+    setNoticeFacets(undefined);
     setFacetsLoading(true);
-    void fetchNoticeFacets({
-      category: request.category,
-      supplyType: request.supplyType,
-      keyword: request.keyword,
-      region: request.region,
-      minPrice: request.minPrice,
-      maxPrice: request.maxPrice,
-      minArea: request.minArea,
-      maxArea: request.maxArea,
-    }, controller.signal)
-      .then((facets) => setNoticeFacets(facets))
-      .catch(() => undefined)
-      .finally(() => { if (!controller.signal.aborted) setFacetsLoading(false); });
-    return () => controller.abort();
-  }, [category, debouncedQuery, maxArea, maxPriceManwon, minArea, minPriceManwon, region, supplyType]);
+    setFacetsError(false);
+    const loadFacets = async () => {
+      try {
+        const facets = await fetchNoticeFacets({
+          category: request.category,
+          supplyType: request.supplyType,
+          keyword: request.keyword,
+          region: request.region,
+          minPrice: request.minPrice,
+          maxPrice: request.maxPrice,
+          minArea: request.minArea,
+          maxArea: request.maxArea,
+        }, controller.signal);
+        if (controller.signal.aborted) return;
+        setNoticeFacets(facets);
+        setFacetsLoading(false);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        const remainingWait = NOTICE_LOAD_RETRY_WINDOW_MS - (Date.now() - startedAt);
+        if (isTemporaryApiConnectionError(error) && remainingWait > 0) {
+          const retryDelay = Math.min(3_500 * 2 ** Math.min(retryCount++, 3), 15_000, remainingWait);
+          retryTimer = window.setTimeout(() => { void loadFacets(); }, retryDelay);
+          return;
+        }
+        setFacetsLoading(false);
+        setFacetsError(true);
+      }
+    };
+    // 목록 요청과 독립적으로 복구하므로 집계 실패가 공고 탐색을 막지 않는다.
+    void loadFacets();
+    return () => {
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      controller.abort();
+    };
+  }, [category, debouncedQuery, facetsVersion, maxArea, maxPriceManwon, minArea, minPriceManwon, region, supplyType]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1222,11 +1248,12 @@ export default function Home() {
     minArea || maxArea ? `${minArea || "0"}~${maxArea || "무제한"}㎡` : undefined,
     includeClosed ? "마감 공고 포함" : undefined,
   ].filter((value): value is string => Boolean(value));
-  const todayCount = noticeFacets.endingToday;
-  const openCount = noticeFacets.open;
-  const upcomingCount = noticeFacets.upcoming;
+  const todayCount = noticeFacets?.endingToday ?? 0;
+  const openCount = noticeFacets?.open ?? 0;
+  const upcomingCount = noticeFacets?.upcoming ?? 0;
+  const facetsUnavailable = facetsLoading || !noticeFacets;
   const statuses: { key: StatusKey; label: string; count: number; tone: string; icon: IconName }[] = [
-    { key: "all", label: includeClosed ? "전체 청약" : "모집 중·예정", count: includeClosed ? noticeFacets.total : openCount + upcomingCount, tone: "navy", icon: "grid" },
+    { key: "all", label: includeClosed ? "전체 청약" : "모집 중·예정", count: includeClosed ? noticeFacets?.total ?? 0 : openCount + upcomingCount, tone: "navy", icon: "grid" },
     { key: "today", label: "오늘 마감", count: todayCount, tone: "coral", icon: "bell" },
     { key: "open", label: "접수중", count: openCount, tone: "mint", icon: "check" },
     { key: "upcoming", label: "오픈 예정", count: upcomingCount, tone: "blue", icon: "calendar" },
@@ -1962,9 +1989,9 @@ export default function Home() {
             <span className="live-dot">LIVE</span>
           </div>
           <div className="week-stats">
-            <div><strong>{facetsLoading ? "–" : openCount}</strong><span>접수중</span></div>
-            <div><strong>{facetsLoading ? "–" : todayCount}</strong><span>오늘 마감</span></div>
-            <div><strong>{facetsLoading ? "–" : upcomingCount}</strong><span>오픈 예정</span></div>
+            <div><strong>{facetsUnavailable ? "–" : openCount}</strong><span>접수중</span></div>
+            <div><strong>{facetsUnavailable ? "–" : todayCount}</strong><span>오늘 마감</span></div>
+            <div><strong>{facetsUnavailable ? "–" : upcomingCount}</strong><span>오픈 예정</span></div>
           </div>
           {highlight && highlightEvent ? (
             <button className="next-event" type="button" onClick={() => openDetail(highlight)}>
@@ -1983,10 +2010,15 @@ export default function Home() {
         <div className="status-tabs" role="tablist" aria-label="청약 상태">
           {statuses.map((status) => (
             <button className={activeStatus === status.key ? "selected" : ""} type="button" role="tab" aria-selected={activeStatus === status.key} key={status.key} onClick={() => { setActiveStatus(status.key); if (status.key !== "all") setIncludeClosed(false); setSavedOnly(false); setFavoriteProgressFilter("ALL"); resetVisible(); }}>
-              <span className={`tab-icon ${status.tone}`}><Icon name={status.icon} /></span><span>{status.label}<b>{loading || facetsLoading ? "–" : status.count}</b></span>
+              <span className={`tab-icon ${status.tone}`}><Icon name={status.icon} /></span><span>{status.label}<b>{facetsUnavailable ? "–" : status.count}</b></span>
             </button>
           ))}
         </div>
+
+        {facetsError && <div className="facets-error" role="status">
+          <span>청약 건수를 불러오지 못했어요. 공고 목록은 계속 확인할 수 있어요.</span>
+          <button type="button" onClick={() => setFacetsVersion((version) => version + 1)}>건수 다시 불러오기</button>
+        </div>}
 
         <div className="content-grid">
           <div className="list-panel">
