@@ -96,7 +96,7 @@ import {
   normalizeRecentNoticeSearches,
   updateRecentNoticeSearches,
 } from "./noticeTools";
-import { cacheNoticePage, noticePageCacheKey, readCachedNoticePage } from "./noticePageCache";
+import { cacheNoticePage, noticePageCacheKey, noticePageStorage, readCachedNoticePage } from "./noticePageCache";
 
 type StatusKey = "all" | "today" | "open" | "upcoming";
 type StateTone = "mint" | "coral" | "blue" | "purple" | "gray";
@@ -809,7 +809,8 @@ export default function Home() {
         return;
       }
       const cacheKey = noticePageCacheKey({ ...request, page: 0 });
-      const cached = savedOnly ? undefined : readCachedNoticePage(window.sessionStorage, cacheKey);
+      const storage = noticePageStorage(window);
+      const cached = savedOnly ? undefined : readCachedNoticePage(storage, cacheKey);
       setLoading(!cached);
       setCachedListShownAt(cached?.cachedAt);
       if (!loadRetryPending) setLoadError("");
@@ -833,11 +834,11 @@ export default function Home() {
         STATUS_KEYS.filter((statusKey) => statusKey !== activeStatus).forEach((statusKey) => {
           const prefetchRequest = { ...currentSearchRequest(statusKey), page: 0 };
           const prefetchCacheKey = noticePageCacheKey(prefetchRequest);
-          if (readCachedNoticePage(window.sessionStorage, prefetchCacheKey) || noticePagePrefetches.has(prefetchCacheKey)) return;
+          if (readCachedNoticePage(storage, prefetchCacheKey) || noticePagePrefetches.has(prefetchCacheKey)) return;
           const prefetch = fetchNoticePage(prefetchRequest);
           noticePagePrefetches.set(prefetchCacheKey, prefetch);
           void prefetch
-            .then((page) => cacheNoticePage(window.sessionStorage, prefetchCacheKey, page))
+            .then((page) => cacheNoticePage(storage, prefetchCacheKey, page))
             // 사전 요청 실패는 현재 탭의 목록 사용을 막지 않는다.
             .catch(() => undefined)
             .finally(() => noticePagePrefetches.delete(prefetchCacheKey));
@@ -850,7 +851,7 @@ export default function Home() {
         automaticLoadRetryCount.current = 0;
         setLoadRetryPending(false);
         setLoadError("");
-        if (!savedOnly) cacheNoticePage(window.sessionStorage, cacheKey, page);
+        if (!savedOnly) cacheNoticePage(storage, cacheKey, page);
         setNotices(page.content);
         setNoticePage(0);
         setNoticeTotal(page.totalElements);

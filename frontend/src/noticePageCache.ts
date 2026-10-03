@@ -13,16 +13,36 @@ interface CachedNoticePage {
   page: PageResponse<NoticeSummary>;
 }
 export function noticePageCacheKey(request: Record<string, unknown>): string {
-  return NOTICE_PAGE_CACHE_PREFIX + JSON.stringify(request);
+  return NOTICE_PAGE_CACHE_PREFIX + JSON.stringify(
+    Object.fromEntries(Object.entries(request).sort(([left], [right]) => left.localeCompare(right))),
+  );
+}
+export function noticePageStorage(source: { readonly sessionStorage: Storage }): Storage | undefined {
+  try {
+    return source.sessionStorage;
+  } catch {
+    return undefined;
+  }
+}
+function isNotice(value: unknown): value is NoticeSummary {
+  if (!value || typeof value !== "object") return false;
+  const notice = value as Partial<NoticeSummary>;
+  return Number.isSafeInteger(notice.id) && notice.id! > 0
+    && typeof notice.title === "string"
+    && typeof notice.sourceSystem === "string"
+    && typeof notice.housingCategory === "string"
+    && typeof notice.status === "string"
+    && typeof notice.syncedAt === "string";
 }
 function isPage(value: unknown): value is PageResponse<NoticeSummary> {
   if (!value || typeof value !== "object") return false;
   const page = value as Partial<PageResponse<NoticeSummary>>;
   return Array.isArray(page.content)
-    && typeof page.number === "number"
-    && typeof page.size === "number"
-    && typeof page.totalElements === "number"
-    && typeof page.totalPages === "number";
+    && page.content.every(isNotice)
+    && Number.isSafeInteger(page.number) && page.number! >= 0
+    && Number.isSafeInteger(page.size) && page.size! > 0
+    && Number.isSafeInteger(page.totalElements) && page.totalElements! >= 0
+    && Number.isSafeInteger(page.totalPages) && page.totalPages! >= 0;
 }
 function removeCachedEntry(storage: StorageReader, key: string): void {
   try {
@@ -32,11 +52,12 @@ function removeCachedEntry(storage: StorageReader, key: string): void {
   }
 }
 export function readCachedNoticePage(
-  storage: StorageReader,
+  storage: StorageReader | undefined,
   key: string,
   now = Date.now(),
   maxAgeMs = NOTICE_PAGE_CACHE_MAX_AGE_MS,
 ): CachedNoticePage | undefined {
+  if (!storage) return undefined;
   try {
     const raw = storage.getItem(key);
     if (!raw) return undefined;
@@ -57,22 +78,28 @@ export function readCachedNoticePage(
     return undefined;
   }
 }
-function pruneCachedNoticePages(storage: StorageWriter, now: number): void {
+function pruneCachedNoticePages(storage: StorageWriter, now: number, incomingKey: string): void {
   const freshEntries: Array<{ key: string; cachedAt: number }> = [];
+  const keys: string[] = [];
+  // Collect keys before reads can remove entries and shift storage indexes.
   for (let index = 0; index < storage.length; index += 1) {
     const key = storage.key(index);
-    if (!key?.startsWith(NOTICE_PAGE_CACHE_PREFIX)) continue;
+    if (key?.startsWith(NOTICE_PAGE_CACHE_PREFIX)) keys.push(key);
+  }
+  for (const key of keys) {
     const cached = readCachedNoticePage(storage, key, now);
-    if (cached) freshEntries.push({ key, cachedAt: cached.cachedAt });
+    // Reserve one slot for the incoming value, including an existing key refresh.
+    if (cached && key !== incomingKey) freshEntries.push({ key, cachedAt: cached.cachedAt });
   }
   freshEntries
     .sort((left, right) => left.cachedAt - right.cachedAt)
     .slice(0, Math.max(0, freshEntries.length - NOTICE_PAGE_CACHE_MAX_ENTRIES + 1))
     .forEach(({ key }) => removeCachedEntry(storage, key));
 }
-export function cacheNoticePage(storage: StorageWriter, key: string, page: PageResponse<NoticeSummary>, cachedAt = Date.now()): void {
+export function cacheNoticePage(storage: StorageWriter | undefined, key: string, page: PageResponse<NoticeSummary>, cachedAt = Date.now()): void {
+  if (!storage) return;
   try {
-    pruneCachedNoticePages(storage, cachedAt);
+    pruneCachedNoticePages(storage, cachedAt, key);
     storage.setItem(key, JSON.stringify({ cachedAt, page } satisfies CachedNoticePage));
   } catch {
     // private mode·용량 초과에서도 공고 조회 자체는 계속 동작해야 한다.
