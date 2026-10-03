@@ -32,6 +32,8 @@ public class MemberNotificationPushDelivery {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean deliver(Long notificationId) {
+        // Disabled transport must not turn queued notifications into false delivery successes.
+        if (!pushSender.enabled()) return false;
         var now = clock.instant();
         var notification = notificationRepository.findForPushDelivery(notificationId).orElse(null);
         if (notification == null || !notification.isPushDeliveryDue(now, MAXIMUM_ATTEMPTS)) return false;

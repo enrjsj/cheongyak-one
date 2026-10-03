@@ -50,6 +50,7 @@ async function mockApi(page: Page, options: { failInitialNoticeLoad?: boolean; f
     const detail = path.match(/^\/api\/v1\/notices\/(\d+)$/);
     if (detail) return json(notices.find((notice) => notice.id === Number(detail[1])));
     if (path.endsWith("/changes")) return json([]);
+    if (path.endsWith("/ai-consultations/availability")) return json({ available: false });
     if (path.endsWith("/favorites/tracker")) return json([...trackers.values()]);
     const favoriteTracker = path.match(/^\/api\/v1\/members\/me\/favorites\/(\d+)\/tracker$/);
     if (favoriteTracker) {
@@ -108,6 +109,68 @@ async function signup(page: Page) {
   await page.getByRole("button", { name: "가입 완료하기" }).click();
   await expect(page.getByRole("button", { name: "테스트 회원" })).toBeVisible();
 }
+
+test("AI 상담은 로그인과 동의 후 실행하고 답변을 안전한 텍스트로 표시한다", async ({ page }) => {
+  await mockApi(page);
+  let consultations = 0;
+  await page.route("**/api/v1/members/me/ai-consultations**", async (route) => {
+    if (route.request().method() === "GET") return route.fulfill({ json: { available: true } });
+    consultations++;
+    expect(route.request().postDataJSON()).toEqual({ noticeId: 1, topic: "CASH", consent: true });
+    return route.fulfill({ json: { noticeId: 1, topic: "CASH", answer: "<script>unsafe()</script> 계약금 조건을 확인하세요.",
+      noticeSyncedAt: "2026-10-03T00:00:00Z", generatedAt: "2026-10-03T01:00:00Z", disclaimer: "공식 공고문을 확인하세요." } });
+  });
+  await page.goto("/?notice=1");
+  await expect(page.getByText("로그인 후 이용할 수 있습니다.")).toBeVisible();
+  expect(consultations).toBe(0);
+  await page.getByRole("dialog").getByLabel("닫기", { exact: true }).click();
+  await signup(page);
+  await page.locator("article").filter({ hasText: "E2E 서울 공공분양" }).getByRole("button", { name: /공고 핵심만 보기/ }).click();
+  const panel = page.locator(".ai-consultation");
+  await expect(panel.getByRole("button", { name: "확인 항목 정리하기" })).toBeDisabled();
+  await panel.getByLabel("상담 주제").selectOption("CASH");
+  await panel.getByRole("checkbox").check();
+  await panel.getByRole("button", { name: "확인 항목 정리하기" }).click();
+  await expect(panel.getByText("<script>unsafe()</script> 계약금 조건을 확인하세요.")).toBeVisible();
+  await expect(panel.locator("script")).toHaveCount(0);
+  expect(consultations).toBe(1);
+  await page.screenshot({ path: "test-results/ai-consultation-desktop.png", fullPage: true });
+});
+
+test("AI 오류와 대기 취소가 가능하고 모바일에서 가로 넘침이 없다", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page);
+  let attempts = 0;
+  await page.route("**/api/v1/members/me/ai-consultations**", async (route) => {
+    if (route.request().method() === "GET") return route.fulfill({ json: { available: true } });
+    attempts++;
+    if (attempts === 1) return route.fulfill({ status: 429, json: { detail: "잠시 후 다시 시도해주세요." } });
+    // Leave the next mock request pending until the UI cancels it.
+    await new Promise<void>((resolve) => page.once("close", () => resolve()));
+  });
+  await page.goto("/");
+  await signup(page);
+  await page.locator("article").filter({ hasText: "E2E 서울 공공분양" }).getByRole("button", { name: /공고 핵심만 보기/ }).click();
+  const panel = page.locator(".ai-consultation");
+  await panel.getByRole("checkbox").check();
+  await panel.getByRole("button", { name: "확인 항목 정리하기" }).click();
+  await expect(panel.getByRole("alert")).toHaveText("잠시 후 다시 시도해주세요.");
+  await panel.getByRole("button", { name: "확인 항목 정리하기" }).click();
+  await expect(panel.getByRole("button", { name: "답변 생성 중…" })).toBeDisabled();
+  await panel.getByRole("button", { name: "응답 대기 취소" }).click();
+  await expect(panel.getByRole("alert")).toContainText("응답 대기를 취소했습니다");
+  expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/ai-consultation-mobile.png" });
+});
+
+test("AI 미연결 상태는 신청 버튼 없이 준비 안내를 표시한다", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/");
+  await signup(page);
+  await page.locator("article").filter({ hasText: "E2E 서울 공공분양" }).getByRole("button", { name: /공고 핵심만 보기/ }).click();
+  await expect(page.getByText("OpenAI 연결 준비 중입니다. 연결 후 상담을 이용할 수 있습니다.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "확인 항목 정리하기" })).toHaveCount(0);
+});
 
 test("비회원도 관심청약 저장과 공고 비교를 할 수 있다", async ({ page }) => {
   await mockApi(page);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fetchNotificationChannelAvailability } from "../src/notificationChannelsApi.ts";
+import { fetchNotificationChannelAvailability } from "../src/api.ts";
 
 test("notification channel availability uses the authenticated member endpoint", async () => {
   const originalFetch = globalThis.fetch;
@@ -18,4 +18,18 @@ test("notification channel availability uses the authenticated member endpoint",
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("notification channel requests honor caller cancellation", async (t) => {
+  let started;
+  const ready = new Promise((resolve) => { started = resolve; });
+  t.mock.method(globalThis, "fetch", (_url, { signal }) => new Promise((_resolve, reject) => {
+    signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+    started();
+  }));
+  const controller = new AbortController();
+  const result = assert.rejects(fetchNotificationChannelAvailability(controller.signal), { name: "AbortError" });
+  await ready;
+  controller.abort();
+  await result;
 });

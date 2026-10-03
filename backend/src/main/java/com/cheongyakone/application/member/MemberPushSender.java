@@ -5,6 +5,7 @@ import com.cheongyakone.domain.member.MemberNotification;
 import java.util.List;
 
 public interface MemberPushSender {
+    default boolean enabled() { return true; }
 
     PushDeliveryResult send(MemberNotification notification, List<String> pushTokens);
 
