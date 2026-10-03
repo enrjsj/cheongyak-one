@@ -5,7 +5,7 @@ const notices = [
   { id: 2, sourceSystem: "MYHOME_PUBLIC_RENTAL", housingCategory: "PUBLIC_RENTAL", status: "UPCOMING", title: "E2E 경기 행복주택", regionCode: "경기", address: "경기도 고양시", noticeDate: "2026-09-02", applyStartDate: "2026-09-21", applyEndDate: "2026-09-25", winnerAnnounceDate: "2026-10-03", totalUnits: 80, officialUrl: "https://applyhome.example/2", syncedAt: "2026-09-01T00:00:00Z" },
 ];
 
-async function mockApi(page: Page, options: { failInitialNoticeLoad?: boolean; failNoticeLoads?: number; noticeFailureStatus?: number; failFacetLoads?: number; facetFailureStatus?: number } = {}) {
+async function mockApi(page: Page, options: { admin?: boolean; failInitialNoticeLoad?: boolean; failNoticeLoads?: number; noticeFailureStatus?: number; failFacetLoads?: number; facetFailureStatus?: number } = {}) {
   let member: Record<string, unknown> | undefined;
   let favoriteIds: number[] = [];
   let failedNoticeRequests = 0;
@@ -24,7 +24,7 @@ async function mockApi(page: Page, options: { failInitialNoticeLoad?: boolean; f
     }
     if (path === "/api/v1/auth/signup") {
       const input = request.postDataJSON();
-      member = { id: 1, email: input.email, nickname: input.nickname, role: "MEMBER", emailVerified: true, ...input, createdAt: "2026-09-01T00:00:00Z" };
+      member = { id: 1, email: input.email, nickname: input.nickname, role: options.admin ? "ADMIN" : "MEMBER", emailVerified: true, ...input, createdAt: "2026-09-01T00:00:00Z" };
       return json(member);
     }
     if (path === "/api/v1/auth/login") return json(member);
@@ -155,12 +155,106 @@ test("AI 오류와 대기 취소가 가능하고 모바일에서 가로 넘침�
   await panel.getByRole("checkbox").check();
   await panel.getByRole("button", { name: "확인 항목 정리하기" }).click();
   await expect(panel.getByRole("alert")).toHaveText("잠시 후 다시 시도해주세요.");
-  await panel.getByRole("button", { name: "확인 항목 정리하기" }).click();
+  await panel.getByRole("button", { name: "답변 다시 요청" }).click();
   await expect(panel.getByRole("button", { name: "답변 생성 중…" })).toBeDisabled();
   await panel.getByRole("button", { name: "응답 대기 취소" }).click();
   await expect(panel.getByRole("alert")).toContainText("응답 대기를 취소했습니다");
   expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   await page.screenshot({ path: "test-results/ai-consultation-mobile.png" });
+});
+
+test("상담 연결 재시도와 답변 복사에 면책·수집 기준을 포함한다", async ({ page, context }) => {
+  await mockApi(page);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  let checks = 0;
+  let connectionRecovered = false;
+  await page.route("**/api/v1/members/me/ai-consultations**", async route => {
+    if (route.request().method() === "GET") {
+      checks++;
+      return !connectionRecovered ? route.fulfill({ status: 503, json: { detail: "unavailable" } }) : route.fulfill({ json: { available: true } });
+    }
+    return route.fulfill({ json: { answer: "공식 공고의 조건을 확인하세요.", disclaimer: "자격 판정이 아닙니다.", noticeSyncedAt: "2020-01-01T00:00:00Z" } });
+  });
+  await page.goto("/");
+  await signup(page);
+  await page.locator("article").filter({ hasText: "E2E 서울 공공분양" }).getByRole("button", { name: /공고 핵심만 보기/ }).click();
+  const panel = page.locator(".ai-consultation");
+  await expect(panel.getByRole("button", { name: "연결 다시 확인" })).toBeVisible();
+  const initialChecks = checks;
+  connectionRecovered = true;
+  await panel.getByRole("button", { name: "연결 다시 확인" }).click();
+  await panel.getByRole("checkbox").check();
+  await panel.getByRole("button", { name: "확인 항목 정리하기" }).click();
+  await expect(panel.getByText(/공고 수집 시점이 오래/)).toBeVisible();
+  await panel.getByRole("button", { name: "답변 복사" }).click();
+  await expect(panel.getByRole("status")).toHaveText("답변을 복사했습니다.");
+  expect((await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, "\n")).toContain("자격 판정이 아닙니다.\n공고 수집 기준:");
+  expect(checks).toBe(initialChecks + 1);
+});
+
+test("상담 세션 만료 후 추가 요청을 차단한다", async ({ page }) => {
+  await mockApi(page);
+  let attempts = 0;
+  await page.route("**/api/v1/members/me/ai-consultations**", route => {
+    if (route.request().method() === "GET") return route.fulfill({ json: { available: true } });
+    attempts++;
+    return route.fulfill({ status: 401, json: { detail: "expired" } });
+  });
+  await page.goto("/");
+  await signup(page);
+  await page.locator("article").filter({ hasText: "E2E 서울 공공분양" }).getByRole("button", { name: /공고 핵심만 보기/ }).click();
+  const panel = page.locator(".ai-consultation");
+  await panel.getByRole("checkbox").check();
+  await panel.getByRole("button", { name: "확인 항목 정리하기" }).click();
+  await expect(panel.getByRole("alert")).toContainText("로그인이 만료");
+  await expect(panel.getByRole("button", { name: "확인 항목 정리하기" })).toBeDisabled();
+  expect(attempts).toBe(1);
+});
+
+test("관리자 동기화와 AI 사용량 조회 실패를 수동 복구한다", async ({ page }) => {
+  await mockApi(page, { admin: true });
+  let syncs = 0;
+  let usages = 0;
+  let usageRecovered = false;
+  await page.route("**/api/v1/admin/**", route => {
+    if (route.request().url().endsWith("/ai-consultations/usage")) {
+      usages++;
+      return !usageRecovered ? route.fulfill({ status: 503, json: { detail: "사용량 조회 실패" } }) :
+        route.fulfill({ json: [{ date: "2026-10-04", requests: 4, succeeded: 2, failed: 1, active: 1 }] });
+    }
+    if (route.request().method() === "POST") { syncs++; return route.fulfill({ status: 202 }); }
+    return route.fulfill({ json: { runningCount: 0, failuresLast24Hours: 0, executions: [] } });
+  });
+  await page.goto("/");
+  await signup(page);
+  await page.getByRole("button", { name: "운영 관리" }).click();
+  page.on("dialog", dialog => dialog.accept());
+  await page.getByRole("button", { name: "지금 동기화", exact: true }).click();
+  await expect(page.getByText(/공고 동기화를 시작했습니다/)).toBeVisible();
+  expect(syncs).toBe(1);
+  await page.getByRole("tab", { name: "AI 사용량" }).click();
+  await expect(page.getByRole("button", { name: "다시 시도", exact: true })).toBeVisible();
+  usageRecovered = true;
+  await page.getByRole("button", { name: "다시 시도", exact: true }).click();
+  await expect(page.getByText("완료 요청 실패율: 33.3%")).toBeVisible();
+});
+
+test("알림 설정 저장 결과와 채널 준비 상태를 구분한다", async ({ page }) => {
+  await mockApi(page);
+  let saved: Record<string, unknown> | undefined;
+  await page.route("**/api/v1/members/me/notifications/preference", route => {
+    if (route.request().method() === "PUT") saved = route.request().postDataJSON();
+    return route.fulfill({ json: saved ?? {} });
+  });
+  await page.goto("/");
+  await signup(page);
+  await page.getByRole("button", { name: "알림 0개", exact: true }).click();
+  await page.getByRole("tab", { name: "알림 설정" }).click();
+  await page.getByRole("checkbox", { name: "마감 7일 전", exact: true }).uncheck();
+  await page.getByRole("button", { name: "알림 설정 저장" }).click();
+  await expect(page.getByText("알림 설정을 저장했습니다.")).toBeVisible();
+  expect(saved?.deadline7dEnabled).toBe(false);
+  await expect(page.getByLabel("외부 알림 채널 상태").getByText("준비 중", { exact: true })).toHaveCount(4);
 });
 
 test("AI 미연결 상태는 신청 버튼 없이 준비 안내를 표시한다", async ({ page }) => {

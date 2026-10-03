@@ -8,6 +8,7 @@ import {
 } from "./api";
 import AdminMembersPanel from "./AdminMembersPanel";
 import AdminAuditPanel from "./AdminAuditPanel";
+import AdminAiUsagePanel from "./AdminAiUsagePanel";
 import AdminMemberStatisticsPanel from "./AdminMemberStatisticsPanel";
 import AdminPushNotificationPanel from "./AdminPushNotificationPanel";
 import { useDialogAccessibility } from "./useDialogAccessibility";
@@ -43,7 +44,7 @@ function formatDuration(seconds?: number | null): string {
 }
 
 export default function AdminSyncDialog({ open, onClose, currentMemberId }: AdminSyncDialogProps) {
-  const [tab, setTab] = useState<"sync" | "members" | "statistics" | "push" | "audit">("sync");
+  const [tab, setTab] = useState<"sync" | "members" | "statistics" | "push" | "audit" | "ai">("sync");
   const [dashboard, setDashboard] = useState<AdminSyncDashboard>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -119,9 +120,10 @@ export default function AdminSyncDialog({ open, onClose, currentMemberId }: Admi
           <button type="button" role="tab" aria-selected={tab === "statistics"} className={tab === "statistics" ? "active" : ""} onClick={() => setTab("statistics")}>회원 통계</button>
           <button type="button" role="tab" aria-selected={tab === "push"} className={tab === "push" ? "active" : ""} onClick={() => setTab("push")}>푸시 발송</button>
           <button type="button" role="tab" aria-selected={tab === "audit"} className={tab === "audit" ? "active" : ""} onClick={() => setTab("audit")}>감사 로그</button>
+          <button type="button" role="tab" aria-selected={tab === "ai"} className={tab === "ai" ? "active" : ""} onClick={() => setTab("ai")}>AI 사용량</button>
         </div>
 
-        {tab === "members" ? <AdminMembersPanel currentMemberId={currentMemberId} /> : tab === "statistics" ? <AdminMemberStatisticsPanel /> : tab === "push" ? <AdminPushNotificationPanel /> : tab === "audit" ? <AdminAuditPanel /> : loading && !dashboard ? <p className="admin-sync-loading" role="status">운영 현황을 불러오는 중…</p> : error ? (
+        {tab === "ai" ? <AdminAiUsagePanel /> : tab === "members" ? <AdminMembersPanel currentMemberId={currentMemberId} /> : tab === "statistics" ? <AdminMemberStatisticsPanel /> : tab === "push" ? <AdminPushNotificationPanel /> : tab === "audit" ? <AdminAuditPanel /> : loading && !dashboard ? <p className="admin-sync-loading" role="status">운영 현황을 불러오는 중…</p> : error ? (
           <div className="admin-sync-error" role="alert"><p>{error}</p><button type="button" onClick={() => setVersion((value) => value + 1)}>다시 시도</button></div>
         ) : dashboard && (
           <>

@@ -135,6 +135,9 @@ class MigrationValidationTest {
         );
 
         assertThat(noticeTableCount).isEqualTo(1);
+        for (String table : java.util.List.of("ai_consultation_gate", "ai_consultation_attempt", "member_push_receipt")) {
+            assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM information_schema.tables WHERE table_name=?", Integer.class, table)).isEqualTo(1);
+        }
         assertThat(syncTableCount).isEqualTo(1);
         assertThat(memberTableCount).isEqualTo(1);
         assertThat(preferenceTableCount).isEqualTo(1);

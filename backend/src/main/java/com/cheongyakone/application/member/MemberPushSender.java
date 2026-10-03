@@ -9,13 +9,18 @@ public interface MemberPushSender {
 
     PushDeliveryResult send(MemberNotification notification, List<String> pushTokens);
 
-    record PushDeliveryResult(boolean retryableFailure, List<String> invalidTokens, String error) {
+    record PushDeliveryResult(boolean retryableFailure, List<String> invalidTokens,
+                              List<String> successfulTokens, String error) {
+        public PushDeliveryResult {
+            invalidTokens = List.copyOf(invalidTokens);
+            successfulTokens = List.copyOf(successfulTokens);
+        }
         public static PushDeliveryResult none() {
-            return new PushDeliveryResult(false, List.of(), null);
+            return new PushDeliveryResult(false, List.of(), List.of(), null);
         }
 
         public static PushDeliveryResult retryableFailure(String error) {
-            return new PushDeliveryResult(true, List.of(), error);
+            return new PushDeliveryResult(true, List.of(), List.of(), error);
         }
     }
 }

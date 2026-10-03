@@ -14,7 +14,7 @@ class MemberPushSafetyTest {
         var notifications = mock(MemberNotificationRepository.class);
         var devices = mock(MemberDeviceTokenRepository.class);
         var delivery = new MemberNotificationPushDelivery(notifications, devices,
-                new DisabledMemberPushSender(), Clock.systemUTC());
+                new DisabledMemberPushSender(), Clock.systemUTC(), mock(MemberPushReceiptStore.class));
         assertThat(delivery.deliver(1L)).isFalse();
         verifyNoInteractions(notifications, devices);
     }

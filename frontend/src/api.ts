@@ -4,6 +4,16 @@ export type HousingCategory = "APARTMENT" | "PUBLIC_RENTAL" | "OFFICETEL";
 export type SupplyType = "SALE" | "PUBLIC_RENTAL";
 export type NoticeStatus = "UPCOMING" | "OPEN" | "CLOSED" | "ANNOUNCED";
 export type AiTopic = "ELIGIBILITY" | "CASH" | "SCORE";
+export interface AiUsageDay {
+  date: string;
+  requests: number;
+  succeeded: number;
+  failed: number;
+  active: number;
+}
+export function fetchAdminAiUsage(signal?: AbortSignal): Promise<AiUsageDay[]> {
+  return requestJson("/api/v1/admin/ai-consultations/usage", { signal });
+}
 export type NotificationChannelId = "EMAIL" | "APP_PUSH" | "KAKAO_ALIMTALK" | "SMS";
 export interface NotificationChannelAvailability {
   id: NotificationChannelId;

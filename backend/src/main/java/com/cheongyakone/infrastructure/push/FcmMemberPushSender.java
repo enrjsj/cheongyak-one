@@ -67,8 +67,10 @@ public class FcmMemberPushSender implements MemberPushSender {
         try {
             BatchResponse response = messaging.sendEachForMulticast(builder.build());
             List<String> invalidTokens = new ArrayList<>();
+            List<String> successfulTokens = new ArrayList<>();
             for (int index = 0; index < response.getResponses().size(); index++) {
                 SendResponse sendResponse = response.getResponses().get(index);
+                if (sendResponse.isSuccessful()) successfulTokens.add(pushTokens.get(index));
                 if (!sendResponse.isSuccessful() && isInvalidToken(sendResponse.getException())) {
                     invalidTokens.add(pushTokens.get(index));
                 }
@@ -79,7 +81,7 @@ public class FcmMemberPushSender implements MemberPushSender {
             boolean retryableFailure = response.getResponses().stream()
                     .filter(sendResponse -> !sendResponse.isSuccessful())
                     .anyMatch(sendResponse -> !isInvalidToken(sendResponse.getException()));
-            return new PushDeliveryResult(retryableFailure, invalidTokens,
+            return new PushDeliveryResult(retryableFailure, invalidTokens, successfulTokens,
                     retryableFailure ? "FCM partial delivery failure" : null);
         } catch (FirebaseMessagingException exception) {
             log.error("FCM member push failed: notificationId={}, code={}",
