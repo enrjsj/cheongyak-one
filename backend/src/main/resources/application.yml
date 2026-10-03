@@ -61,6 +61,10 @@ management:
         enabled: true
 
 app:
+  ai-consultation:
+    enabled: ${AI_CONSULTATION_ENABLED:false}
+    api-key: ${OPENAI_API_KEY:}
+    model: ${OPENAI_MODEL:}
   auth:
     cookie-name: CHEONGYAK_SESSION
     csrf-cookie-name: CHEONGYAK_CSRF

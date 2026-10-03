@@ -3,6 +3,36 @@ export type SourceSystem = "REB_APT" | "REB_OFFICETEL" | "MYHOME_PUBLIC_RENTAL";
 export type HousingCategory = "APARTMENT" | "PUBLIC_RENTAL" | "OFFICETEL";
 export type SupplyType = "SALE" | "PUBLIC_RENTAL";
 export type NoticeStatus = "UPCOMING" | "OPEN" | "CLOSED" | "ANNOUNCED";
+export type AiTopic = "ELIGIBILITY" | "CASH" | "SCORE";
+export type NotificationChannelId = "EMAIL" | "APP_PUSH" | "KAKAO_ALIMTALK" | "SMS";
+export interface NotificationChannelAvailability {
+  id: NotificationChannelId;
+  label: string;
+  available: boolean;
+  message: string;
+}
+export function fetchNotificationChannelAvailability(signal?: AbortSignal): Promise<{ channels: NotificationChannelAvailability[] }> {
+  return requestJson("/api/v1/members/me/notifications/channels", { signal });
+}
+export interface AiConsultation {
+  noticeId: number;
+  topic: AiTopic;
+  answer: string;
+  officialUrl?: string;
+  noticeSyncedAt: string;
+  generatedAt: string;
+  disclaimer: string;
+}
+
+export function fetchAiAvailability(signal?: AbortSignal): Promise<{ available: boolean }> {
+  return requestJson("/api/v1/members/me/ai-consultations/availability", { signal });
+}
+
+export function requestAiConsultation(noticeId: number, topic: AiTopic, consent: boolean, signal?: AbortSignal): Promise<AiConsultation> {
+  return requestJson("/api/v1/members/me/ai-consultations", {
+    method: "POST", body: JSON.stringify({ noticeId, topic, consent }), signal,
+  }, 75000);
+}
 
 export interface NoticeSummary {
   id: number;
@@ -444,7 +474,7 @@ function csrfToken(): string | undefined {
   return cookieValue("CHEONGYAK_CSRF") ?? responseCsrfToken;
 }
 
-async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
+async function requestJson<T>(url: string, init: RequestInit = {}, timeoutMs = API_REQUEST_TIMEOUT_MS): Promise<T> {
   const requestUrl = apiUrl(url);
   if (DEMO_MODE) return demoJson<T>(requestUrl, init);
   const headers = new Headers(init.headers);
@@ -463,17 +493,33 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   const timeout = globalThis.setTimeout(() => {
     timedOut = true;
     controller.abort();
-  }, API_REQUEST_TIMEOUT_MS);
+  }, timeoutMs);
 
-  let response: Response;
   try {
-    response = await fetch(requestUrl, {
+    const response = await fetch(requestUrl, {
       ...init,
       headers,
       signal: controller.signal,
       // HttpOnly 회원 세션을 동일 출처 API 요청에 자동으로 포함한다.
       credentials: "include",
     });
+    const issuedCsrfToken = response.headers.get("X-CSRF-Token");
+    if (issuedCsrfToken) responseCsrfToken = issuedCsrfToken;
+
+    if (!response.ok) {
+      const problem = await response.json().catch((error: unknown) => {
+        if (controller.signal.aborted) throw error;
+        return undefined;
+      }) as { detail?: string } | undefined;
+      throw new ApiError(response.status, problem?.detail ?? (response.status === 404
+        ? "요청한 정보를 찾지 못했습니다."
+        : "요청을 처리하지 못했습니다."));
+    }
+
+    if (response.status === 204) return undefined as T;
+    const body = await response.text();
+    if (!body.trim()) return undefined as T;
+    return JSON.parse(body) as T;
   } catch (error) {
     if (timedOut) throw new ApiRequestTimeoutError();
     throw error;
@@ -481,21 +527,6 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
     globalThis.clearTimeout(timeout);
     init.signal?.removeEventListener("abort", abortFromCaller);
   }
-
-  const issuedCsrfToken = response.headers.get("X-CSRF-Token");
-  if (issuedCsrfToken) responseCsrfToken = issuedCsrfToken;
-
-  if (!response.ok) {
-    const problem = await response.json().catch(() => undefined) as { detail?: string } | undefined;
-    throw new ApiError(response.status, problem?.detail ?? (response.status === 404
-      ? "요청한 정보를 찾지 못했습니다."
-      : "요청을 처리하지 못했습니다."));
-  }
-
-  if (response.status === 204) return undefined as T;
-  const body = await response.text();
-  if (!body.trim()) return undefined as T;
-  return JSON.parse(body) as T;
 }
 
 export async function fetchNotices(

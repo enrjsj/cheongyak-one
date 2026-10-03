@@ -10,9 +10,10 @@ import java.util.List;
 @Component
 @ConditionalOnProperty(prefix = "app.member-push", name = "delivery", havingValue = "disabled", matchIfMissing = true)
 public class DisabledMemberPushSender implements MemberPushSender {
+    @Override public boolean enabled() { return false; }
 
     @Override
     public PushDeliveryResult send(MemberNotification notification, List<String> pushTokens) {
-        return PushDeliveryResult.none();
+        return PushDeliveryResult.retryableFailure("Push delivery is disabled");
     }
 }

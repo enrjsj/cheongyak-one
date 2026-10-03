@@ -54,6 +54,29 @@ class MemberApiIntegrationTest {
 
     private static final String PASSWORD = "Strong-password-1!";
 
+    @Test
+    void aiConsultationRequiresSessionCsrfValidationAndConfiguration() throws Exception {
+        String path = "/api/v1/members/me/ai-consultations";
+        mockMvc.perform(get(path + "/availability")).andExpect(status().isUnauthorized());
+        signup("ai-offline@example.com", "상담회원");
+        AuthenticatedSession session = authenticatedSession(login("ai-offline@example.com", PASSWORD).andReturn());
+        mockMvc.perform(get(path + "/availability").cookie(session.cookie()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.available").value(false))
+                .andExpect(header().string("Cache-Control", "no-store"));
+        mockMvc.perform(post(path).cookie(session.cookie()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"noticeId\":1,\"topic\":\"CASH\",\"consent\":true}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(authenticated(post(path), session).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"noticeId\":-1,\"topic\":\"CASH\",\"consent\":true}"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(authenticated(post(path), session).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"noticeId\":1,\"topic\":\"CASH\",\"consent\":false}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("AI_CONSENT_REQUIRED"));
+        mockMvc.perform(authenticated(post(path), session).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"noticeId\":1,\"topic\":\"CASH\",\"consent\":true}"))
+                .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("AI_NOT_CONFIGURED"));
+    }
+
     @Autowired
     private MockMvc mockMvc;
 

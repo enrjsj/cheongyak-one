@@ -42,6 +42,8 @@ const DEFAULT_PREFERENCE: NotificationPreference = {
 };
 
 const DEFAULT_OUTBOUND_CHANNELS: NotificationChannelAvailability[] = [
+  { id: "EMAIL", label: "이메일", available: false, message: "발송 서버 상태를 확인하지 못했어요." },
+  { id: "APP_PUSH", label: "앱 푸시", available: false, message: "발송 서버와 기기 등록 상태를 확인하지 못했어요." },
   { id: "KAKAO_ALIMTALK", label: "카카오 알림톡", available: false, message: "사업자 채널·승인 템플릿을 연결한 뒤 사용할 수 있어요." },
   { id: "SMS", label: "문자", available: false, message: "발신번호와 문자 발송사를 연결한 뒤 사용할 수 있어요." },
 ];
@@ -109,6 +111,7 @@ export default function NotificationsDialog({
     setError("");
     setNotice("");
     setFilter("ALL");
+    setChannels(DEFAULT_OUTBOUND_CHANNELS);
     Promise.allSettled([fetchNotificationInbox(), fetchNotificationPreference(), fetchNotificationChannelAvailability()])
       .then(([inboxResult, preferenceResult, channelResult]) => {
         if (cancelled) return;
@@ -125,7 +128,7 @@ export default function NotificationsDialog({
         } else if (inboxResult.status === "fulfilled") {
           setError("알림은 불러왔지만 알림 설정을 확인하지 못했습니다.");
         }
-        if (channelResult.status === "fulfilled") {
+        if (channelResult.status === "fulfilled" && Array.isArray(channelResult.value.channels)) {
           setChannels(channelResult.value.channels);
         }
       })
@@ -268,11 +271,11 @@ export default function NotificationsDialog({
               <input type="checkbox" checked={preference.appPushEnabled} onChange={(event) => setPreference((current) => ({ ...current, appPushEnabled: event.target.checked }))} />
             </label>
             <div className="notification-channel-status" aria-label="외부 알림 채널 상태">
-              <b>추가 알림 채널</b>
-              <p>공개 테스트에서는 유료 발송을 실행하지 않아요.</p>
-              {channels.filter((channel) => channel.id === "KAKAO_ALIMTALK" || channel.id === "SMS").map((channel) => (
+              <b>알림 채널 연결 상태</b>
+              <p>수신 설정과 실제 발송 연결은 별도입니다. 문자·알림톡은 업체 연결 전까지 발송하지 않아요.</p>
+              {channels.map((channel) => (
                 <div key={channel.id}>
-                  <span>{channel.label}</span><em className={channel.available ? "ready" : "pending"}>{channel.available ? "연결됨" : "준비 중"}</em>
+                  <span>{channel.label}</span><em className={channel.available ? "ready" : "pending"}>{channel.available ? "설정됨" : "준비 중"}</em>
                   <small>{channel.message}</small>
                 </div>
               ))}

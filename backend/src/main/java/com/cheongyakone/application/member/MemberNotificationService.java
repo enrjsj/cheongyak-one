@@ -26,19 +26,25 @@ public class MemberNotificationService {
     private final MemberNotificationPreferenceRepository preferenceRepository;
     private final MemberNotificationChannelProperties channelProperties;
     private final Clock clock;
+    private final org.springframework.core.env.Environment environment;
+    private final com.cheongyakone.domain.member.MemberDeviceTokenRepository deviceTokenRepository;
 
     public MemberNotificationService(
             MemberService memberService,
             MemberNotificationRepository notificationRepository,
             MemberNotificationPreferenceRepository preferenceRepository,
             MemberNotificationChannelProperties channelProperties,
-            Clock clock
+            Clock clock,
+            org.springframework.core.env.Environment environment,
+            com.cheongyakone.domain.member.MemberDeviceTokenRepository deviceTokenRepository
     ) {
         this.memberService = memberService;
         this.notificationRepository = notificationRepository;
         this.preferenceRepository = preferenceRepository;
         this.channelProperties = channelProperties;
         this.clock = clock;
+        this.environment = environment;
+        this.deviceTokenRepository = deviceTokenRepository;
     }
 
     @Transactional(readOnly = true)
@@ -84,10 +90,15 @@ public class MemberNotificationService {
     @Transactional(readOnly = true)
     public NotificationChannelAvailabilityResponse channelAvailability(String rawToken) {
         // 로그인한 회원에게만 실제 수신 채널의 준비 상태를 노출한다.
-        memberService.requireMember(rawToken);
+        Member member = memberService.requireMember(rawToken);
+        boolean emailConfigured = "smtp".equals(environment.getProperty("app.member-mail.delivery"));
+        boolean pushConfigured = "fcm".equals(environment.getProperty("app.member-push.delivery"));
+        boolean pushRegistered = pushConfigured && deviceTokenRepository.existsByMember_Id(member.getId());
         return new NotificationChannelAvailabilityResponse(List.of(
-                channel("EMAIL", "이메일", false, "공개 테스트에서는 이메일 발송을 아직 연결하지 않았어요."),
-                channel("APP_PUSH", "앱 푸시", false, "FCM과 기기 등록을 연결하면 사용할 수 있어요."),
+                channel("EMAIL", "이메일", emailConfigured, "이메일 발송 서버를 연결한 뒤 사용할 수 있어요."),
+                channel("APP_PUSH", "앱 푸시", pushRegistered, pushConfigured
+                        ? "앱에서 알림 권한을 허용하고 기기를 등록해주세요."
+                        : "FCM 발송 서버 연결을 준비 중이에요."),
                 channel("KAKAO_ALIMTALK", "카카오 알림톡", false,
                         channelProperties.kakaoAlimtalkDelivery().equals("disabled")
                                 ? "사업자 채널·승인 템플릿을 연결한 뒤 사용할 수 있어요."
@@ -106,7 +117,7 @@ public class MemberNotificationService {
                 id,
                 label,
                 available,
-                available ? "발송 채널이 연결되어 있어요." : unavailableMessage
+                available ? "발송 채널이 설정되어 있어요. 수신 설정과 기기 권한을 확인해주세요." : unavailableMessage
         );
     }
 

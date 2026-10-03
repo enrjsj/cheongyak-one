@@ -82,18 +82,20 @@ public class FcmMemberPushSender implements MemberPushSender {
             return new PushDeliveryResult(retryableFailure, invalidTokens,
                     retryableFailure ? "FCM partial delivery failure" : null);
         } catch (FirebaseMessagingException exception) {
-            log.error("FCM member push failed: notificationId={}", notification.getId(), exception);
+            log.error("FCM member push failed: notificationId={}, code={}",
+                    notification.getId(), exception.getMessagingErrorCode());
             return PushDeliveryResult.retryableFailure(
-                    exception.getClass().getSimpleName() + ": " + exception.getMessage()
+                    "FCM delivery failed: " + exception.getMessagingErrorCode()
             );
         }
     }
 
     private boolean isInvalidToken(FirebaseMessagingException exception) {
-        if (exception == null || exception.getMessagingErrorCode() == null) return false;
-        return switch (exception.getMessagingErrorCode()) {
-            case UNREGISTERED, INVALID_ARGUMENT -> true;
-            default -> false;
-        };
+        return exception != null && isExpiredToken(exception.getMessagingErrorCode());
+    }
+
+    static boolean isExpiredToken(com.google.firebase.messaging.MessagingErrorCode code) {
+        // INVALID_ARGUMENT can describe the message payload, not an expired device token.
+        return code == com.google.firebase.messaging.MessagingErrorCode.UNREGISTERED;
     }
 }

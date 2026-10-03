@@ -1,5 +1,6 @@
 // 서비스의 주요 사용자 흐름(검색·관심청약·비교·회원·사전점검)을 조합하는 화면 컨테이너다.
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { AiConsultationPanel } from "./AiConsultationPanel";
 import {
   changeMemberPassword,
   ApiError,
@@ -1948,6 +1949,7 @@ export default function Home() {
             )}
             <button
               className={`account-button ${member ? "signed-in" : ""}`}
+              aria-label={member ? member.nickname : undefined}
               type="button"
               onClick={() => { setNotificationsOpen(false); setMemberDialog(member ? "account" : "login"); }}
               disabled={authLoading}
@@ -2469,6 +2471,7 @@ export default function Home() {
                 {(favoriteTrackers.get(detailApplication.id)?.applicationResult ?? "PENDING") !== "PENDING" && <input key={`${detailApplication.id}-${favoriteTrackers.get(detailApplication.id)?.applicationResultRecordedAt ?? "result"}`} defaultValue={favoriteTrackers.get(detailApplication.id)?.applicationResultMemo ?? ""} maxLength={500} placeholder="결과 메모 (예: 계약 일정 확인)" onBlur={(event) => void saveFavoriteTracker(detailApplication.id, "APPLIED", favoriteTrackers.get(detailApplication.id)?.memo ?? "", {}, favoriteTrackers.get(detailApplication.id)?.applicationResult ?? "PENDING", event.target.value)} />}
               </div>
             )}
+            <AiConsultationPanel key={detailApplication.id} noticeId={detailApplication.id} signedIn={Boolean(member)} />
             <div className="detail-actions"><button type="button" className="secondary-button" onClick={() => void toggleSaved(detailApplication.id)} disabled={favoritePendingId === detailApplication.id}><Icon name="bookmark" /> {savedIds.has(detailApplication.id) ? "관심 해제" : "관심 저장"}</button><button type="button" className="secondary-button" onClick={() => void copyNoticeLink(detailApplication.id)}>링크 복사</button>{detailApplication.officialUrl ? <a className="primary-button" href={detailApplication.officialUrl} target="_blank" rel="noreferrer">공식 공고 보기 <Icon name="arrow" /></a> : <button type="button" className="primary-button" disabled>공식 링크 확인 중</button>}</div>
           </section>
         </div>
