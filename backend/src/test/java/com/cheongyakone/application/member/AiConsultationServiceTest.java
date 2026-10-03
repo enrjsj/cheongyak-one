@@ -39,6 +39,7 @@ class AiConsultationServiceTest {
     @Test void sendsOnlyPublicFactsAndReleasesQuotaOnFailure() {
         var member = mock(Member.class);
         when(member.getId()).thenReturn(42L);
+        when(limiter.acquire(42L)).thenReturn("attempt");
         when(members.requireMember("private-session")).thenReturn(member);
         var notice = JsonMapper.builder().build().readValue(
                 "{\"id\":1,\"title\":\"공개 공고\"}", NoticeDetailResponse.class);
@@ -51,7 +52,31 @@ class AiConsultationServiceTest {
         assertThatThrownBy(() -> service(true).consult("private-session", 1L, AiConsultationService.Topic.CASH, true))
                 .isInstanceOf(IllegalStateException.class);
         verify(limiter).acquire(42L);
-        verify(limiter).release();
+        verify(limiter).finish("attempt", false);
         verify(member, never()).getEmail();
+    }
+    @Test void rejectedAnswerCountsAsFailureAndIsNotReturned() {
+        var member = mock(Member.class);
+        when(member.getId()).thenReturn(42L);
+        when(members.requireMember("session")).thenReturn(member);
+        when(limiter.acquire(42L)).thenReturn("attempt");
+        when(notices.findById(1L)).thenReturn(JsonMapper.builder().build()
+                .readValue("{\"id\":1,\"title\":\"공개 공고\"}", NoticeDetailResponse.class));
+        when(client.consult(anyString())).thenReturn("신청 가능합니다.");
+        assertThatThrownBy(() -> service(true).consult("session", 1L, AiConsultationService.Topic.ELIGIBILITY, true))
+                .isInstanceOf(MemberApiException.class);
+        verify(limiter).finish("attempt", false);
+    }
+    @Test void checklistAnswerCompletesUsageSuccessfully() {
+        var member = mock(Member.class);
+        when(member.getId()).thenReturn(42L);
+        when(members.requireMember("session")).thenReturn(member);
+        when(limiter.acquire(42L)).thenReturn("attempt");
+        when(notices.findById(1L)).thenReturn(JsonMapper.builder().build()
+                .readValue("{\"id\":1,\"title\":\"공개 공고\"}", NoticeDetailResponse.class));
+        when(client.consult(anyString())).thenReturn("공식 공고에서 거주지 요건을 확인하세요.");
+        assertThat(service(true).consult("session", 1L, AiConsultationService.Topic.ELIGIBILITY, true).answer())
+                .contains("거주지");
+        verify(limiter).finish("attempt", true);
     }
 }

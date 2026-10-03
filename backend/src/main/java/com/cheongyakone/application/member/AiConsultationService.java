@@ -49,12 +49,15 @@ public class AiConsultationService {
         input.put("applyEndDate", notice.applyEndDate());
         input.put("syncedAt", notice.syncedAt());
         input.put("today", java.time.LocalDate.now(clock));
-        limiter.acquire(member.getId());
+        String attemptId = limiter.acquire(member.getId());
+        boolean success = false;
         try {
-            return new Result(noticeId, topic, client.consult(mapper.writeValueAsString(input)),
+            String answer = AiConsultationAnswerPolicy.check(client.consult(mapper.writeValueAsString(input)));
+            success = true;
+            return new Result(noticeId, topic, answer,
                     notice.officialUrl(), notice.syncedAt(), clock.instant(),
                     "AI 답변은 오류가 있을 수 있으며 청약 자격 판정·금융 조언이 아닙니다. 최종 판단은 공식 공고문과 담당 기관에서 확인하세요.");
-        } finally { limiter.release(); }
+        } finally { limiter.finish(attemptId, success); }
     }
 
     public enum Topic {
