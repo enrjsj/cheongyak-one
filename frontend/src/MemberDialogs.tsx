@@ -9,6 +9,7 @@ import {
   MemberSession,
 } from "./api";
 import { useDialogAccessibility } from "./useDialogAccessibility";
+import AccountAccessPanel from "./AccountAccessPanel";
 
 export type MemberDialogMode = "login" | "signup" | "verify-email" | "forgot-password" | "reset-password" | "account" | null;
 
@@ -39,17 +40,6 @@ const RESIDENCE_REGIONS = [
 
 function optionalNumber(value: string): number | undefined {
   return value === "" ? undefined : Number(value);
-}
-
-function formatSessionDate(value: string): string {
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
 }
 
 function formatConsentDate(value: string): string {
@@ -95,7 +85,6 @@ export default function MemberDialogs({
   const [termsAgreed, setTermsAgreed] = useState(false);
   const [privacyPolicyAgreed, setPrivacyPolicyAgreed] = useState(false);
   const [policyDocument, setPolicyDocument] = useState<"terms" | "privacy" | null>(null);
-  const [policyConsents, setPolicyConsents] = useState<PolicyConsent[]>([]);
   const [confirmPersonalProfileDeletion, setConfirmPersonalProfileDeletion] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -105,10 +94,6 @@ export default function MemberDialogs({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [sessions, setSessions] = useState<MemberSession[]>([]);
-  const [sessionsLoading, setSessionsLoading] = useState(false);
-  const [sessionBusy, setSessionBusy] = useState<number | "others">();
-  const [sessionError, setSessionError] = useState("");
   const dialogRef = useDialogAccessibility<HTMLElement>(Boolean(mode), () => onModeChange(null));
 
   useEffect(() => {
@@ -144,36 +129,6 @@ export default function MemberDialogs({
       setPrivacyPolicyAgreed(false);
     }
   }, [member, mode]);
-
-  useEffect(() => {
-    if (mode !== "account" || !member) return;
-    onLoadPolicyConsents().then(setPolicyConsents).catch(() => setPolicyConsents([]));
-  }, [member, mode, onLoadPolicyConsents]);
-
-  useEffect(() => {
-    if (mode !== "account" || !member) {
-      setSessions([]);
-      setSessionError("");
-      return;
-    }
-
-    let cancelled = false;
-    setSessionsLoading(true);
-    setSessionError("");
-    onLoadSessions()
-      .then((items) => {
-        if (!cancelled) setSessions(items);
-      })
-      .catch((requestError: unknown) => {
-        if (!cancelled) {
-          setSessionError(requestError instanceof Error ? requestError.message : "로그인 기기를 불러오지 못했습니다.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setSessionsLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [member, mode, onLoadSessions]);
 
   if (!mode) return null;
 
@@ -376,7 +331,9 @@ export default function MemberDialogs({
         ) : member ? (
           <div className="account-sections">
             <div className="account-summary"><span>{member.nickname.slice(0, 1)}</span><div><b>{member.nickname}</b><small>{member.email}</small></div></div>
-            <section className="account-section"><h3>약관 동의 내역</h3>{policyConsents.length ? <ul className="policy-consent-history">{policyConsents.map((consent) => <li key={`${consent.policyType}-${consent.policyVersion}`}><b>{consent.policyType === "TERMS" ? "서비스 이용약관" : "개인정보 처리방침"}</b><span>{consent.policyVersion} · {formatConsentDate(consent.agreedAt)}</span></li>)}</ul> : <p className="field-help">동의 내역을 불러오지 못했습니다.</p>}</section>
+            <AccountAccessPanel key={member.id} memberId={member.id} disabled={busy}
+              onLoadSessions={onLoadSessions} onRevokeSession={onRevokeSession}
+              onRevokeOtherSessions={onRevokeOtherSessions} onLoadPolicyConsents={onLoadPolicyConsents} />
 
             <form className="account-section" onSubmit={(event) => {
               event.preventDefault();
@@ -432,41 +389,7 @@ export default function MemberDialogs({
               <button className="secondary-button" type="submit" disabled={busy}>비밀번호 변경</button>
             </form>
 
-            <section className="account-section session-section" aria-busy={sessionsLoading}>
-              <div className="session-heading">
-                <div><h3>로그인 기기</h3><p>현재 계정에 로그인된 기기를 확인하고 종료할 수 있습니다.</p></div>
-                {sessions.filter((session) => !session.current).length > 0 && (
-                  <button type="button" disabled={sessionBusy !== undefined} onClick={() => {
-                    setSessionBusy("others");
-                    setSessionError("");
-                    void onRevokeOtherSessions()
-                      .then(setSessions)
-                      .catch((requestError: unknown) => setSessionError(requestError instanceof Error ? requestError.message : "다른 기기를 종료하지 못했습니다."))
-                      .finally(() => setSessionBusy(undefined));
-                  }}>{sessionBusy === "others" ? "종료 중…" : "다른 기기 모두 종료"}</button>
-                )}
-              </div>
-              {sessionsLoading ? <p className="session-state">로그인 기기를 확인하고 있습니다…</p> : sessions.map((session) => (
-                <article className={`session-item${session.current ? " current" : ""}`} key={session.id}>
-                  <span className="session-device" aria-hidden="true">{session.current ? "●" : "○"}</span>
-                  <div>
-                    <b>{session.clientName}{session.current && <em>현재 기기</em>}</b>
-                    <small>{formatSessionDate(session.createdAt)} 로그인</small>
-                    <small>{formatSessionDate(session.expiresAt)} 자동 만료</small>
-                  </div>
-                  {!session.current && <button type="button" disabled={sessionBusy !== undefined} onClick={() => {
-                    setSessionBusy(session.id);
-                    setSessionError("");
-                    void onRevokeSession(session.id)
-                      .then(() => setSessions((items) => items.filter((item) => item.id !== session.id)))
-                      .catch((requestError: unknown) => setSessionError(requestError instanceof Error ? requestError.message : "로그인 기기를 종료하지 못했습니다."))
-                      .finally(() => setSessionBusy(undefined));
-                  }}>{sessionBusy === session.id ? "종료 중…" : "종료"}</button>}
-                </article>
-              ))}
-              {!sessionsLoading && sessions.length === 0 && !sessionError && <p className="session-state">표시할 로그인 기기가 없습니다.</p>}
-              {sessionError && <p className="member-message error" role="alert">{sessionError}</p>}
-            </section>
+
 
             {notice && <p className="member-message success" role="status">{notice}</p>}
             {error && <p className="member-message error" role="alert">{error}</p>}

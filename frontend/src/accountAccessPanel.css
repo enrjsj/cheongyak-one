@@ -1,0 +1,7 @@
+.account-access-panel { display: grid; gap: 16px; min-width: 0; }
+.account-access-panel .session-heading { flex-wrap: wrap; gap: 8px; }
+.account-access-panel .session-item > div { min-width: 0; overflow-wrap: anywhere; }
+.account-access-panel .session-item button { flex-shrink: 0; }
+.account-access-panel .session-confirm { margin-top: 12px; padding: 12px; border: 1px solid #dfe6ef; border-radius: 8px; }
+.account-access-panel .session-confirm button { margin-right: 8px; min-height: 36px; }
+.account-access-panel p { overflow-wrap: anywhere; }

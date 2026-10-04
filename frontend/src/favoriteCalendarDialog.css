@@ -11,3 +11,11 @@
 .favorite-calendar-event .event-type { padding: 3px 5px; border-radius: 5px; background: #edf3fd; color: #416fae; font-size: 8px; font-style: normal; font-weight: 800; }
 .favorite-calendar-event .event-type.apply-end { background: #fff0ee; color: #c65c53; }
 .favorite-calendar-event .event-type.winner { background: #f0ebfb; color: #7054ae; }
+.favorite-calendar-search { display: flex; flex-wrap: wrap; gap: 8px; }
+.favorite-calendar-search label { display: grid; gap: 4px; flex: 1 1 140px; min-width: 0; font-size: 12px; }
+.favorite-calendar-search input, .favorite-calendar-search select { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px; min-height: 38px; border: 1px solid #dfe6ef; border-radius: 8px; background: white; color: inherit; }
+.favorite-calendar-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.favorite-calendar-actions button { border: 1px solid #dfe6ef; border-radius: 8px; background: white; padding: 8px 12px; cursor: pointer; }
+.favorite-calendar-actions button:disabled { opacity: .5; cursor: default; }
+.favorite-calendar-note { color: #65758b; font-size: 11px; line-height: 1.6; margin: 0; }
+.favorite-calendar-event > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }

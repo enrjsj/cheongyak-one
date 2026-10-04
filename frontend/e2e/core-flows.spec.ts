@@ -650,10 +650,136 @@ test("알림 저장 중 세션이 만료되면 추가 저장을 차단한다", a
   await page.getByRole("button", { name: "알림 0개", exact: true }).click();
   await page.getByRole("tab", { name: "알림 설정" }).click();
   await page.getByRole("button", { name: "알림 설정 저장" }).click();
-  await expect(page.getByText("로그인이 만료되었습니다. 다시 로그인한 뒤 알림 창을 열어주세요.")).toBeVisible();
+  await expect(page.getByText("로그인이 만료되었거나 접근 권한이 없습니다. 다시 로그인한 뒤 알림 창을 열어주세요.")).toBeVisible();
   await expect(page.getByRole("button", { name: "알림 설정 저장" })).toBeDisabled();
   expect(saves).toBe(1);
 });
+
+const inboxRows = [
+  { id: 31, noticeId: 1, noticeTitle: "서울 접수 알림", type: "APPLY_START", eventDate: "2026-10-04", createdAt: "2026-10-01T00:00:00Z", message: "접수 시작을 확인하세요", readAt: null },
+  { id: 32, noticeId: 2, noticeTitle: "부산 임대 알림", type: "NOTICE_UPDATED", eventDate: "2026-10-04", createdAt: "2026-10-03T00:00:00Z", message: "공고 변경을 확인하세요", readAt: "2026-10-03T01:00:00Z" },
+  { id: 33, noticeId: 1, noticeTitle: "서울 마감 알림", type: "APPLY_DEADLINE_1D", eventDate: "2026-10-04", createdAt: "2026-10-02T00:00:00Z", message: "내일 마감입니다", readAt: null },
+];
+
+async function openMemberInbox(page: Page) {
+  await page.goto("/");
+  await signup(page);
+  await page.getByRole("button", { name: /^알림 \d+개$/ }).click();
+  await expect(page.getByLabel("알림 검색")).toBeVisible();
+}
+
+test("알림함 검색과 정렬은 추가 조회 없이 즉시 반영되고 모바일에서 넘치지 않는다", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page);
+  let reads = 0;
+  await page.route("**/api/v1/members/me/notifications", route => { reads++; return route.fulfill({ json: { notifications: inboxRows, unreadCount: 2 } }); });
+  await openMemberInbox(page);
+  const count = reads;
+  const dialog = page.getByRole("dialog", { name: "맞춤 청약 알림" });
+  await expect(dialog.locator(".notification-item").first()).toContainText("부산 임대 알림");
+  await dialog.getByLabel("알림 정렬").selectOption("UNREAD_FIRST");
+  await expect(dialog.locator(".notification-item").first()).toContainText("서울 마감 알림");
+  await dialog.getByLabel("알림 검색").fill("서울   마감");
+  await expect(dialog.locator(".notification-item")).toHaveCount(1);
+  await expect(dialog.getByText("불러온 3건 중 1건 표시")).toBeVisible();
+  await dialog.getByLabel("알림 검색").fill("존재하지 않음");
+  await expect(dialog.getByText("검색 결과가 없어요")).toBeVisible();
+  await dialog.getByRole("button", { name: "검색 초기화" }).click();
+  await dialog.getByRole("button", { name: "변경 1", exact: true }).click();
+  await expect(dialog.locator(".notification-item")).toHaveCount(1);
+  await expect(dialog.getByRole("button", { name: "변경 1", exact: true })).toHaveAttribute("aria-pressed", "true");
+  expect(reads).toBe(count);
+  expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/notification-inbox-mobile.png" });
+});
+
+test("알림함 재진입 조회 실패는 이전 목록과 빈 알림 안내를 보여주지 않는다", async ({ page }) => {
+  await mockApi(page);
+  let fail = false;
+  await page.route("**/api/v1/members/me/notifications", route => fail
+    ? route.fulfill({ status: 503, json: { detail: "조회 실패" } })
+    : route.fulfill({ json: { notifications: inboxRows, unreadCount: 2 } }));
+  await openMemberInbox(page);
+  await page.keyboard.press("Escape");
+  fail = true;
+  await page.getByRole("button", { name: "알림 2개", exact: true }).click();
+  await expect(page.getByText("알림 목록을 확인하지 못했습니다. 새로고침으로 다시 불러와주세요.")).toBeVisible();
+  await expect(page.locator(".notification-item")).toHaveCount(0);
+  await expect(page.getByText("아직 도착한 알림이 없어요")).toHaveCount(0);
+  fail = false;
+  await page.getByRole("button", { name: "새로고침", exact: true }).click();
+  await expect(page.locator(".notification-item")).toHaveCount(3);
+});
+
+for (const action of ["읽음", "모두 읽음", "설정 저장"]) {
+  test(`알림함 ${action} 동일 이벤트의 중복 요청과 교차 작업을 차단한다`, async ({ page }) => {
+    await mockApi(page);
+    await page.route("**/api/v1/members/me/notifications", route => route.fulfill({ json: { notifications: [inboxRows[0]], unreadCount: 1 } }));
+    let pending: Route | undefined;
+    let writes = 0;
+    await page.route("**/api/v1/members/me/notifications/**", route => {
+      if (route.request().method() === "GET") return route.fallback();
+      writes++; pending = route;
+    });
+    await openMemberInbox(page);
+    const dialog = page.getByRole("dialog", { name: "맞춤 청약 알림" });
+    if (action === "설정 저장") {
+      await dialog.getByRole("tab", { name: "알림 설정" }).click();
+      await dialog.locator("form").evaluate((form: HTMLFormElement) => { form.requestSubmit(); form.requestSubmit(); });
+    } else {
+      const button = action === "읽음" ? dialog.locator(".notification-item") : dialog.getByRole("button", { name: "모두 읽음" });
+      await button.evaluate((el: HTMLButtonElement) => { el.click(); el.click(); });
+    }
+    await expect.poll(() => Boolean(pending)).toBe(true);
+    expect(writes).toBe(1);
+    await dialog.getByRole("tab", { name: "알림함", exact: false }).click();
+    await expect(dialog.getByRole("button", { name: "모두 읽음" })).toBeDisabled();
+    await expect(dialog.getByRole("button", { name: "새로고침", exact: true })).toBeDisabled();
+    await expect(dialog.locator(".notification-item")).toBeDisabled();
+    // Fail safely so all variants stay in the dialog and demonstrate lock recovery.
+    await pending!.fulfill({ status: 503, json: { detail: "쓰기 실패" } });
+    await expect(dialog.getByRole("button", { name: "모두 읽음" })).toBeEnabled();
+    expect(writes).toBe(1);
+  });
+}
+
+test("알림함 자동 갱신 실패는 이전 목록을 유지하고 수동 갱신으로 복구한다", async ({ page }) => {
+  await mockApi(page);
+  let fail = false;
+  await page.route("**/api/v1/members/me/notifications", route => fail
+    ? route.fulfill({ status: 503, json: { detail: "자동 갱신 실패" } })
+    : route.fulfill({ json: { notifications: inboxRows, unreadCount: 2 } }));
+  await openMemberInbox(page);
+  fail = true;
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await expect(page.getByText(/최근 알림을 갱신하지 못했습니다/)).toBeVisible();
+  await expect(page.locator(".notification-item")).toHaveCount(3);
+  fail = false;
+  await page.getByRole("button", { name: "새로고침", exact: true }).click();
+  await expect(page.getByText(/최근 알림을 갱신하지 못했습니다/)).toHaveCount(0);
+  await expect(page.locator(".notification-item")).toHaveCount(3);
+});
+
+for (const status of [401, 403]) {
+  test(`알림함 자동 갱신 ${status} 이후 읽음과 새로고침을 차단한다`, async ({ page }) => {
+    await mockApi(page);
+    let denied = false;
+    let reads = 0;
+    await page.route("**/api/v1/members/me/notifications", route => { reads++; return denied
+      ? route.fulfill({ status, json: { detail: "접근 거부" } })
+      : route.fulfill({ json: { notifications: inboxRows, unreadCount: 2 } }); });
+    await openMemberInbox(page);
+    denied = true;
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await expect(page.getByText(/로그인이 만료되었거나 접근 권한/)).toBeVisible();
+    const count = reads;
+    await expect(page.getByRole("button", { name: "새로고침", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "모두 읽음" })).toBeDisabled();
+    await expect(page.locator(".notification-item").first()).toBeDisabled();
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    expect(reads).toBe(count);
+  });
+}
 
 test("닫힌 알림창의 늦은 새로고침이 새 창의 읽지 않은 개수를 덮어쓰지 않는다", async ({ page }) => {
   await mockApi(page);
@@ -747,6 +873,311 @@ test("AI 미연결 상태는 신청 버튼 없이 준비 안내를 표시한다"
   await page.locator("article").filter({ hasText: "E2E 서울 공공분양" }).getByRole("button", { name: /공고 핵심만 보기/ }).click();
   await expect(page.getByText("OpenAI 연결 준비 중입니다. 연결 후 상담을 이용할 수 있습니다.")).toBeVisible();
   await expect(page.getByRole("button", { name: "확인 항목 정리하기" })).toHaveCount(0);
+});
+
+const accountSessions = [
+  { id: 2, clientName: "다른 브라우저", current: false, createdAt: "2026-10-04T00:00:00Z", expiresAt: "bad" },
+  { id: 1, clientName: "현재 브라우저", current: true, createdAt: "2026-10-01T00:00:00Z", expiresAt: "2026-11-01T00:00:00Z" },
+];
+async function openAccount(page: Page) {
+  await page.goto("/"); await signup(page);
+  await page.getByRole("button", { name: "테스트 회원", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "회원 관리" })).toBeVisible();
+}
+
+test("계정 보안 조회 실패와 빈 결과를 구분하고 기기·동의 내역을 각각 복구한다", async ({ page }) => {
+  await mockApi(page);
+  let recovered = false;
+  for (const path of ["sessions", "policy-consents"]) await page.route(`**/api/v1/members/me/${path}`, route =>
+    recovered ? route.fulfill({ json: [] }) : route.fulfill({ status: 503, json: { detail: "조회 실패" } }));
+  await openAccount(page);
+  const panel = page.locator(".account-access-panel");
+  await expect(panel.getByRole("alert")).toHaveCount(2);
+  await expect(panel.getByText("기록된 동의 내역이 없습니다.")).toHaveCount(0);
+  await expect(panel.getByText("표시할 로그인 기기가 없습니다.")).toHaveCount(0);
+  recovered = true;
+  await panel.getByRole("button", { name: "기기 목록 새로고침" }).click();
+  await panel.getByRole("button", { name: "동의 내역 새로고침" }).click();
+  await expect(panel.getByText("기록된 동의 내역이 없습니다.")).toBeVisible();
+  await expect(panel.getByText("표시할 로그인 기기가 없습니다.")).toBeVisible();
+  await expect(panel.getByRole("alert")).toHaveCount(0);
+});
+
+test("계정 기기 종료는 확인·중복 차단·최신 목록 갱신까지 잠금을 유지한다", async ({ page }) => {
+  await mockApi(page);
+  await page.route("**/api/v1/members/me/policy-consents", route => route.fulfill({ json: [] }));
+  let terminated = false;
+  let writes = 0;
+  let pendingWrite: Route | undefined;
+  let pendingRead: Route | undefined;
+  await page.route("**/api/v1/members/me/sessions", route => {
+    if (terminated) { pendingRead = route; return; }
+    return route.fulfill({ json: accountSessions });
+  });
+  await page.route("**/api/v1/members/me/sessions/2", route => { writes++; pendingWrite = route; });
+  await openAccount(page);
+  const panel = page.locator(".account-access-panel");
+  await expect(panel.locator(".session-item").first()).toContainText("현재 브라우저");
+  await expect(panel.locator(".session-item").first().getByRole("button", { name: "종료", exact: true })).toHaveCount(0);
+  await expect(panel.getByText("날짜 확인 불가 자동 만료")).toBeVisible();
+  await panel.getByRole("button", { name: "종료", exact: true }).click();
+  await panel.getByRole("button", { name: "취소", exact: true }).click();
+  expect(writes).toBe(0);
+  await panel.getByRole("button", { name: "종료", exact: true }).click();
+  await panel.getByRole("button", { name: "종료 확인" }).evaluate((button: HTMLButtonElement) => { button.click(); button.click(); });
+  await expect.poll(() => Boolean(pendingWrite)).toBe(true);
+  expect(writes).toBe(1);
+  terminated = true;
+  await pendingWrite!.fulfill({ status: 204 });
+  await expect.poll(() => Boolean(pendingRead)).toBe(true);
+  await expect(panel.getByRole("button", { name: "기기 목록 새로고침" })).toBeDisabled();
+  await expect(panel.getByRole("button", { name: "다른 기기 모두 종료" })).toBeDisabled();
+  await pendingRead!.fulfill({ json: [accountSessions[1]] });
+  await expect(panel.getByText("조회된 기기 1개 · 다른 기기 0개")).toBeVisible();
+  await expect(panel.getByRole("button", { name: "기기 목록 새로고침" })).toBeEnabled();
+  expect(writes).toBe(1);
+});
+
+for (const phase of ["종료 요청", "종료 후 조회"]) {
+  test(`계정 ${phase} 실패는 재종료 없이 읽기 요청으로 복구한다`, async ({ page }) => {
+    await mockApi(page);
+    await page.route("**/api/v1/members/me/policy-consents", route => route.fulfill({ json: [] }));
+    let writes = 0;
+    let recovered = false;
+    await page.route("**/api/v1/members/me/sessions", route => {
+      if (phase === "종료 후 조회" && writes && !recovered) return route.fulfill({ status: 503, json: { detail: "갱신 실패" } });
+      return route.fulfill({ json: recovered ? [accountSessions[1]] : accountSessions });
+    });
+    await page.route("**/api/v1/members/me/sessions/2", route => {
+      writes++;
+      return phase === "종료 요청" ? route.fulfill({ status: 503, json: { detail: "결과 미확인" } }) : route.fulfill({ status: 204 });
+    });
+    await openAccount(page);
+    const panel = page.locator(".account-access-panel");
+    await panel.getByRole("button", { name: "종료", exact: true }).click();
+    await panel.getByRole("button", { name: "종료 확인" }).click();
+    await expect(panel.getByText(/추가 종료 전 기기 목록을 새로고침/)).toBeVisible();
+    await expect(panel.getByRole("button", { name: "종료", exact: true })).toBeDisabled();
+    recovered = true;
+    await panel.getByRole("button", { name: "기기 목록 새로고침" }).click();
+    await expect(panel.locator(".session-item")).toHaveCount(1);
+    await expect(panel.getByRole("alert")).toHaveCount(0);
+    expect(writes).toBe(1);
+  });
+}
+
+test("닫힌 계정창의 동의 응답은 새 창의 내역을 덮어쓰지 않는다", async ({ page }) => {
+  await mockApi(page);
+  await page.route("**/api/v1/members/me/sessions", route => route.fulfill({ json: [] }));
+  let old: Route | undefined;
+  let reads = 0;
+  await page.route("**/api/v1/members/me/policy-consents", route => {
+    if (++reads === 1) { old = route; return; }
+    return route.fulfill({ json: [{ policyType: "TERMS", policyVersion: "new-v2", agreedAt: "bad" }] });
+  });
+  await openAccount(page);
+  await expect.poll(() => Boolean(old)).toBe(true);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "테스트 회원", exact: true }).click();
+  await expect(page.getByText("new-v2 · 날짜 확인 불가")).toBeVisible();
+  const response = page.waitForResponse(r => r.url().endsWith("/policy-consents") && r.status() === 403);
+  await old!.fulfill({ status: 403, json: { detail: "old denied" } }); await response;
+  await expect(page.getByText("new-v2 · 날짜 확인 불가")).toBeVisible();
+  await expect(page.locator(".account-access-panel").getByRole("alert")).toHaveCount(0);
+});
+
+test("닫힌 계정창의 종료 실패는 새 창을 잠그지 않는다", async ({ page }) => {
+  await mockApi(page);
+  await page.route("**/api/v1/members/me/sessions", route => route.fulfill({ json: accountSessions }));
+  await page.route("**/api/v1/members/me/policy-consents", route => route.fulfill({ json: [] }));
+  let pending: Route | undefined;
+  await page.route("**/api/v1/members/me/sessions/2", route => { pending = route; });
+  await openAccount(page);
+  const panel = page.locator(".account-access-panel");
+  await panel.getByRole("button", { name: "종료", exact: true }).click();
+  await panel.getByRole("button", { name: "종료 확인" }).click();
+  await expect.poll(() => Boolean(pending)).toBe(true);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "테스트 회원", exact: true }).click();
+  await expect(panel.getByRole("button", { name: "종료", exact: true })).toBeEnabled();
+  const response = page.waitForResponse(r => r.url().endsWith("/sessions/2"));
+  await pending!.fulfill({ status: 401, json: { detail: "old expired" } }); await response;
+  await expect(panel.getByRole("alert")).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "종료", exact: true })).toBeEnabled();
+});
+
+for (const status of [401, 403]) {
+  test(`계정 권한 오류 ${status}에서 기기와 동의 재조회를 모두 차단한다`, async ({ page }) => {
+    await mockApi(page);
+    let reads = 0;
+    await page.route("**/api/v1/members/me/sessions", route => { reads++; return route.fulfill({ status, json: { detail: "denied" } }); });
+    await page.route("**/api/v1/members/me/policy-consents", route => route.fulfill({ json: [] }));
+    await openAccount(page);
+    const panel = page.locator(".account-access-panel");
+    await expect(panel.getByText(/로그인이 만료되었거나 권한이 없습니다/)).toBeVisible();
+    await expect(panel.getByRole("button", { name: "기기 목록 새로고침" })).toBeDisabled();
+    await expect(panel.getByRole("button", { name: "동의 내역 새로고침" })).toBeDisabled();
+    // Development StrictMode may start the mount read twice. After denial,
+    // neither control may initiate another request.
+    const initialReads = reads;
+    expect(initialReads).toBeGreaterThan(0);
+    await panel.getByRole("button", { name: "기기 목록 새로고침" }).evaluate((button: HTMLButtonElement) => button.click());
+    await panel.getByRole("button", { name: "동의 내역 새로고침" }).evaluate((button: HTMLButtonElement) => button.click());
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    expect(reads).toBe(initialReads);
+  });
+}
+
+test("계정 다른 기기 전체 종료와 모바일 레이아웃을 확인한다", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page);
+  let writes = 0;
+  await page.route("**/api/v1/members/me/policy-consents", route => route.fulfill({ json: [] }));
+  await page.route("**/api/v1/members/me/sessions", route => route.fulfill({ json: writes ? [accountSessions[1]] : accountSessions }));
+  await page.route("**/api/v1/members/me/sessions/others", route => { writes++; return route.fulfill({ json: [accountSessions[1]] }); });
+  await openAccount(page);
+  const panel = page.locator(".account-access-panel");
+  await panel.getByRole("button", { name: "다른 기기 모두 종료" }).click();
+  await expect(panel.getByText("현재 기기를 제외한 모든 기기를 종료할까요?")).toBeVisible();
+  await panel.getByRole("button", { name: "종료 확인" }).click();
+  await expect(panel.locator(".session-item")).toHaveCount(1);
+  expect(writes).toBe(1);
+  const dialog = page.getByRole("dialog", { name: "회원 관리" });
+  expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await dialog.evaluate(el => { el.scrollTop = 0; });
+  await page.screenshot({ path: "test-results/account-access-mobile.png", animations: "disabled" });
+});
+
+test("계정 종료 중 다른 조회의 권한 거부가 발생하면 후속 조회도 중단한다", async ({ page }) => {
+  await mockApi(page);
+  let denied = false;
+  let reads = 0;
+  let pending: Route | undefined;
+  await page.route("**/api/v1/members/me/sessions", route => { reads++; return route.fulfill({ json: accountSessions }); });
+  await page.route("**/api/v1/members/me/policy-consents", route => denied
+    ? route.fulfill({ status: 403, json: { detail: "denied" } }) : route.fulfill({ json: [] }));
+  await page.route("**/api/v1/members/me/sessions/2", route => { pending = route; });
+  await openAccount(page);
+  const panel = page.locator(".account-access-panel");
+  await panel.getByRole("button", { name: "종료", exact: true }).click();
+  await panel.getByRole("button", { name: "종료 확인" }).click();
+  await expect.poll(() => Boolean(pending)).toBe(true);
+  denied = true;
+  await panel.getByRole("button", { name: "동의 내역 새로고침" }).click();
+  await expect(panel.getByText(/로그인이 만료되었거나 권한이 없습니다/)).toBeVisible();
+  const before = reads;
+  const response = page.waitForResponse(r => r.url().endsWith("/sessions/2"));
+  await pending!.fulfill({ status: 204 }); await response;
+  await expect(panel.getByText(/기기 종료 처리 중/)).toHaveCount(0);
+  expect(reads).toBe(before);
+});
+
+async function openFavoriteSchedule(page: Page) {
+  await page.goto("/");
+  for (const item of notices) {
+    await page.locator("article").filter({ hasText: item.title }).getByLabel(/관심청약 저장/).click();
+  }
+  await page.locator(".saved-button").click();
+  await page.getByRole("button", { name: "전체 일정 보기" }).click();
+  await expect(page.getByRole("dialog", { name: "관심청약 전체 일정" })).toBeVisible();
+}
+
+test("관심 일정 검색·월·유형 건수는 서버 재조회 없이 즉시 일치한다", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-09-20T00:00:00Z") });
+  await mockApi(page);
+  await openFavoriteSchedule(page);
+  let requests = 0;
+  page.on("request", request => { if (request.url().includes("/api/v1/notices")) requests++; });
+  const dialog = page.getByRole("dialog", { name: "관심청약 전체 일정" });
+  await expect(dialog.locator(".favorite-calendar-event")).toHaveCount(5);
+  await expect(dialog.getByRole("button", { name: "전체 5", exact: true })).toBeVisible();
+  await expect(dialog.getByText("2026.09.20 · 오늘")).toBeVisible();
+  await expect(dialog.getByText("2026.09.21 · D-1")).toBeVisible();
+  await dialog.getByLabel("일정 월", { exact: true }).selectOption("2026-10");
+  await expect(dialog.locator(".favorite-calendar-event")).toHaveCount(1);
+  await expect(dialog.getByRole("button", { name: "전체 1", exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "조건 초기화" }).click();
+  await dialog.getByLabel("일정 공고 검색").fill("서울 강남구");
+  await expect(dialog.locator(".favorite-calendar-event")).toHaveCount(2);
+  await dialog.getByRole("button", { name: "접수 마감 1", exact: true }).click();
+  await expect(dialog.locator(".favorite-calendar-event")).toHaveCount(1);
+  await expect(dialog.getByRole("button", { name: "접수 마감 1", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await dialog.getByLabel("일정 공고 검색").fill("없는 결과");
+  await expect(dialog.getByText("조건에 맞는 일정이 없어요")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "조회 일정 저장" })).toBeDisabled();
+  expect(requests).toBe(0);
+});
+
+test("관심 일정 파일은 현재 조회한 유형만 저장하고 원본 전체 일정은 보존한다", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-09-20T00:00:00Z") });
+  await mockApi(page);
+  await openFavoriteSchedule(page);
+  const dialog = page.getByRole("dialog", { name: "관심청약 전체 일정" });
+  await dialog.getByRole("button", { name: "접수 마감 2", exact: true }).click();
+  const downloadPromise = page.waitForEvent("download");
+  await dialog.getByRole("button", { name: "조회 일정 저장" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("cheongyak-filtered-schedule.ics");
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+  const content = Buffer.concat(chunks).toString("utf8");
+  expect(content.match(/BEGIN:VEVENT/g)).toHaveLength(2);
+  expect(content).toContain("notice-1-apply-end");
+  expect(content).toContain("notice-2-apply-end");
+  expect(content).not.toContain("apply-start@");
+  expect(content).not.toContain("-winner@");
+  await expect(dialog.getByText(/현재 표시된 2개 일정의 파일 다운로드/)).toBeVisible();
+  await dialog.getByRole("button", { name: "조건 초기화" }).click();
+  await expect(dialog.locator(".favorite-calendar-event")).toHaveCount(5);
+});
+
+test("관심 일정은 재열기에서 조건을 초기화하고 한국 날짜 변경을 반영한다", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-09-20T14:59:00Z") });
+  await mockApi(page);
+  await openFavoriteSchedule(page);
+  const dialog = page.getByRole("dialog", { name: "관심청약 전체 일정" });
+  await dialog.getByLabel("지난 일정도 보기").check();
+  await expect(dialog.locator(".favorite-calendar-event")).toHaveCount(6);
+  await dialog.getByLabel("일정 공고 검색").fill("서울");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "전체 일정 보기" }).click();
+  await expect(dialog.getByLabel("일정 공고 검색")).toHaveValue("");
+  await expect(dialog.getByLabel("지난 일정도 보기")).not.toBeChecked();
+  await page.clock.fastForward(65_000);
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await expect(dialog.getByText(/한국 날짜 2026-09-21 기준/)).toBeVisible();
+  await expect(dialog.locator(".favorite-calendar-event")).toHaveCount(4);
+  await expect(dialog.getByText("2026.09.21 · 오늘")).toBeVisible();
+});
+
+test("관심 일정 파일 생성 실패는 오류를 표시하고 조건을 유지한다", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-09-20T00:00:00Z") });
+  await mockApi(page);
+  await openFavoriteSchedule(page);
+  const dialog = page.getByRole("dialog", { name: "관심청약 전체 일정" });
+  await dialog.getByLabel("일정 공고 검색").fill("서울");
+  await page.evaluate(() => { URL.createObjectURL = () => { throw new Error("download unavailable"); }; });
+  await dialog.getByRole("button", { name: "조회 일정 저장" }).click();
+  await expect(dialog.getByRole("alert")).toHaveText("일정 파일을 만들지 못했습니다. 잠시 후 다시 시도해주세요.");
+  await expect(dialog.getByLabel("일정 공고 검색")).toHaveValue("서울");
+  await expect(dialog.locator(".favorite-calendar-event")).toHaveCount(2);
+});
+
+test("관심 일정 미정 안내와 모바일 레이아웃을 확인한다", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.clock.install({ time: new Date("2026-09-20T00:00:00Z") });
+  await mockApi(page);
+  await page.route(/\/api\/v1\/notices(?:\?|$)/, route => route.fulfill({ json: {
+    content: notices.map(item => ({ ...item, applyStartDate: null, applyEndDate: null, winnerAnnounceDate: null })),
+    number: 0, size: 24, totalElements: 2, totalPages: 1,
+  } }));
+  await openFavoriteSchedule(page);
+  const dialog = page.getByRole("dialog", { name: "관심청약 전체 일정" });
+  await expect(dialog.getByText(/관심 공고 2건은 확인 가능한 일정이 없습니다/)).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "조회 일정 저장" })).toBeDisabled();
+  expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/favorite-schedule-mobile.png", animations: "disabled" });
 });
 
 test("비회원도 관심청약 저장과 공고 비교를 할 수 있다", async ({ page }) => {
