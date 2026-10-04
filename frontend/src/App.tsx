@@ -9,7 +9,6 @@ import {
   confirmEmailVerification,
   deleteSearchPreference,
   deleteEligibilityProfile,
-  dismissMemberRecommendation,
   fetchNoticeFacets,
   fetchNoticeFreshness,
   fetchNoticePage,
@@ -18,7 +17,6 @@ import {
   fetchFavoriteIds,
   fetchFavoriteTrackers,
   fetchMemberSessions,
-  fetchMemberRecommendations,
   fetchNotice,
   fetchNoticeChanges,
   fetchNotificationInbox,
@@ -36,7 +34,6 @@ import {
   logoutMember,
   MemberProfile,
   MemberProfileInput,
-  MemberRecommendationList,
   MemberSearchPreference,
   SavedSearchProfile,
   SearchPreferenceInput,
@@ -59,7 +56,6 @@ import {
   saveEligibilityProfile,
   revokeMemberSession,
   revokeOtherMemberSessions,
-  resetDismissedRecommendations,
   requestEmailVerification,
   requestPasswordReset,
   resetPasswordWithToken,
@@ -76,6 +72,7 @@ import AdminSyncDialog from "./AdminSyncDialog";
 import NotificationsDialog from "./NotificationsDialog";
 import FavoriteCalendarDialog from "./FavoriteCalendarDialog";
 import RecommendationPanel from "./RecommendationPanel";
+import { useMemberRecommendations } from "./useMemberRecommendations";
 import {
   buildEligibilityCheckResult,
   EligibilityAnswer,
@@ -594,11 +591,7 @@ export default function Home() {
   const [preferenceBusy, setPreferenceBusy] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
-  const [recommendations, setRecommendations] = useState<MemberRecommendationList>();
-  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
-  const [recommendationsError, setRecommendationsError] = useState("");
-  const [recommendationsBusy, setRecommendationsBusy] = useState(false);
-  const [recommendationsVersion, setRecommendationsVersion] = useState(0);
+  const recommendationState = useMemberRecommendations(member, searchPreference);
   const [adminSyncOpen, setAdminSyncOpen] = useState(false);
   const [favoriteCalendarOpen, setFavoriteCalendarOpen] = useState(false);
   const [detailRouteVersion, setDetailRouteVersion] = useState(0);
@@ -1031,31 +1024,7 @@ export default function Home() {
     };
   }, [member, notificationsOpen]);
 
-  useEffect(() => {
-    if (!member) {
-      setRecommendations(undefined);
-      setRecommendationsError("");
-      setRecommendationsLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setRecommendationsLoading(true);
-    setRecommendationsError("");
-    fetchMemberRecommendations()
-      .then((result) => {
-        if (!cancelled) setRecommendations(result);
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          setRecommendations(undefined);
-          setRecommendationsError(error instanceof Error ? error.message : "맞춤 추천을 불러오지 못했습니다.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setRecommendationsLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [member, searchPreference, recommendationsVersion]);
+
 
   useEffect(() => {
     const onPopState = () => {
@@ -1811,36 +1780,6 @@ export default function Home() {
     }
   };
 
-  const dismissRecommendation = async (noticeId: number) => {
-    setRecommendationsBusy(true);
-    try {
-      await dismissMemberRecommendation(noticeId);
-      setRecommendations((current) => current ? {
-        ...current,
-        dismissedCount: current.dismissedCount + 1,
-        recommendations: current.recommendations.filter((item) => item.notice.id !== noticeId),
-      } : current);
-      setToast("이 공고를 맞춤 추천에서 제외했습니다.");
-    } catch (error) {
-      setToast(error instanceof Error ? error.message : "추천 공고를 제외하지 못했습니다.");
-    } finally {
-      setRecommendationsBusy(false);
-    }
-  };
-
-  const resetRecommendationDismissals = async () => {
-    setRecommendationsBusy(true);
-    try {
-      await resetDismissedRecommendations();
-      setRecommendationsVersion((version) => version + 1);
-      setToast("숨긴 추천 공고를 다시 표시합니다.");
-    } catch (error) {
-      setToast(error instanceof Error ? error.message : "숨긴 추천 공고를 복구하지 못했습니다.");
-    } finally {
-      setRecommendationsBusy(false);
-    }
-  };
-
   const answerQuestion = (answer: EligibilityAnswer) => {
     setAnswers((items) => [...items, answer]);
     setQualStep((step) => step + 1);
@@ -2228,16 +2167,13 @@ export default function Home() {
 
           <aside className="side-column">
             <RecommendationPanel
+              key={member?.id ?? "visitor"}
               signedIn={Boolean(member)}
-              loading={authLoading || recommendationsLoading}
-              error={recommendationsError}
-              result={recommendations}
+              {...recommendationState}
+              loading={authLoading || recommendationState.loading}
               onLogin={() => setMemberDialog("login")}
               onConfigure={() => setFilterOpen(true)}
               onOpenNotice={(noticeId) => { void openNotificationNotice(noticeId); }}
-              onDismiss={(noticeId) => { void dismissRecommendation(noticeId); }}
-              onResetDismissals={() => { void resetRecommendationDismissals(); }}
-              busy={recommendationsBusy}
             />
 
             <section className="plan-card" id="guide">
