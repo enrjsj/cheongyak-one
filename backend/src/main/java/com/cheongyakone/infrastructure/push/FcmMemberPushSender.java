@@ -33,6 +33,7 @@ import java.util.List;
 public class FcmMemberPushSender implements MemberPushSender {
 
     private static final Logger log = LoggerFactory.getLogger(FcmMemberPushSender.class);
+    private static final int MAX_MULTICAST_TOKENS = 500;
     private final String serviceAccountBase64;
     private FirebaseMessaging messaging;
 
@@ -58,6 +59,25 @@ public class FcmMemberPushSender implements MemberPushSender {
     @Override
     public PushDeliveryResult send(MemberNotification notification, List<String> pushTokens) {
         if (pushTokens.isEmpty()) return PushDeliveryResult.none();
+        var tokens = List.copyOf(pushTokens);
+        List<String> invalidTokens = new ArrayList<>();
+        List<String> successfulTokens = new ArrayList<>();
+        boolean retryable = false;
+        String error = null;
+        for (int start = 0; start < tokens.size(); start += MAX_MULTICAST_TOKENS) {
+            var batch = tokens.subList(start, start + Math.min(MAX_MULTICAST_TOKENS, tokens.size() - start));
+            var result = sendBatch(notification, batch);
+            invalidTokens.addAll(result.invalidTokens());
+            successfulTokens.addAll(result.successfulTokens());
+            retryable |= result.retryableFailure();
+            if (error == null) error = result.error();
+        }
+        // Preserve confirmed results even when another batch fails, so retries can
+        // exclude those devices after the caller commits their durable receipts.
+        return new PushDeliveryResult(retryable, invalidTokens, successfulTokens, error);
+    }
+
+    private PushDeliveryResult sendBatch(MemberNotification notification, List<String> pushTokens) {
         try {
             BatchResponse response = messaging.sendEachForMulticast(buildMessage(notification, pushTokens));
             List<String> invalidTokens = new ArrayList<>();
@@ -122,4 +142,3 @@ public class FcmMemberPushSender implements MemberPushSender {
         return code == com.google.firebase.messaging.MessagingErrorCode.UNREGISTERED;
     }
 }
-
