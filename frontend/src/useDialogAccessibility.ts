@@ -10,24 +10,35 @@ const FOCUSABLE_SELECTOR = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 
+const dialogStack: HTMLElement[] = [];
+let unlockedOverflow = "";
+
 export function useDialogAccessibility<T extends HTMLElement>(open: boolean, onClose: () => void): RefObject<T | null> {
   const dialogRef = useRef<T>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const wasOpen = useRef(false);
+  const opener = useRef<HTMLElement | null>(null);
+  if (open && !wasOpen.current) opener.current = typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  wasOpen.current = open;
 
   useEffect(() => {
     if (!open) return;
     const dialog = dialogRef.current;
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const previousOverflow = document.body.style.overflow;
+    if (!dialog) return;
+    const previouslyFocused = opener.current;
+    if (dialogStack.length === 0) unlockedOverflow = document.body.style.overflow;
+    dialogStack.push(dialog);
     document.body.style.overflow = "hidden";
 
     const focusTimer = window.setTimeout(() => {
-      const first = dialog?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+      if (dialogStack.at(-1) !== dialog) return;
+      const first = dialog.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
       (first ?? dialog)?.focus();
     });
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (dialogStack.at(-1) !== dialog || event.defaultPrevented) return;
       if (event.key === "Escape") {
         event.preventDefault();
         closeRef.current();
@@ -56,8 +67,15 @@ export function useDialogAccessibility<T extends HTMLElement>(open: boolean, onC
     return () => {
       window.clearTimeout(focusTimer);
       document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
-      previouslyFocused?.focus();
+      const wasTop = dialogStack.at(-1) === dialog;
+      const index = dialogStack.indexOf(dialog);
+      if (index >= 0) dialogStack.splice(index, 1);
+      document.body.style.overflow = dialogStack.length ? "hidden" : unlockedOverflow;
+      if (wasTop) {
+        const parent = dialogStack.at(-1);
+        if (previouslyFocused?.isConnected && !previouslyFocused.matches(":disabled") && (!parent || parent.contains(previouslyFocused))) previouslyFocused.focus();
+        else parent?.focus();
+      }
     };
   }, [open]);
 

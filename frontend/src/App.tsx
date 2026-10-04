@@ -71,6 +71,7 @@ import { useMemberRecommendations } from "./useMemberRecommendations";
 import { useHorizontalTabs } from "./useHorizontalTabs";
 import { useLinkCopy } from "./useLinkCopy";
 import LinkCopyFeedback from "./LinkCopyFeedback";
+import ComparisonTable from "./ComparisonTable";
 import { publicShareUrl } from "./shareLinkTools";
 import { useSavedSearchProfiles } from "./useSavedSearchProfiles";
 import SavedSearchProfilesPanel from "./SavedSearchProfilesPanel";
@@ -1111,8 +1112,12 @@ export default function Home() {
 
   useEffect(() => {
     // 비회원은 브라우저에, 회원은 서버에 저장하고 URL에는 공유 가능한 목록을 반영한다.
-    if (member) window.localStorage.removeItem("cheongyak-one-comparison");
-    else window.localStorage.setItem("cheongyak-one-comparison", JSON.stringify(comparisonIds));
+    try {
+      if (member) window.localStorage.removeItem("cheongyak-one-comparison");
+      else window.localStorage.setItem("cheongyak-one-comparison", JSON.stringify(comparisonIds));
+    } catch {
+      if (!member && comparisonIds.length) setToast("브라우저 저장이 제한되어 비교 목록은 현재 화면에서만 유지됩니다.");
+    }
     const searchUrl = noticeSearchUrl(window.location.href, {
       query,
       status: activeStatus,
@@ -1282,7 +1287,8 @@ export default function Home() {
     if (isSaving) next.add(id); else next.delete(id);
     setSavedIds(next);
     if (!member) {
-      window.localStorage.setItem("cheongyak-one-saved", JSON.stringify([...next]));
+      try { window.localStorage.setItem("cheongyak-one-saved", JSON.stringify([...next])); }
+      catch { setToast("브라우저 저장이 제한되어 관심 목록은 현재 화면에서만 유지됩니다."); return; }
       setToast(isSaving ? "관심청약에 저장했어요." : "관심청약에서 삭제했어요.");
       return;
     }
@@ -2362,21 +2368,7 @@ export default function Home() {
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setComparisonOpen(false); }}>
           <section ref={comparisonDialogRef} tabIndex={-1} className="modal compare-modal" role="dialog" aria-modal="true" aria-labelledby="compare-title">
             <div className="modal-head"><div><span>NOTICE COMPARISON</span><h2 id="compare-title">청약 공고 비교</h2></div><button type="button" onClick={() => setComparisonOpen(false)} aria-label="닫기"><Icon name="close" /></button></div>
-            <div className="compare-table-wrap">
-              <table className="compare-table">
-                <caption>선택한 청약 공고 비교</caption>
-                <thead><tr><th scope="col">비교 항목</th>{comparisonNotices.map((item) => <th scope="col" key={item.id}><span>{item.category}</span><strong>{item.title}</strong><button type="button" onClick={() => void toggleComparison(item.id)} disabled={comparisonPendingId !== undefined || comparisonResetPending} aria-label={`${item.title} 비교 목록에서 삭제`}><Icon name="close" /></button></th>)}</tr></thead>
-                <tbody>
-                  <tr><th scope="row">지역·위치</th>{comparisonNotices.map((item) => <td key={item.id}><strong>{item.region}</strong><small>{item.location}</small></td>)}</tr>
-                  <tr><th scope="row">현재 상태</th>{comparisonNotices.map((item) => <td key={item.id}><span className={`state ${item.stateTone}`}>{item.state}</span><b className="compare-dday">{item.dday}</b></td>)}</tr>
-                  <tr><th scope="row">접수 일정</th>{comparisonNotices.map((item) => <td key={item.id}><strong>{item.period}</strong></td>)}</tr>
-                  <tr><th scope="row">당첨 발표</th>{comparisonNotices.map((item) => <td key={item.id}><strong>{formatShortDate(item.winnerAnnounceDate)}</strong></td>)}</tr>
-                  <tr><th scope="row">가격·보증금</th>{comparisonNotices.map((item) => <td key={item.id}><strong>{item.price}</strong></td>)}</tr>
-                  <tr><th scope="row">공급 규모</th>{comparisonNotices.map((item) => <td key={item.id}><strong>{item.scale}</strong></td>)}</tr>
-                  <tr><th scope="row">공식 공고</th>{comparisonNotices.map((item) => <td key={item.id}>{item.officialUrl ? <a href={item.officialUrl} target="_blank" rel="noreferrer">원문 확인 <Icon name="arrow" /></a> : <span>링크 확인 중</span>}</td>)}</tr>
-                </tbody>
-              </table>
-            </div>
+            <ComparisonTable items={comparisonNotices.map(item => ({ ...item, winnerDate: formatShortDate(item.winnerAnnounceDate) }))} busy={comparisonPendingId !== undefined || comparisonResetPending} onRemove={id => void toggleComparison(id)} />
             <LinkCopyFeedback state={comparisonCopy} />
             <div className="compare-footer"><p>최종 신청 전 공식 공고문의 자격과 일정을 확인하세요.</p><div><button type="button" disabled={comparisonCopy.busy} onClick={copyComparisonLink}>비교 링크 복사</button><button type="button" onClick={() => downloadCalendar(comparisonNotices, "cheongyak-comparison.ics")}><Icon name="calendar" /> 비교 일정 저장</button></div></div>
           </section>
