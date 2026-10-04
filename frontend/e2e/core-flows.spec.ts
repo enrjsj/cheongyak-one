@@ -1405,6 +1405,8 @@ for (const width of [320, 360, 390, 430, 680]) {
     await page.setViewportSize({ width, height: 844 });
     await mockApi(page);
     await page.goto("/");
+    // Wider font metrics must not expand the hero's grid track beyond 320px.
+    if (width === 320) await page.addStyleTag({ content: "* { letter-spacing: 1px !important; }" });
     const tabs = page.getByRole("tablist", { name: "청약 상태" });
     await expect(tabs.getByRole("tab", { name: /모집 중·예정/ }).locator("b")).toHaveText("2");
     const metrics = await tabs.locator("button").evaluateAll(elements => elements.map(element => {

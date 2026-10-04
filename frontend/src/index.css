@@ -929,6 +929,8 @@ footer { background: var(--navy); color: white; }
 
 /* Compact mobile controls: keep labels intact instead of shrinking text or wrapping tabs. */
 @media (max-width: 680px) {
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .hero-copy { min-width: 0; }
   .status-tabs {
     display: flex; gap: 4px; padding: 6px 12px; min-width: 0;
     overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin;
