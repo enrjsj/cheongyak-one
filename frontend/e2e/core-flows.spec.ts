@@ -17,6 +17,181 @@ async function mockLinkClipboard(page: Page, mode: "success" | "fail" | "pending
   }, mode);
 }
 
+async function openComparisonWorkspace(page: Page) {
+  await mockApi(page); await page.goto("/?compare=1,2");
+  await page.getByRole("button", { name: "비교하기", exact: true }).click();
+  return page.getByRole("dialog", { name: "청약 공고 비교" });
+}
+
+for (const width of [320, 1280]) {
+  test(`사용자 여정 ${width}px 저장 조건 편집 Escape는 상위 필터와 입력을 유지한다`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 }); await prepareSavedProfiles(page);
+    const panel = await openSavedProfiles(page);
+    await panel.getByRole("button", { name: "수정", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "저장 조건 수정", exact: true });
+    await editor.getByLabel("조건 이름", { exact: true }).fill("수정 취소 테스트");
+    await page.keyboard.press("Escape");
+    await expect(editor).toHaveCount(0);
+    const parent = page.getByRole("dialog", { name: "청약 조건 선택", exact: true });
+    await expect(parent).toBeVisible();
+    await expect(panel.getByRole("button", { name: "수정", exact: true })).toBeFocused();
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe("hidden");
+    await page.keyboard.press("Escape"); await expect(parent).toHaveCount(0);
+    expect(await page.evaluate(() => document.body.style.overflow)).not.toBe("hidden");
+  });
+}
+
+test("사용자 여정 중첩 편집창에서 Tab과 Shift Tab은 최상위 창 안에 머문다", async ({ page }) => {
+  await prepareSavedProfiles(page); const panel = await openSavedProfiles(page);
+  await panel.getByRole("button", { name: "수정", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "저장 조건 수정", exact: true });
+  await editor.getByRole("button", { name: "저장", exact: true }).focus();
+  await page.keyboard.press("Tab"); await expect(editor.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
+  await page.keyboard.press("Shift+Tab"); await expect(editor.getByRole("button", { name: "저장", exact: true })).toBeFocused();
+});
+
+test("사용자 여정 저장소 쓰기가 차단되어도 검색과 비교가 중단되지 않는다", async ({ page }) => {
+  const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
+  await page.addInitScript(() => { Storage.prototype.setItem = () => { throw new DOMException("blocked", "QuotaExceededError"); }; Storage.prototype.removeItem = () => { throw new DOMException("blocked", "SecurityError"); }; });
+  await mockApi(page); await page.goto("/");
+  await expect(page.getByRole("heading", { name: notices[0].title, exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "비교 담기", exact: true }).first().click();
+  await expect(page.getByRole("region", { name: "청약 공고 비교 목록" })).toBeVisible();
+  await expect(page.getByText("브라우저 저장이 제한되어 비교 목록은 현재 화면에서만 유지됩니다.")).toBeVisible();
+  await page.locator("article").filter({ hasText: notices[0].title }).getByLabel(/관심청약 저장/).click();
+  await expect(page.getByText("브라우저 저장이 제한되어 관심 목록은 현재 화면에서만 유지됩니다.")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+for (const width of [320, 390, 1280]) {
+  test(`사용자 여정 ${width}px 관심과 비교는 새로고침 후 복원되고 상세 뒤로가기가 동작한다`, async ({ page }) => {
+    const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
+    await page.setViewportSize({ width, height: 844 }); await mockApi(page); await page.goto("/");
+    const card = page.locator("article").filter({ hasText: notices[0].title });
+    await card.getByLabel(/관심청약 저장/).click();
+    await page.getByRole("button", { name: "비교 담기", exact: true }).first().click();
+    await page.reload();
+    await expect(card.getByLabel(/관심청약 해제/)).toBeVisible();
+    await expect(page.getByRole("region", { name: "청약 공고 비교 목록" })).toBeVisible();
+    await card.getByRole("button", { name: /공고 핵심만 보기/ }).click();
+    await expect(page.getByRole("dialog", { name: notices[0].title })).toBeVisible();
+    await page.goBack(); await expect(page.getByRole("dialog", { name: notices[0].title })).toHaveCount(0);
+    await expect(card.getByRole("button", { name: /공고 핵심만 보기/ })).toBeFocused();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(errors).toEqual([]);
+  });
+}
+
+test("사용자 여정 낮은 모바일 화면에서도 편집 입력과 취소 버튼에 접근할 수 있다", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 400 }); await prepareSavedProfiles(page);
+  const panel = await openSavedProfiles(page); await panel.getByRole("button", { name: "수정", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "저장 조건 수정", exact: true });
+  await editor.getByLabel("최대 면적 (㎡)", { exact: true }).fill("84");
+  await editor.getByRole("button", { name: "취소", exact: true }).click();
+  await expect(editor).toHaveCount(0); await expect(panel).toBeVisible();
+  await expect(panel.getByRole("button", { name: "수정", exact: true })).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+for (const width of [320, 390]) {
+  test(`비교 작업공간 ${width}px 세 공고의 마지막 열은 고정 항목에 가리지 않고 삭제 후 갱신한다`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 }); await mockApi(page);
+    const third = { ...notices[1], id: 3, title: "세 번째 비교 공고" };
+    await page.route("**/notices/3", route => route.fulfill({ json: third }));
+    await page.goto("/?compare=1,2,3"); await page.getByRole("button", { name: "비교하기", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "청약 공고 비교" });
+    await expect(dialog.locator("thead th")).toHaveCount(4);
+    const tableRegion = dialog.getByRole("region", { name: "공고 비교표", exact: true });
+    await tableRegion.focus(); await tableRegion.press("End");
+    await expect.poll(async () => {
+      const left = await dialog.locator("thead th").first().boundingBox();
+      const right = await dialog.locator("thead th").last().boundingBox();
+      return Boolean(left && right && right.x >= left.x + left.width - 1);
+    }).toBe(true);
+    await dialog.getByRole("button", { name: "세 번째 비교 공고 비교 목록에서 삭제", exact: true }).click();
+    await expect(dialog.locator("thead th")).toHaveCount(3);
+    await expect(tableRegion).toBeFocused();
+    await expect(page).toHaveURL(/compare=1%2C2|compare=1,2/);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}
+
+test("비교 작업공간 잘못된 공식 링크는 실행 가능한 링크로 표시하지 않는다", async ({ page }) => {
+  await mockApi(page);
+  const bad = { ...notices[0], officialUrl: "javascript:alert(1)" };
+  await page.route("**/notices/1", route => route.fulfill({ json: bad }));
+  await page.route("**/api/v1/notices?**", route => route.fulfill({ json: { content: [bad, notices[1]], number: 0, size: 24, totalElements: 2, totalPages: 1 } }));
+  await page.goto("/?compare=1,2"); await page.getByRole("button", { name: "비교하기", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "청약 공고 비교" });
+  await expect(dialog.getByText("링크 미제공", { exact: true })).toBeVisible();
+  await expect(dialog.locator('a[href^="javascript:"]')).toHaveCount(0);
+});
+
+test("비교 작업공간 항목 필터와 차이점 보기는 목록을 유지하고 재조회하지 않는다", async ({ page }) => {
+  let requests = 0; page.on("request", request => { if (/\/api\/v1\/notices\/\d+$/.test(new URL(request.url()).pathname)) requests++; });
+  const dialog = await openComparisonWorkspace(page); const initial = requests;
+  await expect(dialog.locator("tbody tr")).toHaveCount(8);
+  await dialog.getByLabel("비교 항목", { exact: true }).selectOption("COST");
+  await expect(dialog.locator("tbody tr")).toHaveCount(3);
+  await dialog.getByRole("button", { name: "차이점만 보기", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "차이점만 보기", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.locator("tbody .comparison-different")).toHaveCount(2);
+  await dialog.getByRole("button", { name: "비교 보기 초기화" }).click();
+  await expect(dialog.locator("tbody tr")).toHaveCount(8); expect(requests).toBe(initial);
+  expect(new URL(page.url()).searchParams.get("compare")).toBe("1,2");
+});
+
+test("비교 작업공간 동일한 정보는 차이점에서 숨기고 공식 링크는 남긴다", async ({ page }) => {
+  await mockApi(page);
+  await page.route("**/notices/2", route => route.fulfill({ json: { ...notices[0], id: 2, title: "같은 조건 공고" } }));
+  await page.route("**/api/v1/notices?**", route => route.fulfill({ json: { content: [notices[0], { ...notices[0], id: 2, title: "같은 조건 공고" }], number: 0, size: 24, totalElements: 2, totalPages: 1 } }));
+  await page.goto("/?compare=1,2"); await page.getByRole("button", { name: "비교하기", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "청약 공고 비교" });
+  await dialog.getByLabel("비교 항목", { exact: true }).selectOption("BASIC");
+  await dialog.getByRole("button", { name: "차이점만 보기" }).click();
+  await expect(dialog.getByText(/선택한 범위에 서로 다른 항목이 없습니다/)).toBeVisible();
+  await expect(dialog.locator("tbody tr")).toHaveCount(1); await expect(dialog.getByRole("link", { name: /원문 확인/ })).toHaveCount(2);
+});
+
+test("비교 작업공간 CSV는 현재 표시한 항목만 저장한다", async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = blob => { if (blob instanceof Blob) void blob.text().then(text => { (window as any).__comparisonCsv = text; }); return original(blob); };
+  });
+  const dialog = await openComparisonWorkspace(page);
+  await dialog.getByLabel("비교 항목", { exact: true }).selectOption("COST");
+  const downloading = page.waitForEvent("download");
+  await dialog.getByRole("button", { name: "현재 비교표 CSV 저장" }).click();
+  expect((await downloading).suggestedFilename()).toBe("cheongyak-comparison.csv");
+  await expect.poll(() => page.evaluate(() => (window as any).__comparisonCsv)).toContain("가격·보증금");
+  const csv = await page.evaluate(() => (window as any).__comparisonCsv);
+  expect(csv).not.toContain("당첨 발표"); expect(csv).toContain("공식 공고");
+});
+
+test("비교 작업공간 파일 저장 실패는 조건을 유지하며 다시 시도할 수 있다", async ({ page }) => {
+  await page.addInitScript(() => { URL.createObjectURL = () => { throw new Error("blocked"); }; });
+  const dialog = await openComparisonWorkspace(page);
+  await dialog.getByLabel("비교 항목", { exact: true }).selectOption("SCHEDULE");
+  await dialog.getByRole("button", { name: "현재 비교표 CSV 저장" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("비교표를 저장하지 못했습니다");
+  await expect(dialog.getByLabel("비교 항목", { exact: true })).toHaveValue("SCHEDULE");
+  await expect(dialog.getByRole("button", { name: "현재 비교표 CSV 저장" })).toBeEnabled();
+  await dialog.getByRole("button", { name: "비교 보기 초기화" }).click(); await expect(dialog.getByRole("alert")).toHaveCount(0);
+});
+
+test("비교 작업공간 모바일 표는 키보드로 가로 탐색하고 재열면 필터를 초기화한다", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 }); const dialog = await openComparisonWorkspace(page);
+  const region = dialog.getByRole("region", { name: "공고 비교표", exact: true });
+  await region.focus(); await region.press("End");
+  await expect.poll(() => region.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await dialog.getByLabel("비교 항목", { exact: true }).selectOption("COST");
+  await dialog.screenshot({ path: "test-results/comparison-mobile.png", animations: "disabled" });
+  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+  await page.getByRole("button", { name: "비교하기", exact: true }).click();
+  await expect(dialog.getByLabel("비교 항목", { exact: true })).toHaveValue("ALL");
+});
+
 test("링크 공유 검색 링크는 허용된 검색조건만 복사한다", async ({ page }) => {
   await mockApi(page); await mockLinkClipboard(page, "success");
   await page.goto("/?region=서울&category=OFFICETEL&token=secret#private");
