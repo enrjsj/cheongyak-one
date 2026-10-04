@@ -36,14 +36,20 @@ public class MemberNotificationPushDispatcher {
     }
 
     public int deliverPendingPushes() {
+        return deliverPendingPushesWithSummary().acceptedCount();
+    }
+
+    public DispatchSummary deliverPendingPushesWithSummary() {
         var candidateIds = notificationRepository.findPushDeliveryCandidateIds(
                 clock.instant(), MAXIMUM_ATTEMPTS, PageRequest.of(0, BATCH_SIZE)
         );
         int sentCount = 0;
+        int errorCount = 0;
         for (Long notificationId : candidateIds) {
             try {
                 if (pushDelivery.deliver(notificationId)) sentCount += 1;
             } catch (RuntimeException exception) {
+                errorCount++;
                 // Each delivery uses REQUIRES_NEW. A rolled-back notification must
                 // not prevent the remaining queue entries from being attempted.
                 // Exception messages may contain SQL values or provider credentials.
@@ -51,6 +57,10 @@ public class MemberNotificationPushDispatcher {
                         notificationId, exception.getClass().getSimpleName());
             }
         }
-        return sentCount;
+        return new DispatchSummary(candidateIds.size(), sentCount, candidateIds.size() - sentCount - errorCount, errorCount);
     }
+
+    // Other includes deferred/disabled/skipped deliveries and completion without acceptance.
+    // These are per-notification results, never counts of delivered devices.
+    public record DispatchSummary(int selectedCount, int acceptedCount, int otherCount, int errorCount) {}
 }

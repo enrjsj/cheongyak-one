@@ -7,6 +7,7 @@ export default function AdminPushNotificationPanel() {
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState<number>();
   const [message, setMessage] = useState("");
+  const [dispatchWarning, setDispatchWarning] = useState("");
   const [expired, setExpired] = useState(false);
   const [refreshRequired, setRefreshRequired] = useState(false);
   const lifetime = useRef(0);
@@ -54,14 +55,20 @@ export default function AdminPushNotificationPanel() {
     if (busy.current || reading.current || blocked.current || needsRefresh.current) return;
     const epoch = lifetime.current;
     busy.current = true;
-    setWorkingId(notificationId); setError(""); setMessage("");
+    setWorkingId(notificationId); setError(""); setMessage(""); setDispatchWarning("");
     try {
       if (notificationId === -1) {
         const result = await dispatchAdminPushNotifications();
         if (lifetime.current !== epoch) return;
-        setMessage(result.acceptedCount === undefined
+        const detailed = result.selectedCount !== undefined && result.otherCount !== undefined && result.errorCount !== undefined && result.acceptedCount !== undefined;
+        setMessage(detailed
+          ? `이번 처리 대상 ${result.selectedCount}건 · 접수 확인 ${result.acceptedCount}건 · 접수 확인 외 ${result.otherCount}건 · 처리 오류 ${result.errorCount}건. 접수 확인 외에는 재시도 대기·기기 없음·건너뜀 등이 포함되며 실제 기기 수신을 보장하지 않습니다.`
+          : result.acceptedCount === undefined
           ? `대기 푸시 처리 완료: ${result.sentCount}건. 구버전 서버의 처리 종료 집계입니다. 실제 기기 수신을 보장하지 않습니다.`
           : `공급사 접수 확인 후 종료: ${result.acceptedCount}건. 기기 없음·토큰 만료 종료는 제외하며 실제 기기 수신을 보장하지 않습니다.`);
+        if (result.errorCount !== undefined && result.errorCount > 0) {
+          setDispatchWarning(`${result.errorCount}건의 처리 결과를 확정하지 못했습니다. 다른 알림은 계속 처리했으며, 재실행 전 최신 현황과 서버 로그를 확인해주세요.`);
+        }
       } else {
         await retryAdminPushNotification(notificationId);
         if (lifetime.current !== epoch) return;
@@ -82,6 +89,8 @@ export default function AdminPushNotificationPanel() {
   return <div className="admin-push-panel">
     {loading && <p className="admin-sync-loading" role="status">푸시 발송 현황을 불러오는 중…</p>}
     {message && <p role="status">{message}</p>}
+    {workingId === -1 && <p role="status">대기 푸시를 처리하고 있습니다. 결과 확인까지 잠시 기다려주세요.</p>}
+    {dispatchWarning && <p className="admin-sync-error" role="alert">{dispatchWarning}</p>}
     {error && <div className="admin-sync-error" role="alert"><p>{error}</p>
       {!expired && <button type="button" onClick={load} disabled={loading || workingId !== undefined}>현황 다시 불러오기</button>}
     </div>}
@@ -109,4 +118,3 @@ export default function AdminPushNotificationPanel() {
     </>}
   </div>;
 }
-

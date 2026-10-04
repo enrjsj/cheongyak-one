@@ -68,5 +68,10 @@ public class AdminPushNotificationService {
         memberService.requireAdmin(rawToken);
         return pushDispatcher.deliverPendingPushes();
     }
-}
 
+    @Transactional(readOnly = true)
+    public MemberNotificationPushDispatcher.DispatchSummary dispatchPendingWithSummary(String rawToken) {
+        memberService.requireAdmin(rawToken);
+        return pushDispatcher.deliverPendingPushesWithSummary();
+    }
+}

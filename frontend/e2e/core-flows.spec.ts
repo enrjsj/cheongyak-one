@@ -213,6 +213,49 @@ async function openPushAdmin(page: Page) {
   await page.getByRole("tab", { name: "푸시 발송" }).click();
 }
 
+test("관리자 푸시 묶음 처리의 진행 상태와 부분 오류를 표시하고 다음 결과로 교체한다", async ({ page }) => {
+  await mockApi(page, { admin: true });
+  let pending: Route | undefined;
+  let calls = 0;
+  await page.route("**/api/v1/admin/notifications/push**", route => {
+    if (route.request().url().endsWith("/dispatch")) { calls++; pending = route; return; }
+    return route.fulfill({ json: pushDashboard });
+  });
+  await openPushAdmin(page);
+  const panel = page.locator(".admin-push-panel");
+  await panel.getByRole("button", { name: "대기 발송" }).evaluate((button: HTMLButtonElement) => { button.click(); button.click(); });
+  await expect.poll(() => Boolean(pending)).toBe(true);
+  await expect(panel.getByText(/대기 푸시를 처리하고 있습니다/)).toBeVisible();
+  await expect(panel.getByRole("button", { name: "대기 발송" })).toBeDisabled();
+  expect(calls).toBe(1);
+  await pending!.fulfill({ json: { sentCount: 1, acceptedCount: 1, selectedCount: 4, otherCount: 2, errorCount: 1 } });
+  await expect(panel.getByText(/이번 처리 대상 4건 · 접수 확인 1건 · 접수 확인 외 2건 · 처리 오류 1건/)).toBeVisible();
+  await expect(panel.getByRole("alert")).toContainText("1건의 처리 결과를 확정하지 못했습니다");
+  await expect(panel.getByRole("button", { name: "대기 발송" })).toBeEnabled();
+  pending = undefined;
+  await panel.getByRole("button", { name: "대기 발송" }).click();
+  await expect.poll(() => Boolean(pending)).toBe(true);
+  await expect(panel.getByRole("alert")).toHaveCount(0);
+  await pending!.fulfill({ json: { sentCount: 0, acceptedCount: 0, selectedCount: 0, otherCount: 0, errorCount: 0 } });
+  await expect(panel.getByText(/이번 처리 대상 0건 · 접수 확인 0건/)).toBeVisible();
+  await expect(panel.getByText(/대기 푸시를 처리하고 있습니다/)).toHaveCount(0);
+  expect(calls).toBe(2);
+});
+
+test("관리자 푸시 일부 상세 필드가 없는 서버는 누락 건수를 0으로 표시하지 않는다", async ({ page }) => {
+  await mockApi(page, { admin: true });
+  await page.route("**/api/v1/admin/notifications/push**", route => route.fulfill({
+    json: route.request().url().endsWith("/dispatch")
+      ? { sentCount: 2, acceptedCount: 2, selectedCount: 5 } : pushDashboard,
+  }));
+  await openPushAdmin(page);
+  const panel = page.locator(".admin-push-panel");
+  await panel.getByRole("button", { name: "대기 발송" }).click();
+  await expect(panel.getByText(/공급사 접수 확인 후 종료: 2건/)).toBeVisible();
+  await expect(panel.getByText(/이번 처리 대상/)).toHaveCount(0);
+  await expect(panel.getByRole("alert")).toHaveCount(0);
+});
+
 test("관리자 푸시 재시도는 결과 갱신까지 중복 요청을 차단하고 발송 결과를 구분한다", async ({ page }) => {
   await mockApi(page, { admin: true });
   let queued = false;
@@ -956,4 +999,3 @@ test("저장 조건을 수정하고 신규 공고 알림을 개별로 끈다", a
   await page.getByRole("button", { name: "신규 알림 켜짐", exact: true }).click();
   await expect(page.getByRole("button", { name: "신규 알림 꺼짐", exact: true })).toBeVisible();
 });
-

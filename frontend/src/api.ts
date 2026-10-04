@@ -931,8 +931,16 @@ export function fetchAdminPushNotificationDashboard(): Promise<AdminPushNotifica
   return requestJson<AdminPushNotificationDashboard>("/api/v1/admin/notifications/push");
 }
 
-export function dispatchAdminPushNotifications(): Promise<{ sentCount: number; acceptedCount?: number }> {
-  return requestJson<{ sentCount: number; acceptedCount?: number }>("/api/v1/admin/notifications/push/dispatch", { method: "POST" });
+export interface AdminPushDispatchResult {
+  sentCount: number;
+  acceptedCount?: number;
+  selectedCount?: number;
+  otherCount?: number;
+  errorCount?: number;
+}
+
+export function dispatchAdminPushNotifications(): Promise<AdminPushDispatchResult> {
+  return requestJson<AdminPushDispatchResult>("/api/v1/admin/notifications/push/dispatch", { method: "POST" });
 }
 
 export function retryAdminPushNotification(notificationId: number): Promise<void> {
@@ -942,4 +950,3 @@ export function retryAdminPushNotification(notificationId: number): Promise<void
 export function fetchAdminAuditLogs(): Promise<AdminAuditLog[]> {
   return requestJson<AdminAuditLog[]>("/api/v1/admin/audit-logs");
 }
-

@@ -13,6 +13,21 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class MemberNotificationPushDispatcherTest {
+    @Test void summarySeparatesAcceptedOtherAndTransactionErrors() {
+        when(repository.findPushDeliveryCandidateIds(now, 5, PageRequest.of(0, 50))).thenReturn(List.of(1L, 2L, 3L));
+        when(delivery.deliver(1L)).thenReturn(true);
+        when(delivery.deliver(2L)).thenReturn(false);
+        when(delivery.deliver(3L)).thenThrow(new IllegalStateException("failure"));
+        assertThat(dispatcher.deliverPendingPushesWithSummary())
+                .isEqualTo(new MemberNotificationPushDispatcher.DispatchSummary(3, 1, 1, 1));
+    }
+
+    @Test void emptySummaryHasNoFabricatedSuccessOrFailure() {
+        assertThat(dispatcher.deliverPendingPushesWithSummary())
+                .isEqualTo(new MemberNotificationPushDispatcher.DispatchSummary(0, 0, 0, 0));
+        verifyNoInteractions(delivery);
+    }
+
     private final MemberNotificationRepository repository = mock(MemberNotificationRepository.class);
     private final MemberNotificationPushDelivery delivery = mock(MemberNotificationPushDelivery.class);
     private final Instant now = Instant.parse("2026-10-04T00:00:00Z");
