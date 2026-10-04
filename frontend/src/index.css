@@ -927,6 +927,67 @@ footer { background: var(--navy); color: white; }
   .error-card { padding: 32px 22px; }
 }
 
+/* Compact mobile controls: keep labels intact instead of shrinking text or wrapping tabs. */
+@media (max-width: 680px) {
+  .status-tabs {
+    display: flex; gap: 4px; padding: 6px 12px; min-width: 0;
+    overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin;
+    scroll-padding-inline: 12px;
+  }
+  .status-tabs button {
+    flex: 1 0 auto; min-width: max-content; height: 44px; padding: 0 10px;
+    gap: 0; border-radius: 10px; white-space: nowrap;
+  }
+  .status-tabs .tab-icon { display: none; }
+  .status-tabs button > span:last-child { flex-direction: row; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
+  .status-tab-label { white-space: nowrap; }
+  .status-tabs button b { min-width: 20px; padding: 2px 5px; border-radius: 6px; background: #eef1f6; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .status-tabs button.selected { background: #edf3ff; }
+  .status-tabs button.selected > span:last-child, .status-tabs button.selected b { color: #2859d5; }
+  .status-tabs button.selected b { background: #dfe9ff; }
+  .status-tabs button::after { left: 10px; right: 10px; bottom: -6px; height: 2px; }
+  .status-tabs button:focus-visible, .admin-operation-tabs button:focus-visible { outline: 2px solid #2859d5; outline-offset: -3px; }
+  .content-grid { margin-top: 22px; }
+  .application-card { padding: 18px 16px; }
+  .card-topline { gap: 8px; align-items: flex-start; }
+  .tags { flex-wrap: wrap; min-width: 0; gap: 6px; }
+  .tags span { white-space: nowrap; flex-shrink: 0; font-size: 11px; padding-inline: 7px; }
+  .bookmark { flex-shrink: 0; min-width: 36px; min-height: 44px; }
+  .card-main { flex-direction: column; align-items: stretch; gap: 10px; margin-top: 8px; }
+  .card-main > div:first-child { min-width: 0; }
+  .card-main h3 { word-break: keep-all; overflow-wrap: anywhere; line-height: 1.45; }
+  .deadline { display: flex; align-items: center; gap: 8px; text-align: left; }
+  .deadline strong { font-size: 14px; white-space: nowrap; }
+  .list-panel, .side-column, .section-actions { min-width: 0; }
+  .section-actions { flex-wrap: wrap; gap: 8px; }
+  .section-actions button, .sort-control select { min-height: 44px; }
+  .section-actions .calendar-button { width: auto; padding-inline: 10px; font-size: 12px; white-space: nowrap; }
+  .sort-control select { max-width: 100%; }
+  .quick-filters, .favorite-progress-filters {
+    flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
+    padding-bottom: 5px; scrollbar-width: thin;
+  }
+  .quick-filters > *, .favorite-progress-filters button { flex-shrink: 0; white-space: nowrap; }
+  .quick-filters button, .favorite-progress-filters button { min-height: 44px; }
+  .admin-operation-tabs {
+    display: flex; gap: 4px; overflow-x: auto; overscroll-behavior-x: contain;
+    scrollbar-width: thin; padding: 4px;
+  }
+  .admin-operation-tabs button { flex: 0 0 auto; min-height: 44px; padding: 0 14px; white-space: nowrap; font-size: 13px; }
+  .notification-tabs button, .member-tabs button { white-space: nowrap; }
+  .notification-filter, .favorite-calendar-filters { scrollbar-width: thin; overscroll-behavior-x: contain; }
+  .modal .notification-filter button, .modal .favorite-calendar-filters button { min-height: 44px; white-space: nowrap; font-size: 12px; }
+  .favorite-summary-stats { max-width: 100%; }
+  .mobile-nav a, .mobile-nav button { min-width: 0; white-space: nowrap; }
+  .modal-head > div { min-width: 0; }
+  .modal-head > button { flex-shrink: 0; }
+}
+
+@media (max-width: 359px) {
+  .section-actions .sort-control { flex: 1 1 100%; margin-right: 0; }
+  .section-actions .sort-control select { width: 100%; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   * { transition: none !important; }

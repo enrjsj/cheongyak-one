@@ -94,7 +94,7 @@ async function mockApi(page: Page, options: { admin?: boolean; failInitialNotice
 }
 
 async function signup(page: Page) {
-  await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await page.locator(".header-actions").getByRole("button", { name: "로그인", exact: true }).click();
   await page.getByRole("tab", { name: "회원가입" }).click();
   await page.getByLabel("닉네임").fill("테스트 회원");
   await page.getByLabel("이메일").fill("e2e@example.com");
@@ -1398,6 +1398,110 @@ test("상태 탭은 미리 받은 목록으로 로딩 없이 전환한다", asyn
   await expect(page.getByText("조건에 맞는 공고 2건")).toBeVisible();
   await page.waitForTimeout(400);
   expect(facetRequests).toBe(initialFacetRequests);
+});
+
+for (const width of [320, 360, 390, 430, 680]) {
+  test(`모바일 탭 ${width}px에서 이름과 건수는 한 줄이며 마지막 탭과 검색 도구를 사용할 수 있다`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await mockApi(page);
+    await page.goto("/");
+    const tabs = page.getByRole("tablist", { name: "청약 상태" });
+    await expect(tabs.getByRole("tab", { name: /모집 중·예정/ }).locator("b")).toHaveText("2");
+    const metrics = await tabs.locator("button").evaluateAll(elements => elements.map(element => {
+      const label = element.querySelector(".status-tab-label")!;
+      const badge = element.querySelector("b")!;
+      const a = label.getBoundingClientRect(); const b = badge.getBoundingClientRect();
+      return { height: element.getBoundingClientRect().height, sameRow: Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) < 2,
+        singleLine: label.getClientRects().length === 1 && getComputedStyle(label).whiteSpace === "nowrap" };
+    }));
+    expect(metrics.every(item => item.height >= 44 && item.sameRow && item.singleLine)).toBe(true);
+    await tabs.getByRole("tab", { name: /오픈 예정/ }).click();
+    await expect(tabs.getByRole("tab", { name: /오픈 예정/ })).toHaveAttribute("aria-selected", "true");
+    expect(await tabs.evaluate(container => {
+      const selected = container.querySelector('[aria-selected="true"]')!.getBoundingClientRect();
+      const outer = container.getBoundingClientRect();
+      return selected.left >= outer.left && selected.right <= outer.right;
+    })).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.getByRole("button", { name: /청약 필터 열기/ }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.keyboard.press("Escape");
+    if (width === 390 || width === 320) {
+      await page.evaluate(() => window.scrollTo({ top: document.querySelector(".dashboard")!.getBoundingClientRect().top + scrollY - 64, behavior: "instant" }));
+      await page.screenshot({ path: "test-results/mobile-tabs-" + width + ".png", animations: "disabled" });
+    }
+  });
+}
+
+test("모바일 탭 긴 건수와 URL 복원·키보드 이동에서도 선택 탭을 한 줄로 드러낸다", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 }); await mockApi(page);
+  await page.route("**/notices/facets?**", route => route.fulfill({ json: { total: 123456, endingToday: 12345, open: 12345, upcoming: 23456 } }));
+  await page.goto("/?status=upcoming");
+  const tabs = page.getByRole("tablist", { name: "청약 상태" });
+  const last = tabs.getByRole("tab", { name: /오픈 예정/ });
+  await expect(last).toHaveAttribute("aria-selected", "true");
+  await expect(last.locator("b")).toHaveText("23456");
+  await expect.poll(() => tabs.evaluate(container => {
+    const selected = container.querySelector('[aria-selected="true"]')!.getBoundingClientRect();
+    return selected.right <= container.getBoundingClientRect().right;
+  })).toBe(true);
+  await last.focus(); await page.keyboard.press("Home");
+  await expect(tabs.getByRole("tab").first()).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("End");
+  await expect(last).toBeFocused();
+  await expect(last).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowRight");
+  await expect(tabs.getByRole("tab").first()).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("모바일 관리자 탭은 한 줄이며 가로 이동과 키보드로 끝 메뉴에 접근한다", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 }); await mockApi(page, { admin: true });
+  await page.route("**/api/v1/admin/**", route => route.fulfill({ status: 503, json: { detail: "테스트 조회 오류" } }));
+  await page.goto("/"); await signup(page);
+  await page.getByRole("button", { name: "운영 관리" }).click();
+  const tabs = page.getByRole("tablist", { name: "운영 관리 메뉴" });
+  const tops = await tabs.getByRole("tab").evaluateAll(elements => elements.map(e => e.getBoundingClientRect().top));
+  expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(1);
+  await tabs.getByRole("tab").first().focus(); await page.keyboard.press("End");
+  await expect(tabs.getByRole("tab", { name: "AI 사용량" })).toHaveAttribute("aria-selected", "true");
+  expect(await tabs.evaluate(element => element.scrollLeft > 0)).toBe(true);
+  await page.keyboard.press("Home");
+  await expect(tabs.getByRole("tab", { name: "공고 동기화" })).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("모바일 관심·일정 분류는 한 줄과 터치 영역을 유지하며 저장 동작 이름을 표시한다", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 }); await mockApi(page);
+  await openFavoriteSchedule(page);
+  const dialog = page.getByRole("dialog", { name: "관심청약 전체 일정" });
+  const filters = dialog.getByRole("group", { name: "일정 유형 필터" });
+  const metrics = await filters.locator("button").evaluateAll(elements => elements.map(e => ({ top: e.getBoundingClientRect().top, height: e.getBoundingClientRect().height, nowrap: getComputedStyle(e).whiteSpace })));
+  expect(Math.max(...metrics.map(x => x.top)) - Math.min(...metrics.map(x => x.top))).toBeLessThan(1);
+  await expect.poll(() => filters.locator("button").evaluateAll(elements => elements.every(e => e.getBoundingClientRect().height >= 44 && getComputedStyle(e).whiteSpace === "nowrap"))).toBe(true);
+  await page.keyboard.press("Escape");
+  const actions = page.locator(".section-actions");
+  await expect(actions.getByRole("button", { name: "전체 일정 보기" })).toBeVisible();
+  expect(await actions.getByRole("button", { name: "전체 일정 보기" }).evaluate(e => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(12);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("모바일 320px 회원 헤더의 아이콘 버튼은 이름이 있고 화면을 넘치지 않는다", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 }); await mockApi(page, { admin: true });
+  await page.goto("/"); await signup(page);
+  const header = page.locator(".header-actions");
+  await expect(header.getByRole("button", { name: "운영 관리" })).toBeVisible();
+  await expect(header.getByRole("button", { name: "관심청약 0개" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("데스크톱 상태 탭은 기존 아이콘과 네 열을 유지한다", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 }); await mockApi(page); await page.goto("/");
+  const tabs = page.getByRole("tablist", { name: "청약 상태" });
+  await expect(tabs.locator(".tab-icon").first()).toBeVisible();
+  expect(await tabs.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  const tops = await tabs.getByRole("tab").evaluateAll(elements => elements.map(e => e.getBoundingClientRect().top));
+  expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(1);
 });
 
 const recommendationResult = {
