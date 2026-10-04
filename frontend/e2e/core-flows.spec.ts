@@ -1689,6 +1689,81 @@ async function openSavedProfiles(page: Page) {
   return page.getByRole("region", { name: "저장 검색조건 관리" });
 }
 
+test("저장 조건 관리 많은 조건의 더 보기와 복합 필터는 서버 재호출 없이 동작한다", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 }); await prepareSavedProfiles(page);
+  let reads = 0;
+  const rows = Array.from({ length: 14 }, (_, index) => ({ ...savedProfileFixture, id: index + 1, name: `조건 ${index + 1}`, defaultProfile: index === 0, newNoticeEnabled: index % 2 === 0 }));
+  await page.route("**/members/me/saved-search-profiles", route => { reads++; return route.fulfill({ json: rows }); });
+  const panel = await openSavedProfiles(page); await expect(panel.locator("article")).toHaveCount(6);
+  const initial = reads;
+  await panel.getByRole("button", { name: /저장 조건 더 보기/ }).click();
+  await expect(panel.locator("article")).toHaveCount(12);
+  await panel.getByRole("button", { name: /저장 조건 더 보기/ }).click();
+  await expect(panel.locator("article")).toHaveCount(14);
+  await expect(panel.getByRole("button", { name: /저장 조건 더 보기/ })).toHaveCount(0);
+  await panel.getByLabel("신규 알림 상태", { exact: true }).selectOption("OFF");
+  await expect(panel.locator("article")).toHaveCount(6);
+  await expect(panel.getByText("신규 알림 켜짐 7개 · 꺼짐 7개")).toBeVisible();
+  await panel.getByRole("button", { name: "기본 조건만" }).click();
+  await expect(panel.getByRole("button", { name: "기본 조건만" })).toHaveAttribute("aria-pressed", "true");
+  await expect(panel.getByText("검색에 맞는 저장 조건이 없습니다.")).toBeVisible();
+  await panel.getByRole("button", { name: "검색 초기화" }).click();
+  await expect(panel.locator("article")).toHaveCount(6);
+  await panel.getByLabel("저장 조건 검색").fill("조건 14");
+  await expect(panel.locator("article")).toHaveCount(1);
+  await expect(panel.locator("article")).toHaveAttribute("aria-label", "조건 14");
+  expect(reads).toBe(initial);
+  expect(await panel.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+});
+
+test("저장 조건 관리 기본 설정과 복제는 서버 결과를 반영한다", async ({ page }) => {
+  await prepareSavedProfiles(page); let writes = 0;
+  let rows = [savedProfileFixture, { ...savedProfileFixture, id: 12, name: "부산 조건", defaultProfile: false }];
+  await page.route("**/members/me/saved-search-profiles", route => route.fulfill({ json: rows }));
+  await page.route("**/saved-search-profiles/12/default", route => { writes++; rows = rows.map(row => ({ ...row, defaultProfile: row.id === 12 })); return route.fulfill({ json: rows[1] }); });
+  await page.route("**/saved-search-profiles/12/duplicate", route => { writes++; rows = [...rows, { ...rows[1], id: 13, name: "부산 조건 복사", defaultProfile: false }]; return route.fulfill({ json: rows[2] }); });
+  const panel = await openSavedProfiles(page);
+  await panel.getByRole("article", { name: "부산 조건", exact: true }).getByRole("button", { name: "기본 설정" }).click();
+  await expect(panel.locator("article").first()).toHaveAttribute("aria-label", "부산 조건");
+  await panel.getByRole("button", { name: "기본 조건만" }).click();
+  await expect(panel.locator("article")).toHaveCount(1);
+  await panel.getByRole("button", { name: "복제", exact: true }).click();
+  await expect(panel.getByText("저장 조건을 복제했습니다.")).toBeVisible();
+  await expect(panel.locator("article")).toHaveCount(1);
+  await panel.getByRole("button", { name: "검색 초기화" }).click();
+  await expect(panel.locator("article")).toHaveCount(3); expect(writes).toBe(2);
+});
+
+test("저장 조건 관리 알림 변경 후 필터와 집계도 서버 목록으로 갱신한다", async ({ page }) => {
+  await prepareSavedProfiles(page); let writes = 0; let rows = [savedProfileFixture];
+  await page.route("**/members/me/saved-search-profiles", route => route.fulfill({ json: rows }));
+  await page.route("**/saved-search-profiles/11/new-notice-enabled", route => { writes++; rows = [{ ...savedProfileFixture, newNoticeEnabled: false }]; return route.fulfill({ json: rows[0] }); });
+  const panel = await openSavedProfiles(page);
+  await panel.getByLabel("신규 알림 상태", { exact: true }).selectOption("ON");
+  await expect(panel.getByRole("button", { name: "신규 알림 켜짐", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await panel.getByRole("button", { name: "신규 알림 켜짐", exact: true }).click();
+  await expect(panel.locator("article")).toHaveCount(0);
+  await expect(panel.getByText("신규 알림 켜짐 0개 · 꺼짐 1개")).toBeVisible();
+  await panel.getByRole("button", { name: "검색 초기화" }).click();
+  await expect(panel.getByRole("button", { name: "신규 알림 꺼짐", exact: true })).toHaveAttribute("aria-pressed", "false");
+  expect(writes).toBe(1);
+});
+
+test("저장 조건 관리 키보드 생성은 초점을 받고 Enter 한 번으로 저장한다", async ({ page }) => {
+  await prepareSavedProfiles(page); let writes = 0; let rows = [savedProfileFixture];
+  await page.route("**/members/me/saved-search-profiles", route => {
+    if (route.request().method() === "POST") { writes++; rows = [...rows, { ...savedProfileFixture, id: 12, name: route.request().postDataJSON().name, defaultProfile: false }]; return route.fulfill({ json: rows[1] }); }
+    return route.fulfill({ json: rows });
+  });
+  const panel = await openSavedProfiles(page);
+  await panel.getByRole("button", { name: "새 이름으로 저장" }).click();
+  await expect(panel.getByLabel("새 조건 이름")).toBeFocused();
+  await panel.getByLabel("새 조건 이름").fill("키보드 조건");
+  await panel.getByLabel("새 조건 이름").press("Enter");
+  await expect(panel.locator("article")).toHaveCount(2); expect(writes).toBe(1);
+  await expect(panel.getByLabel("새 조건 이름")).toHaveCount(0);
+});
+
 test("저장 조건 관리 검색과 정렬은 추가 조회 없이 동작하고 모바일에서 넘치지 않는다", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 844 }); await prepareSavedProfiles(page);
   let reads = 0;

@@ -42,3 +42,8 @@ export function selectSavedProfiles(items: SavedSearchProfile[], query: string, 
     .sort((a, b) => (order === "DEFAULT" ? Number(b.defaultProfile) - Number(a.defaultProfile) : 0)
       || (order === "NAME" ? a.name.localeCompare(b.name, "ko") : time(b.updatedAt) - time(a.updatedAt)) || a.id - b.id);
 }
+
+export function filterSavedProfiles(items: SavedSearchProfile[], notice: "ALL" | "ON" | "OFF", defaultOnly: boolean): SavedSearchProfile[] {
+  return items.filter(item => (!defaultOnly || item.defaultProfile)
+    && (notice === "ALL" || item.newNoticeEnabled === (notice === "ON")));
+}
