@@ -72,6 +72,7 @@ import { useHorizontalTabs } from "./useHorizontalTabs";
 import { useLinkCopy } from "./useLinkCopy";
 import LinkCopyFeedback from "./LinkCopyFeedback";
 import ComparisonTable from "./ComparisonTable";
+import { useOnlineStatus } from "./useOnlineStatus";
 import { publicShareUrl } from "./shareLinkTools";
 import { useSavedSearchProfiles } from "./useSavedSearchProfiles";
 import SavedSearchProfilesPanel from "./SavedSearchProfilesPanel";
@@ -527,6 +528,7 @@ function formatNoticeSort(sort: NoticeSortKey): string {
 }
 
 export default function Home() {
+  const online = useOnlineStatus();
   const initialSearch = noticeSearchStateFromSearch(window.location.search);
   const [notices, setNotices] = useState<NoticeSummary[]>([]);
   const [knownNotices, setKnownNotices] = useState<Map<number, NoticeSummary>>(new Map());
@@ -739,13 +741,14 @@ export default function Home() {
   }, [query]);
 
   useEffect(() => {
-    // 검색 조건을 바꾼 뒤에는 새 요청으로 간주해 Render 기동 대기 재시도를 다시 허용한다.
+    // 검색 조건 변경 또는 재연결 시 제한된 자동 재시도를 다시 허용한다.
     automaticLoadRetryCount.current = 0;
     noticeLoadStartedAt.current = Date.now();
     setLoadRetryPending(false);
-  }, [activeStatus, category, debouncedQuery, includeClosed, maxArea, maxPriceManwon, minArea, minPriceManwon, region, savedIds, savedOnly, sortKey, supplyType]);
+  }, [online, activeStatus, category, debouncedQuery, includeClosed, maxArea, maxPriceManwon, minArea, minPriceManwon, region, savedIds, savedOnly, sortKey, supplyType]);
 
   const retryNoticeLoad = () => {
+    if (!online) return;
     automaticLoadRetryCount.current = 0;
     noticeLoadStartedAt.current = Date.now();
     setLoadRetryPending(false);
@@ -755,6 +758,7 @@ export default function Home() {
   useEffect(() => {
     const controller = new AbortController();
     const request = currentSearchRequest("all");
+    if (!online) { setFacetsLoading(false); return; }
     const startedAt = Date.now();
     let retryCount = 0;
     let retryTimer: number | undefined;
@@ -794,11 +798,12 @@ export default function Home() {
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
       controller.abort();
     };
-  }, [category, debouncedQuery, facetsVersion, maxArea, maxPriceManwon, minArea, minPriceManwon, region, supplyType]);
+  }, [online, category, debouncedQuery, facetsVersion, maxArea, maxPriceManwon, minArea, minPriceManwon, region, supplyType]);
 
   useEffect(() => {
     const controller = new AbortController();
     let retryTimer: number | undefined;
+    if (!online) { setLoading(false); setLoadRetryPending(false); setLoadError(""); return; }
     const timer = window.setTimeout(() => {
       const request = currentSearchRequest();
       if (savedOnly && request.ids?.length === 0) {
@@ -878,7 +883,7 @@ export default function Home() {
             automaticLoadRetryCount.current += 1;
             const retryDelay = Math.min(3_500 * 2 ** Math.min(automaticLoadRetryCount.current - 1, 3), 15_000, remainingWait);
             setLoadRetryPending(true);
-            setLoadError(`서버를 깨우는 중이에요. ${Math.ceil(retryDelay / 1_000)}초 후 자동으로 다시 시도합니다.`);
+            setLoadError(`서버에 연결하지 못했어요. ${Math.ceil(retryDelay / 1_000)}초 후 자동으로 다시 시도합니다.`);
             retryTimer = window.setTimeout(() => setLoadVersion((version) => version + 1), retryDelay);
             return;
           }
@@ -888,9 +893,10 @@ export default function Home() {
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, 250);
     return () => { window.clearTimeout(timer); if (retryTimer) window.clearTimeout(retryTimer); controller.abort(); };
-  }, [activeStatus, category, debouncedQuery, includeClosed, loadVersion, maxArea, maxPriceManwon, minArea, minPriceManwon, region, savedIds, savedOnly, sortKey, supplyType]);
+  }, [online, activeStatus, category, debouncedQuery, includeClosed, loadVersion, maxArea, maxPriceManwon, minArea, minPriceManwon, region, savedIds, savedOnly, sortKey, supplyType]);
 
   const loadMoreNotices = async () => {
+    if (!online) return;
     if (loadingMore || notices.length >= noticeTotal) return;
     setLoadingMore(true);
     try {
@@ -1801,6 +1807,11 @@ export default function Home() {
 
   return (
     <main>
+      {!online && <section className="connection-banner" role="status" aria-label="오프라인 안내">
+        <strong>인터넷 연결이 끊겼어요.</strong>
+        <p>목록 자동 재시도를 잠시 멈췄습니다. 연결되면 현재 검색조건으로 다시 불러옵니다.</p>
+        <small>표시된 공고는 마지막으로 불러온 목록입니다. 변경한 검색조건은 재연결 후 적용되며 최신 정보가 아닐 수 있습니다.</small>
+      </section>}
       <header className="site-header">
         <div className="header-inner">
           <a className="brand" href="#top" aria-label="청약한눈 홈">
@@ -1885,7 +1896,7 @@ export default function Home() {
             <div><strong>{facetsUnavailable ? "–" : upcomingCount}</strong><span>오픈 예정</span></div>
           </div>
           {highlight && highlightEvent ? (
-            <button className="next-event" type="button" onClick={() => openDetail(highlight)}>
+            <button className="next-event" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); void openDetail(highlight); }}>
               <span className="date-box"><strong>{Number(highlightEvent.date.slice(8))}</strong><span>{weekday(highlightEvent.date)}</span></span>
               <span><small>{highlightEvent.label}</small><b>{highlight.title}</b></span>
               <Icon name="arrow" />
@@ -1954,23 +1965,25 @@ export default function Home() {
               <div className="notice-load-status" role="status">
                 <p>{loadError}</p>
                 <small>첫 연결에는 시간이 걸릴 수 있어요. 약 5분 동안 자동으로 다시 시도합니다.</small>
-                <button type="button" onClick={retryNoticeLoad}>지금 다시 시도</button>
+                <button type="button" onClick={retryNoticeLoad} disabled={!online}>지금 다시 시도</button>
               </div>
             )}
             {loadError && cachedListShownAt && !loadRetryPending && (
               <div className="notice-load-status" role="status">
                 <p>최신 공고를 확인하지 못했어요. 이전에 불러온 목록을 표시합니다.</p>
-                <button type="button" onClick={retryNoticeLoad}>다시 불러오기</button>
+                <button type="button" onClick={retryNoticeLoad} disabled={!online}>다시 불러오기</button>
               </div>
             )}
-            {(loading || loadRetryPending) && !cachedListShownAt ? (
+            {!online && visible.length === 0 ? (
+              <div className="notice-load-status" role="status"><p>연결 후 현재 검색조건의 공고를 확인할 수 있습니다.</p></div>
+            ) : (loading || loadRetryPending) && !cachedListShownAt ? (
               <div className="list-loading" role="status" aria-label="청약 공고 불러오는 중">
                 {[0, 1, 2].map((item) => <div className="list-skeleton" key={item}><i></i><strong></strong><span></span><small></small></div>)}
               </div>
             ) : loadError && !cachedListShownAt ? (
               <div className="inline-error" role="alert">
                 <span>!</span><h3>공고를 불러오지 못했어요</h3><p>{loadError}</p>
-                <button type="button" onClick={retryNoticeLoad}>다시 불러오기</button>
+                <button type="button" onClick={retryNoticeLoad} disabled={!online}>다시 불러오기</button>
               </div>
             ) : visible.length > 0 ? (
               <>
@@ -2020,13 +2033,13 @@ export default function Home() {
                     {upcomingFavoriteEvents.length > 0 && (
                       <div className="favorite-upcoming-events" aria-label="다가오는 관심청약 일정">
                         <div><span>다가오는 내 일정</span><small>관심청약의 접수·당첨 발표 일정입니다.</small></div>
-                        <ol>{upcomingFavoriteEvents.map((event) => <li key={`${event.item.id}-${event.label}-${event.date}`}><time>{formatShortDate(event.date)}</time><span>{event.label}</span><button type="button" onClick={() => openDetail(event.item)}>{event.item.title}</button></li>)}</ol>
+                        <ol>{upcomingFavoriteEvents.map((event) => <li key={`${event.item.id}-${event.label}-${event.date}`}><time>{formatShortDate(event.date)}</time><span>{event.label}</span><button type="button" onClick={(click) => { click.currentTarget.focus({ preventScroll: true }); void openDetail(event.item); }}>{event.item.title}</button></li>)}</ol>
                       </div>
                     )}
                     {resultDueFavoriteEvents.length > 0 && (
                       <div className="favorite-result-due-events" aria-label="확인이 필요한 당첨 발표">
                         <div><span>당첨 발표 확인</span><small>신청 결과가 아직 기록되지 않은 공고입니다.</small></div>
-                        <ol>{resultDueFavoriteEvents.map(({ item, date }) => <li key={item.id}><time>{formatShortDate(date)}</time><span>{resultDueLabel(date)}</span><button type="button" onClick={() => openDetail(item)}>{item.title}</button></li>)}</ol>
+                        <ol>{resultDueFavoriteEvents.map(({ item, date }) => <li key={item.id}><time>{formatShortDate(date)}</time><span>{resultDueLabel(date)}</span><button type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); void openDetail(item); }}>{item.title}</button></li>)}</ol>
                       </div>
                     )}
                   </section>
@@ -2092,13 +2105,13 @@ export default function Home() {
                       )}
                       {savedOnly && member && (favoriteTrackers.get(item.id)?.progress ?? "SAVED") === "APPLIED" && <span className={`application-result-badge result-${favoriteTrackers.get(item.id)?.applicationResult?.toLowerCase() ?? "pending"}`}>{FAVORITE_APPLICATION_RESULT_LABELS[favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING"]}</span>}
                       <div className="card-actions">
-                        <button className="detail-link" type="button" onClick={() => openDetail(item)}>공고 핵심만 보기 <Icon name="arrow" /></button>
+                        <button className="detail-link" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); void openDetail(item); }}>공고 핵심만 보기 <Icon name="arrow" /></button>
                         <button className={`compare-button ${comparisonIds.includes(item.id) ? "selected" : ""}`} type="button" onClick={() => void toggleComparison(item.id)} disabled={comparisonPendingId !== undefined || comparisonResetPending} aria-pressed={comparisonIds.includes(item.id)}><Icon name="grid" /> {comparisonIds.includes(item.id) ? "비교 해제" : "비교 담기"}</button>
                       </div>
                     </article>
                   ))}
                 </div>
-                {notices.length < noticeTotal && <button className="more-button" type="button" onClick={() => void loadMoreNotices()} disabled={loadingMore}>{loadingMore ? "불러오는 중" : `다음 ${Math.min(NOTICE_PAGE_SIZE, noticeTotal - notices.length)}건 더보기`} <Icon name="arrow" /></button>}
+                {notices.length < noticeTotal && <button className="more-button" type="button" onClick={() => void loadMoreNotices()} disabled={loadingMore || !online}>{loadingMore ? "불러오는 중" : `다음 ${Math.min(NOTICE_PAGE_SIZE, noticeTotal - notices.length)}건 더보기`} <Icon name="arrow" /></button>}
               </>
             ) : (
               <div className="empty-state">
@@ -2140,7 +2153,7 @@ export default function Home() {
                 <ol>
                   {recentNotices.map((item) => (
                     <li key={item.id}>
-                      <button type="button" onClick={() => void openDetail(item)}>
+                      <button type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); void openDetail(item); }}>
                         <span className={`state ${item.stateTone}`}>{item.state}</span>
                         <span><b>{item.title}</b><small>{item.region} · {item.type}</small></span>
                         <Icon name="arrow" />
