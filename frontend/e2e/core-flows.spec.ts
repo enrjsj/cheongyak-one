@@ -1680,6 +1680,147 @@ test("회원가입 후 사전점검 답변을 계정에 저장한다", async ({ 
   await expect(page.getByText("사전점검 답변을 저장했습니다.")).toBeVisible();
 });
 
+const savedProfileFixture = { id: 11, name: "서울 기본 조건", region: "서울", housingCategory: "APARTMENT", status: "OPEN", sort: "DEADLINE", defaultProfile: true, newNoticeEnabled: true, updatedAt: "2026-10-01T00:00:00Z" };
+async function prepareSavedProfiles(page: Page) {
+  await mockApi(page); await page.goto("/"); await signup(page);
+}
+async function openSavedProfiles(page: Page) {
+  await page.getByRole("button", { name: /청약 필터 열기/ }).click();
+  return page.getByRole("region", { name: "저장 검색조건 관리" });
+}
+
+test("저장 조건 관리 검색과 정렬은 추가 조회 없이 동작하고 모바일에서 넘치지 않는다", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 }); await prepareSavedProfiles(page);
+  let reads = 0;
+  const rows = [savedProfileFixture, { ...savedProfileFixture, id: 12, name: "가 부산 조건", region: "부산", defaultProfile: false }, { ...savedProfileFixture, id: 13, name: "서울 ＡＰＴ", defaultProfile: false }];
+  await page.route("**/members/me/saved-search-profiles", route => { reads++; return route.fulfill({ json: rows }); });
+  const panel = await openSavedProfiles(page); await expect(panel.locator("article")).toHaveCount(3);
+  const initial = reads;
+  await panel.getByLabel("저장 조건 검색").fill("apt 서울");
+  await expect(panel.locator("article")).toHaveCount(1);
+  await panel.getByRole("button", { name: "검색 초기화" }).click();
+  await panel.getByLabel("저장 조건 정렬").selectOption("NAME");
+  await expect(panel.locator("article").first()).toContainText("가 부산 조건");
+  expect(reads).toBe(initial);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(panel.locator(".saved-profile-controls")).toHaveCSS("display", "grid");
+  await panel.getByLabel("저장 조건 검색").fill("apt 서울");
+  await panel.getByRole("button", { name: "새 이름으로 저장" }).click();
+  await expect(panel.locator(".saved-profile-create")).toHaveCSS("display", "block");
+  await panel.screenshot({ path: "test-results/saved-profile-mobile.png", animations: "disabled" });
+});
+
+test("저장 조건 관리 새 이름 저장은 입력 검증과 중복 차단 후 서버 목록을 갱신한다", async ({ page }) => {
+  await prepareSavedProfiles(page); let writes = 0; let rows = [savedProfileFixture]; let pending: Route | undefined;
+  await page.route("**/members/me/saved-search-profiles", route => {
+    if (route.request().method() === "POST") { writes++; pending = route; return; }
+    return route.fulfill({ json: rows });
+  });
+  const panel = await openSavedProfiles(page);
+  await panel.getByRole("button", { name: "새 이름으로 저장" }).click();
+  await panel.getByRole("button", { name: "조건 저장", exact: true }).click();
+  await expect(panel.getByRole("alert")).toContainText("1~40"); expect(writes).toBe(0);
+  await panel.getByLabel("새 조건 이름").fill(" 새로운 조건 ");
+  await panel.getByRole("button", { name: "조건 저장", exact: true }).evaluate(element => { (element as HTMLButtonElement).click(); (element as HTMLButtonElement).click(); });
+  await expect.poll(() => writes).toBe(1);
+  expect(pending!.request().postDataJSON().name).toBe("새로운 조건");
+  rows = [...rows, { ...savedProfileFixture, id: 12, name: "새로운 조건", defaultProfile: false }];
+  await pending!.fulfill({ json: rows[1] });
+  await expect(panel.locator("article")).toHaveCount(2);
+  await expect(panel.getByLabel("새 조건 이름")).toHaveCount(0); expect(writes).toBe(1);
+});
+
+test("저장 조건 관리 삭제 확인은 기본 조건을 안내하고 취소하면 요청하지 않는다", async ({ page }) => {
+  await prepareSavedProfiles(page); let writes = 0;
+  await page.route("**/members/me/saved-search-profiles", route => route.fulfill({ json: writes ? [] : [savedProfileFixture] }));
+  await page.route("**/saved-search-profiles/11", route => { writes++; return route.fulfill({ status: 204 }); });
+  const panel = await openSavedProfiles(page);
+  await panel.getByRole("button", { name: "삭제", exact: true }).click();
+  await expect(panel.getByRole("group", { name: "저장 조건 삭제 확인" })).toContainText("기본 조건");
+  await panel.getByRole("button", { name: "취소", exact: true }).click(); expect(writes).toBe(0);
+  await panel.getByRole("button", { name: "삭제", exact: true }).click();
+  await panel.getByRole("button", { name: "삭제 확인" }).click();
+  await expect(panel.getByText("저장한 조건이 없습니다.", { exact: false })).toBeVisible(); expect(writes).toBe(1);
+});
+
+for (const postReadFailure of [false, true]) {
+  test(`저장 조건 관리 ${postReadFailure ? "변경 후 조회" : "변경 요청"} 실패는 쓰기 재전송 없이 복구한다`, async ({ page }) => {
+    await prepareSavedProfiles(page); let writes = 0; let failing = false;
+    await page.route("**/members/me/saved-search-profiles", route => failing && postReadFailure ? route.fulfill({ status: 503, json: { detail: "목록 확인 실패" } }) : route.fulfill({ json: [savedProfileFixture] }));
+    await page.route("**/saved-search-profiles/11/duplicate", route => { writes++; failing = true; return route.fulfill({ status: postReadFailure ? 200 : 503, json: postReadFailure ? savedProfileFixture : { detail: "변경 결과 불명" } }); });
+    const panel = await openSavedProfiles(page);
+    await panel.getByRole("button", { name: "복제", exact: true }).click();
+    await expect(panel.getByRole("alert")).toBeVisible();
+    await expect(panel.getByRole("button", { name: "삭제", exact: true })).toBeDisabled();
+    failing = false; await panel.getByRole("button", { name: "목록 새로고침" }).click();
+    await expect(panel.getByRole("button", { name: "복제", exact: true })).toBeEnabled(); expect(writes).toBe(1);
+  });
+}
+
+for (const malformed of [false, true]) {
+  test(`저장 조건 관리 ${malformed ? "잘못된 응답" : "조회 오류"}를 빈 목록과 구분한다`, async ({ page }) => {
+    await prepareSavedProfiles(page); let fail = true;
+    await page.route("**/members/me/saved-search-profiles", route => fail ? route.fulfill({ status: malformed ? 200 : 503, json: malformed ? {} : { detail: "조회 실패" } }) : route.fulfill({ json: [] }));
+    const panel = await openSavedProfiles(page);
+    await expect(panel.getByRole("alert")).toBeVisible();
+    await expect(panel.getByText("저장한 조건이 없습니다.", { exact: false })).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: "새 이름으로 저장" })).toBeDisabled();
+    fail = false; await panel.getByRole("button", { name: "목록 새로고침" }).click();
+    await expect(panel.getByText("저장한 조건이 없습니다.", { exact: false })).toBeVisible();
+  });
+}
+
+for (const status of [401, 403]) {
+  test(`저장 조건 관리 권한 ${status} 이후 추가 요청을 차단한다`, async ({ page }) => {
+    await prepareSavedProfiles(page); let reads = 0;
+    await page.route("**/members/me/saved-search-profiles", route => { reads++; return route.fulfill({ status, json: { detail: "권한 없음" } }); });
+    const panel = await openSavedProfiles(page);
+    await expect(panel.getByText(/로그인이 만료되었거나 권한이 없습니다/)).toBeVisible();
+    const count = reads;
+    await expect(panel.getByRole("button", { name: "목록 새로고침" })).toBeDisabled();
+    await expect(panel.getByRole("button", { name: "새 이름으로 저장" })).toBeDisabled(); expect(reads).toBe(count);
+  });
+}
+
+test("저장 조건 관리 재진입 뒤 이전 조회 오류는 새 목록을 잠그지 않는다", async ({ page }) => {
+  await prepareSavedProfiles(page); let delayed = true; let pending: Route | undefined;
+  await page.route("**/members/me/saved-search-profiles", route => { if (delayed) { pending = route; return; } return route.fulfill({ json: [savedProfileFixture] }); });
+  await openSavedProfiles(page); await expect.poll(() => Boolean(pending)).toBe(true);
+  await page.keyboard.press("Escape"); delayed = false;
+  const panel = await openSavedProfiles(page);
+  await expect(panel.getByRole("button", { name: "복제", exact: true })).toBeEnabled();
+  await pending!.fulfill({ status: 403, json: { detail: "이전 오류" } });
+  await expect(panel.getByRole("alert")).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "복제", exact: true })).toBeEnabled();
+});
+
+test("저장 조건 관리 늦은 쓰기 응답은 다시 연 화면에 성공 안내나 재조회를 남기지 않는다", async ({ page }) => {
+  await prepareSavedProfiles(page); let reads = 0; let pending: Route | undefined;
+  await page.route("**/members/me/saved-search-profiles", route => { reads++; return route.fulfill({ json: [savedProfileFixture] }); });
+  await page.route("**/saved-search-profiles/11/duplicate", route => { pending = route; });
+  let panel = await openSavedProfiles(page);
+  await panel.getByRole("button", { name: "복제", exact: true }).click();
+  await expect.poll(() => Boolean(pending)).toBe(true);
+  await page.keyboard.press("Escape"); panel = await openSavedProfiles(page);
+  await expect(panel.getByRole("button", { name: "복제", exact: true })).toBeEnabled();
+  const count = reads;
+  await pending!.fulfill({ json: { ...savedProfileFixture, id: 12 } });
+  await page.waitForTimeout(150);
+  await expect(panel.getByText("저장 조건을 복제했습니다.")).toHaveCount(0); expect(reads).toBe(count);
+});
+
+test("저장 조건 관리 수정의 역전 범위는 전송 전에 막고 입력을 보존한다", async ({ page }) => {
+  await prepareSavedProfiles(page); let writes = 0;
+  await page.route("**/saved-search-profiles/11", route => { writes++; return route.fulfill({ json: savedProfileFixture }); });
+  const panel = await openSavedProfiles(page);
+  await panel.getByRole("button", { name: "수정", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "저장 조건 수정" });
+  await editor.getByLabel("최소 면적 (㎡)").fill("90"); await editor.getByLabel("최대 면적 (㎡)").fill("60");
+  await editor.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(editor.getByRole("alert")).toContainText("최솟값");
+  await expect(editor.getByLabel("최소 면적 (㎡)")).toHaveValue("90"); expect(writes).toBe(0);
+});
+
 test("저장 조건을 수정하고 신규 공고 알림을 개별로 끈다", async ({ page }) => {
   await mockApi(page);
   await page.goto("/");

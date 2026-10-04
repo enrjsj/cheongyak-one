@@ -47,11 +47,6 @@ import {
   NoticeSearchFacets,
   NoticeFreshness,
   saveSearchPreference,
-  createSavedSearchProfile,
-  deleteSavedSearchProfile,
-  duplicateSavedSearchProfile,
-  setDefaultSavedSearchProfile,
-  setSavedSearchProfileNewNoticeEnabled,
   updateSavedSearchProfile,
   saveEligibilityProfile,
   revokeMemberSession,
@@ -74,6 +69,9 @@ import FavoriteCalendarDialog from "./FavoriteCalendarDialog";
 import RecommendationPanel from "./RecommendationPanel";
 import { useMemberRecommendations } from "./useMemberRecommendations";
 import { useHorizontalTabs } from "./useHorizontalTabs";
+import { useSavedSearchProfiles } from "./useSavedSearchProfiles";
+import SavedSearchProfilesPanel from "./SavedSearchProfilesPanel";
+import { savedProfileInputError } from "./savedSearchTools";
 import {
   buildEligibilityCheckResult,
   EligibilityAnswer,
@@ -582,7 +580,10 @@ export default function Home() {
   const [passwordResetToken, setPasswordResetToken] = useState("");
   const [authLoading, setAuthLoading] = useState(true);
   const [searchPreference, setSearchPreference] = useState<MemberSearchPreference>();
-  const [savedSearchProfiles, setSavedSearchProfiles] = useState<SavedSearchProfile[]>([]);
+  const profilesState = useSavedSearchProfiles(member?.id, filterOpen);
+  const [profileEditorError, setProfileEditorError] = useState("");
+  const profileEditorEpoch = useRef(0);
+  useEffect(() => { ++profileEditorEpoch.current; setEditingSavedSearchProfile(undefined); setProfileEditorError(""); }, [member?.id, filterOpen]);
   // 브라우저 프롬프트 대신 수정 대상을 유지해 모바일에서도 안전하게 편집한다.
   const [editingSavedSearchProfile, setEditingSavedSearchProfile] = useState<SavedSearchProfile>();
   const [savedSearchProfileName, setSavedSearchProfileName] = useState("");
@@ -973,7 +974,6 @@ export default function Home() {
         try {
           const profiles = await fetchSavedSearchProfiles();
           if (!cancelled) {
-            setSavedSearchProfiles(profiles);
             // 로그인 직후에는 기본 프로필을 우선 적용해 이전 단일 검색조건보다 예측 가능한 시작 화면을 제공한다.
             const defaultProfile = profiles.find((item) => item.defaultProfile);
             if (defaultProfile) applySearchPreference(defaultProfile);
@@ -1373,7 +1373,6 @@ export default function Home() {
     }
     try {
       const profiles = await fetchSavedSearchProfiles();
-      setSavedSearchProfiles(profiles);
       // 로그인 동작에서도 기본 프로필을 즉시 반영해 새로고침 없이 동일한 시작 조건을 제공한다.
       const defaultProfile = profiles.find((item) => item.defaultProfile);
       if (defaultProfile) {
@@ -1531,26 +1530,9 @@ export default function Home() {
     maxArea: priceInManwon(maxArea),
   });
 
-  const handleCreateSavedSearchProfile = async () => {
-    const name = window.prompt("저장할 검색조건 이름을 입력해주세요.", "서울 신혼부부");
-    if (!name?.trim()) return;
-    setPreferenceBusy(true);
-    try {
-      const profile = await createSavedSearchProfile({ name: name.trim(), ...currentSearchInput() });
-      setSavedSearchProfiles((items) => [profile, ...items]);
-      setToast(`'${profile.name}' 조건을 저장했습니다.`);
-    } catch (error) { setToast(error instanceof Error ? error.message : "검색조건을 저장하지 못했습니다."); }
-    finally { setPreferenceBusy(false); }
-  };
-
-  const handleDeleteSavedSearchProfile = async (profile: SavedSearchProfile) => {
-    setPreferenceBusy(true);
-    try { await deleteSavedSearchProfile(profile.id); setSavedSearchProfiles((items) => items.filter((item) => item.id !== profile.id)); setToast(`'${profile.name}' 조건을 삭제했습니다.`); }
-    catch (error) { setToast(error instanceof Error ? error.message : "저장 조건을 삭제하지 못했습니다."); }
-    finally { setPreferenceBusy(false); }
-  };
-
   const openSavedSearchProfileEditor = (profile: SavedSearchProfile) => {
+    if (preferenceBusy || profilesState.locked) return;
+    ++profileEditorEpoch.current; setProfileEditorError("");
     setSavedSearchProfileName(profile.name);
     setSavedSearchProfileDraft({ region: profile.region, housingCategory: profile.housingCategory, supplyType: profile.supplyType, status: profile.status, sort: profile.sort, minPriceManwon: profile.minPriceManwon, maxPriceManwon: profile.maxPriceManwon, minArea: profile.minArea, maxArea: profile.maxArea });
     setEditingSavedSearchProfile(profile);
@@ -1560,35 +1542,14 @@ export default function Home() {
     event.preventDefault();
     const profile = editingSavedSearchProfile;
     const name = savedSearchProfileName.trim();
-    if (!profile || !name) return;
-    setPreferenceBusy(true);
-    try { const updated = await updateSavedSearchProfile(profile.id, { name, ...savedSearchProfileDraft }); setSavedSearchProfiles((items) => items.map((item) => item.id === profile.id ? updated : item)); setToast("저장 조건을 수정했습니다."); setEditingSavedSearchProfile(undefined); }
-    catch (error) { setToast(error instanceof Error ? error.message : "저장 조건을 수정하지 못했습니다."); }
-    finally { setPreferenceBusy(false); }
-  };
-
-  const handleDefaultSavedSearchProfile = async (profile: SavedSearchProfile) => {
-    setPreferenceBusy(true);
-    try { const updated = await setDefaultSavedSearchProfile(profile.id); setSavedSearchProfiles((items) => items.map((item) => ({ ...item, ...(item.id === profile.id ? updated : { defaultProfile: false }) }))); setToast(`'${profile.name}'을 기본 조건으로 설정했습니다.`); }
-    catch (error) { setToast(error instanceof Error ? error.message : "기본 조건을 설정하지 못했습니다."); }
-    finally { setPreferenceBusy(false); }
-  };
-
-  const handleDuplicateSavedSearchProfile = async (profile: SavedSearchProfile) => {
-    setPreferenceBusy(true);
-    try { const copied = await duplicateSavedSearchProfile(profile.id); setSavedSearchProfiles((items) => [copied, ...items]); setToast("저장 조건을 복제했습니다."); }
-    catch (error) { setToast(error instanceof Error ? error.message : "저장 조건을 복제하지 못했습니다."); }
-    finally { setPreferenceBusy(false); }
-  };
-
-  const handleSavedSearchProfileNoticeToggle = async (profile: SavedSearchProfile) => {
-    setPreferenceBusy(true);
-    try {
-      const updated = await setSavedSearchProfileNewNoticeEnabled(profile.id, !profile.newNoticeEnabled);
-      setSavedSearchProfiles((items) => items.map((item) => item.id === updated.id ? updated : item));
-      setToast(updated.newNoticeEnabled ? "이 조건의 신규 공고 알림을 켰습니다." : "이 조건의 신규 공고 알림을 껐습니다.");
-    } catch (error) { setToast(error instanceof Error ? error.message : "신규 공고 알림 설정을 바꾸지 못했습니다."); }
-    finally { setPreferenceBusy(false); }
+    const validation = savedProfileInputError(name, savedSearchProfileDraft);
+    setProfileEditorError(validation);
+    if (!profile || validation || preferenceBusy) return;
+    const epoch = profileEditorEpoch.current;
+    const updated = await profilesState.mutate(() => updateSavedSearchProfile(profile.id, { name, ...savedSearchProfileDraft }), "저장 조건을 수정했습니다.");
+    if (updated && epoch === profileEditorEpoch.current) {
+      setEditingSavedSearchProfile(undefined);
+    }
   };
 
   const toggleComparison = async (id: number) => {
@@ -1852,7 +1813,8 @@ export default function Home() {
     [selectedDetail?.unitTypes],
   );
   const filterDialogRef = useDialogAccessibility<HTMLElement>(filterOpen, () => setFilterOpen(false));
-  const savedSearchProfileEditorRef = useDialogAccessibility<HTMLElement>(Boolean(editingSavedSearchProfile), () => setEditingSavedSearchProfile(undefined));
+  const closeProfileEditor = () => { ++profileEditorEpoch.current; setEditingSavedSearchProfile(undefined); setProfileEditorError(""); };
+  const savedSearchProfileEditorRef = useDialogAccessibility<HTMLElement>(Boolean(editingSavedSearchProfile), closeProfileEditor);
   const detailDialogRef = useDialogAccessibility<HTMLElement>(Boolean(detailApplication), closeDetail);
   const comparisonDialogRef = useDialogAccessibility<HTMLElement>(comparisonOpen, () => setComparisonOpen(false));
   const qualificationDialogRef = useDialogAccessibility<HTMLElement>(qualOpen, closeQualification);
@@ -2269,12 +2231,10 @@ export default function Home() {
                     </div>
                   )}
                   <button className="save-preference-button" type="button" onClick={() => void handleSaveSearchPreference()} disabled={preferenceBusy}>{preferenceBusy ? "처리 중…" : "현재 조건 계정에 저장"}</button>
-                  <div className="saved-search-profiles">
-                    <div><b>내 저장 조건</b><button type="button" onClick={() => void handleCreateSavedSearchProfile()} disabled={preferenceBusy}>새 이름으로 저장</button></div>
-                    {savedSearchProfiles.length === 0 ? <p>여러 조건을 이름으로 저장해 빠르게 다시 적용할 수 있어요.</p> : savedSearchProfiles.map((profile) => (
-                      <article key={profile.id}><span><b>{profile.name}{profile.defaultProfile && <em>기본</em>}</b><small>{profile.region ?? "전국"} · {profile.housingCategory ? CATEGORY_LABELS[profile.housingCategory] : "전체 유형"} · {profile.supplyType ? SUPPLY_TYPE_LABELS[profile.supplyType] : "전체 공급"} · {formatPricePreference(profile)} · {formatAreaPreference(profile)}</small></span><div><button className={profile.newNoticeEnabled ? "profile-notice-on" : "profile-notice-off"} type="button" onClick={() => void handleSavedSearchProfileNoticeToggle(profile)} disabled={preferenceBusy}>{profile.newNoticeEnabled ? "신규 알림 켜짐" : "신규 알림 꺼짐"}</button><button type="button" onClick={() => { applySearchPreference(profile); setToast(`'${profile.name}' 조건을 적용했습니다.`); }} disabled={preferenceBusy}>적용</button><button type="button" onClick={() => openSavedSearchProfileEditor(profile)} disabled={preferenceBusy}>수정</button><button type="button" onClick={() => void handleDuplicateSavedSearchProfile(profile)} disabled={preferenceBusy}>복제</button>{!profile.defaultProfile && <button type="button" onClick={() => void handleDefaultSavedSearchProfile(profile)} disabled={preferenceBusy}>기본 설정</button>}<button type="button" onClick={() => void handleDeleteSavedSearchProfile(profile)} disabled={preferenceBusy}>삭제</button></div></article>
-                    ))}
-                  </div>
+                  <SavedSearchProfilesPanel key={member.id} state={profilesState} disabled={preferenceBusy} input={currentSearchInput()}
+                    summary={profile => `${profile.region ?? "전국"} · ${profile.housingCategory ? CATEGORY_LABELS[profile.housingCategory] : "전체 유형"} · ${profile.supplyType ? SUPPLY_TYPE_LABELS[profile.supplyType] : "전체 공급"} · ${formatPricePreference(profile)} · ${formatAreaPreference(profile)}`}
+                    onApply={profile => { applySearchPreference(profile); setToast(`'${profile.name}' 조건을 적용했습니다.`); }}
+                    onEdit={openSavedSearchProfileEditor} />
                 </>
               ) : (
                 <button className="save-preference-button" type="button" onClick={() => void handleSaveSearchPreference()}>로그인하고 조건 저장</button>
@@ -2286,9 +2246,9 @@ export default function Home() {
       )}
 
       {editingSavedSearchProfile && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditingSavedSearchProfile(undefined); }}>
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeProfileEditor(); }}>
           <section ref={savedSearchProfileEditorRef} tabIndex={-1} className="modal profile-editor-modal" role="dialog" aria-modal="true" aria-labelledby="saved-search-profile-editor-title">
-            <div className="modal-head"><div><span>SAVED FILTER</span><h2 id="saved-search-profile-editor-title">저장 조건 수정</h2></div><button type="button" onClick={() => setEditingSavedSearchProfile(undefined)} aria-label="닫기"><Icon name="close" /></button></div>
+            <div className="modal-head"><div><span>SAVED FILTER</span><h2 id="saved-search-profile-editor-title">저장 조건 수정</h2></div><button type="button" onClick={() => closeProfileEditor()} aria-label="닫기"><Icon name="close" /></button></div>
             <form onSubmit={(event) => void handleUpdateSavedSearchProfile(event)}>
               <label className="profile-editor-field">조건 이름<input autoFocus value={savedSearchProfileName} maxLength={40} onChange={(event) => setSavedSearchProfileName(event.target.value)} placeholder="예: 서울 신혼부부" /></label>
               <div className="profile-editor-fields">
@@ -2302,7 +2262,9 @@ export default function Home() {
                 <label>최소 면적 (㎡)<input type="number" min="0" max="1000" inputMode="decimal" value={savedSearchProfileDraft.minArea ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, minArea: priceInManwon(event.target.value) }))} placeholder="예: 59" /></label>
                 <label>최대 면적 (㎡)<input type="number" min="0" max="1000" inputMode="decimal" value={savedSearchProfileDraft.maxArea ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, maxArea: priceInManwon(event.target.value) }))} placeholder="예: 84" /></label>
               </div>
-              <div className="modal-actions"><button className="reset-button" type="button" onClick={() => setEditingSavedSearchProfile(undefined)}>취소</button><button className="primary-button" type="submit" disabled={preferenceBusy}>{preferenceBusy ? "저장 중…" : "저장"}</button></div>
+              {profileEditorError && <p role="alert" className="member-message error">{profileEditorError}</p>}
+              {profilesState.error && <div role="alert"><p>{profilesState.error}</p><button type="button" disabled={profilesState.loading || profilesState.busy || profilesState.blocked} onClick={profilesState.refresh}>저장 목록 다시 확인</button></div>}
+              <div className="modal-actions"><button className="reset-button" type="button" onClick={() => closeProfileEditor()}>취소</button><button className="primary-button" type="submit" disabled={preferenceBusy || profilesState.locked}>{profilesState.busy ? "저장 중…" : "저장"}</button></div>
             </form>
           </section>
         </div>
