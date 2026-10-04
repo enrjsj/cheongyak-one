@@ -48,14 +48,15 @@ public class MemberNotificationPushDelivery {
                 .distinct()
                 .toList();
         if (tokens.isEmpty()) {
-            notification.markPushSent(now);
-            return true;
+            var reason = receipts.completionReason(notificationId);
+            notification.markPushCompleted(now, reason);
+            return reason == com.cheongyakone.domain.member.MemberNotification.PushCompletionReason.ACCEPTED;
         }
         var result = pushSender.send(notification, tokens);
         var successful = result.successfulTokens().stream().filter(tokens::contains).toList();
         var invalid = result.invalidTokens().stream().filter(tokens::contains).toList();
-        receipts.record(notificationId, successful, now);
-        receipts.record(notificationId, invalid, now);
+        receipts.recordAccepted(notificationId, successful, now);
+        receipts.recordInvalid(notificationId, invalid, now);
         if (!invalid.isEmpty()) {
             deviceTokenRepository.deleteByPushTokenIn(invalid);
         }
@@ -65,11 +66,13 @@ public class MemberNotificationPushDelivery {
             notification.markPushFailed(unconfirmed ? "FCM delivery not confirmed" : result.error(), now.plus(retryDelay(nextAttempt)));
             return false;
         }
-        notification.markPushSent(now);
-        return true;
+        var reason = receipts.completionReason(notificationId);
+        notification.markPushCompleted(now, reason);
+        return reason == com.cheongyakone.domain.member.MemberNotification.PushCompletionReason.ACCEPTED;
     }
 
     private Duration retryDelay(int attempt) {
         return Duration.ofMinutes(1L << Math.min(Math.max(attempt - 1, 0), 4));
     }
 }
+

@@ -27,7 +27,10 @@ public class AdminPushNotificationController {
 
     @PostMapping("/dispatch")
     public java.util.Map<String, Integer> dispatch(HttpServletRequest request) {
-        return java.util.Map.of("sentCount", pushNotificationService.dispatchPending(cookieSupport.read(request)));
+        int acceptedCount = pushNotificationService.dispatchPending(cookieSupport.read(request));
+        // Retain the legacy field for older clients; this counts provider acceptance,
+        // not empty-device or invalid-token completion and not confirmed device receipt.
+        return java.util.Map.of("sentCount", acceptedCount, "acceptedCount", acceptedCount);
     }
 
     @PostMapping("/{notificationId}/retry")
@@ -36,3 +39,4 @@ public class AdminPushNotificationController {
         return org.springframework.http.ResponseEntity.noContent().build();
     }
 }
+

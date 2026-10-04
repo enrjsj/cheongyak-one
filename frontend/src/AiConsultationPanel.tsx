@@ -14,7 +14,9 @@ export function AiConsultationPanel({ noticeId, signedIn }: { noticeId: number; 
   const [expired, setExpired] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
   const active = useRef<AbortController | null>(null);
+  const copyVersion = useRef(0);
   useEffect(() => {
+    ++copyVersion.current;
     const controller = new AbortController();
     setAvailable(undefined);
     setResult(undefined);
@@ -31,11 +33,12 @@ export function AiConsultationPanel({ noticeId, signedIn }: { noticeId: number; 
         setExpired(sessionExpired);
         setError(sessionExpired ? "로그인이 만료되었습니다. 다시 로그인해주세요." : "상담 연결 상태를 확인하지 못했습니다.");
       });
-    return () => { controller.abort(); active.current?.abort(); active.current = null; };
+    return () => { ++copyVersion.current; controller.abort(); active.current?.abort(); active.current = null; };
   }, [noticeId, signedIn, connectionVersion]);
 
   async function consult() {
     if (!available || !consent || expired || active.current) return;
+    ++copyVersion.current;
     const controller = new AbortController();
     active.current = controller;
     setBusy(true); setError(""); setResult(undefined); setCopyStatus("");
@@ -61,10 +64,14 @@ export function AiConsultationPanel({ noticeId, signedIn }: { noticeId: number; 
   const stale = validDate && Date.now() - syncedDate.getTime() > 48 * 60 * 60 * 1000;
   async function copyAnswer() {
     if (!result) return;
+    const version = ++copyVersion.current;
+    setCopyStatus("");
     try {
       await navigator.clipboard.writeText(result.answer + "\n\n" + result.disclaimer + "\n공고 수집 기준: " + dateLabel);
-      setCopyStatus("답변을 복사했습니다.");
-    } catch { setCopyStatus("복사하지 못했습니다. 답변 텍스트를 직접 선택해 복사해주세요."); }
+      if (copyVersion.current === version) setCopyStatus("답변을 복사했습니다.");
+    } catch {
+      if (copyVersion.current === version) setCopyStatus("복사하지 못했습니다. 답변 텍스트를 직접 선택해 복사해주세요.");
+    }
   }
   function cancel() {
     active.current?.abort();
@@ -80,7 +87,7 @@ export function AiConsultationPanel({ noticeId, signedIn }: { noticeId: number; 
       {available === false && <p role="status">OpenAI 연결 준비 중입니다. 연결 후 상담을 이용할 수 있습니다.</p>}
       {available && <>
         <label>상담 주제
-          <select value={topic} disabled={busy || expired} onChange={(event) => { setTopic(event.target.value as AiTopic); setResult(undefined); setError(""); setCopyStatus(""); }}>
+          <select value={topic} disabled={busy || expired} onChange={(event) => { ++copyVersion.current; setTopic(event.target.value as AiTopic); setResult(undefined); setError(""); setCopyStatus(""); }}>
             <option value="ELIGIBILITY">신청 자격 확인</option>
             <option value="CASH">필요 현금 확인</option>
             <option value="SCORE">청약 가점 확인</option>
@@ -108,3 +115,4 @@ export function AiConsultationPanel({ noticeId, signedIn }: { noticeId: number; 
     </>}
   </section>;
 }
+

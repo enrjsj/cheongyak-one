@@ -167,6 +167,45 @@ const pushDashboard = {
   generatedAt: "2026-10-04T00:00:00Z",
 };
 
+for (const change of ["주제 변경", "새 상담", "재열기"]) {
+  test(`상담 복사 대기 중 ${change} 후 이전 복사 결과를 표시하지 않는다`, async ({ page }) => {
+    await mockApi(page);
+    await page.addInitScript(() => {
+      const pending: Array<{ resolve: () => void; reject: (error: Error) => void }> = [];
+      (window as any).__copies = pending;
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: {
+        writeText: () => new Promise<void>((resolve, reject) => pending.push({ resolve, reject })),
+      } });
+    });
+    let calls = 0;
+    await page.route("**/api/v1/members/me/ai-consultations**", route => {
+      if (route.request().method() === "GET") return route.fulfill({ json: { available: true } });
+      return route.fulfill({ json: { answer: `답변 ${++calls}`, disclaimer: "공식 공고 확인", noticeSyncedAt: "2026-10-04T00:00:00Z" } });
+    });
+    await page.goto("/"); await signup(page);
+    const openNotice = () => page.locator("article").filter({ hasText: notices[0].title }).getByRole("button", { name: /공고 핵심만 보기/ }).click();
+    await openNotice();
+    const panel = page.locator(".ai-consultation");
+    await panel.getByRole("checkbox").check();
+    await panel.getByRole("button", { name: "확인 항목 정리하기" }).click();
+    await panel.getByRole("button", { name: "답변 복사" }).click();
+    if (change === "주제 변경") await panel.getByLabel("상담 주제").selectOption("CASH");
+    if (change === "재열기") {
+      await page.getByRole("dialog").getByLabel("닫기", { exact: true }).click();
+      await openNotice();
+      await panel.getByRole("checkbox").check();
+    }
+    await panel.getByRole("button", { name: "확인 항목 정리하기" }).click();
+    await expect(panel.getByText("답변 2", { exact: true })).toBeVisible();
+    await page.evaluate((reject) => { const copy = (window as any).__copies[0]; reject ? copy.reject(new Error("old copy")) : copy.resolve(); }, change === "새 상담");
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(panel.getByRole("status")).toHaveCount(0);
+    await panel.getByRole("button", { name: "답변 복사" }).click();
+    await page.evaluate(() => (window as any).__copies[1].resolve());
+    await expect(panel.getByRole("status")).toHaveText("답변을 복사했습니다.");
+  });
+}
+
 async function openPushAdmin(page: Page) {
   await page.route("**/api/v1/admin/sync-executions", route => route.fulfill({ json: { runningCount: 0, failuresLast24Hours: 0, executions: [] } }));
   await page.goto("/"); await signup(page);
@@ -271,6 +310,71 @@ test("닫힌 관리자 푸시 화면의 늦은 재시도 응답은 새 화면을
   expect(reads).toBe(before);
   await expect(panel.getByText(/재시도 대기열에 등록했습니다/)).toHaveCount(0);
   await expect(panel.getByRole("button", { name: "재시도", exact: true })).toBeEnabled();
+});
+
+for (const phase of ["최초 조회", "결과 갱신"]) for (const status of [401, 403]) {
+  test(`관리자 푸시 ${phase} ${status}에서 추가 요청을 차단한다`, async ({ page }) => {
+    await mockApi(page, { admin: true });
+    let posts = 0;
+    let reads = 0;
+    await page.route("**/api/v1/admin/notifications/push**", route => {
+      if (route.request().method() === "POST") { posts++; return route.fulfill({ status: 204 }); }
+      reads++;
+      return phase === "최초 조회" || posts > 0
+        ? route.fulfill({ status, json: { detail: "권한 없음" } })
+        : route.fulfill({ json: pushDashboard });
+    });
+    await openPushAdmin(page);
+    const panel = page.locator(".admin-push-panel");
+    if (phase === "결과 갱신") await panel.getByRole("button", { name: "재시도", exact: true }).click();
+    await expect(panel.getByRole("alert")).toContainText("다시 로그인해주세요");
+    await expect(panel.getByRole("button", { name: "현황 다시 불러오기" })).toHaveCount(0);
+    if (phase === "결과 갱신") {
+      await expect(panel.getByRole("button", { name: "대기 발송" })).toBeDisabled();
+      await expect(panel.getByRole("button", { name: "새로고침" })).toBeDisabled();
+    }
+    expect(posts).toBe(phase === "최초 조회" ? 0 : 1);
+    expect(reads).toBeGreaterThan(0);
+  });
+}
+
+for (const oldStatus of [200, 403]) {
+  test(`관리자 푸시 탭 전환 후 이전 조회 ${oldStatus} 응답을 무시한다`, async ({ page }) => {
+    await mockApi(page, { admin: true });
+    const pending: Route[] = [];
+    let releaseNew = false;
+    await page.route("**/api/v1/admin/notifications/push", route => {
+      if (!releaseNew) { pending.push(route); return; }
+      return route.fulfill({ json: pushDashboard });
+    });
+    await openPushAdmin(page);
+    await expect.poll(() => pending.length).toBeGreaterThan(0);
+    await page.getByRole("tab", { name: "공고 동기화" }).click();
+    releaseNew = true;
+    await page.getByRole("tab", { name: "푸시 발송" }).click();
+    const panel = page.locator(".admin-push-panel");
+    await expect(panel.getByRole("button", { name: "재시도", exact: true })).toBeEnabled();
+    for (const route of pending) await route.fulfill({ status: oldStatus, json: oldStatus === 200
+      ? { ...pushDashboard, recentFailures: [], permanentlyFailedCount: 0 } : { detail: "이전 요청 권한 만료" } });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(panel.getByText("실패한 푸시 공고", { exact: true })).toBeVisible();
+    await expect(panel.getByRole("alert")).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: "재시도", exact: true })).toBeEnabled();
+  });
+}
+
+test("관리자 푸시는 접수 확인·기기 없음·만료·확인 불가를 별도로 표시한다", async ({ page }) => {
+  await mockApi(page, { admin: true });
+  await page.route("**/api/v1/admin/notifications/push**", route => route.request().method() === "POST"
+    ? route.fulfill({ json: { sentCount: 2, acceptedCount: 2 } })
+    : route.fulfill({ json: { ...pushDashboard, sentLast24Hours: 2, noDevicesLast24Hours: 3, invalidTokensLast24Hours: 4, unknownLast24Hours: 5 } }));
+  await openPushAdmin(page);
+  const panel = page.locator(".admin-push-panel");
+  for (const [label, count] of [["24시간 공급사 접수 확인", "2"], ["24시간 기기 없음 종료", "3"], ["24시간 토큰 만료 종료", "4"], ["24시간 결과 확인 불가", "5"]]) {
+    await expect(panel.locator(".admin-sync-summary > div").filter({ hasText: label }).locator("strong")).toHaveText(count);
+  }
+  await panel.getByRole("button", { name: "대기 발송" }).click();
+  await expect(panel.getByRole("status").filter({ hasText: "공급사 접수 확인 후 종료: 2건" })).toBeVisible();
 });
 
 for (const status of [401, 403]) {
