@@ -78,8 +78,10 @@ public class FcmMemberPushSender implements MemberPushSender {
     }
 
     private PushDeliveryResult sendBatch(MemberNotification notification, List<String> pushTokens) {
+        // Invalid local payloads remain programming errors, not provider retry results.
+        var message = buildMessage(notification, pushTokens);
         try {
-            BatchResponse response = messaging.sendEachForMulticast(buildMessage(notification, pushTokens));
+            BatchResponse response = messaging.sendEachForMulticast(message);
             List<String> invalidTokens = new ArrayList<>();
             List<String> successfulTokens = new ArrayList<>();
             for (int index = 0; index < response.getResponses().size(); index++) {
@@ -103,6 +105,12 @@ public class FcmMemberPushSender implements MemberPushSender {
             return PushDeliveryResult.retryableFailure(
                     "FCM delivery failed: " + exception.getMessagingErrorCode()
             );
+        } catch (RuntimeException exception) {
+            // SDK/executor failures must not discard confirmations from other batches.
+            // This batch is ambiguous: do not confirm or delete any of its tokens.
+            log.error("FCM batch interrupted: notificationId={}, errorType={}",
+                    notification.getId(), exception.getClass().getSimpleName());
+            return PushDeliveryResult.retryableFailure("FCM batch result unavailable");
         }
     }
 
