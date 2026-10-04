@@ -25,6 +25,51 @@ import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.verify;
 
 class FcmMemberPushSenderTest {
+    @Test void unexpectedMiddleBatchFailureKeepsOtherConfirmationsAndSanitizesLogs() throws Exception {
+        var messaging = mock(FirebaseMessaging.class);
+        var first = acceptedBatch(500);
+        var last = acceptedBatch(1);
+        when(messaging.sendEachForMulticast(any(MulticastMessage.class)))
+                .thenReturn(first).thenThrow(new IllegalStateException("private-device-token"))
+                .thenReturn(last);
+        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(FcmMemberPushSender.class);
+        var appender = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            var tokens = java.util.stream.IntStream.range(0, 1001).mapToObj(i -> "device-" + i).toList();
+            var result = sender(messaging).send(notification(42L), tokens);
+            var confirmed = new java.util.ArrayList<>(tokens.subList(0, 500));
+            confirmed.add(tokens.get(1000));
+            assertThat(result.successfulTokens()).containsExactlyElementsOf(confirmed);
+            assertThat(result.invalidTokens()).isEmpty();
+            assertThat(result.retryableFailure()).isTrue();
+            assertThat(result.error()).isEqualTo("FCM batch result unavailable");
+            assertThat(appender.list).hasSize(1);
+            assertThat(appender.list.get(0).getFormattedMessage())
+                    .contains("notificationId=42", "IllegalStateException").doesNotContain("private-device-token");
+            assertThat(appender.list.get(0).getThrowableProxy()).isNull();
+            verify(messaging, org.mockito.Mockito.times(3)).sendEachForMulticast(any(MulticastMessage.class));
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
+    }
+
+    @Test void sendStillRejectsInvalidLocalNotificationBeforeCallingProvider() {
+        var messaging = mock(FirebaseMessaging.class);
+        assertThatThrownBy(() -> sender(messaging).send(notification(null), List.of("device")))
+                .isInstanceOf(IllegalArgumentException.class);
+        org.mockito.Mockito.verifyNoInteractions(messaging);
+    }
+
+    @Test void fatalErrorsAreNotConvertedIntoRetryResults() throws Exception {
+        var messaging = mock(FirebaseMessaging.class);
+        when(messaging.sendEachForMulticast(any(MulticastMessage.class))).thenThrow(new AssertionError("fatal"));
+        assertThatThrownBy(() -> sender(messaging).send(notification(42L), List.of("device")))
+                .isInstanceOf(AssertionError.class);
+    }
+
     @Test void multicastBatchesRespectBoundaryAndPreserveEveryToken() throws Exception {
         for (int count : new int[]{1, 499, 500, 501, 1001}) {
             var messaging = mock(FirebaseMessaging.class);
