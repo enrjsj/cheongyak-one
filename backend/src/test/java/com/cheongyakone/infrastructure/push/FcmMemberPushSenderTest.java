@@ -25,6 +25,58 @@ import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.verify;
 
 class FcmMemberPushSenderTest {
+    @Test void multicastBatchesRespectBoundaryAndPreserveEveryToken() throws Exception {
+        for (int count : new int[]{1, 499, 500, 501, 1001}) {
+            var messaging = mock(FirebaseMessaging.class);
+            var observed = new java.util.ArrayList<String>();
+            var sizes = new java.util.ArrayList<Integer>();
+            when(messaging.sendEachForMulticast(any(MulticastMessage.class))).thenAnswer(invocation -> {
+                List<String> tokens = messageTokens(invocation.getArgument(0));
+                sizes.add(tokens.size()); observed.addAll(tokens);
+                return acceptedBatch(tokens.size());
+            });
+            var tokens = java.util.stream.IntStream.range(0, count).mapToObj(i -> "device-" + i).toList();
+            var result = sender(messaging).send(notification(42L), tokens);
+            assertThat(observed).containsExactlyElementsOf(tokens);
+            assertThat(sizes).hasSize((count + 499) / 500).allMatch(size -> size > 0 && size <= 500);
+            assertThat(result.successfulTokens()).containsExactlyElementsOf(tokens);
+            assertThat(result.invalidTokens()).isEmpty();
+            assertThat(result.retryableFailure()).isFalse();
+        }
+    }
+
+    @Test void middleBatchFailurePreservesEarlierAndLaterConfirmations() throws Exception {
+        var messaging = mock(FirebaseMessaging.class);
+        var first = acceptedBatch(500);
+        var last = mock(BatchResponse.class);
+        var invalidResponse = failed(MessagingErrorCode.UNREGISTERED);
+        when(last.getResponses()).thenReturn(List.of(invalidResponse));
+        when(last.getFailureCount()).thenReturn(1);
+        when(messaging.sendEachForMulticast(any(MulticastMessage.class)))
+                .thenReturn(first).thenThrow(failure(MessagingErrorCode.UNAVAILABLE)).thenReturn(last);
+        var tokens = java.util.stream.IntStream.range(0, 1001).mapToObj(i -> "device-" + i).toList();
+        var result = sender(messaging).send(notification(42L), tokens);
+        assertThat(result.successfulTokens()).containsExactlyElementsOf(tokens.subList(0, 500));
+        assertThat(result.invalidTokens()).containsExactly("device-1000");
+        assertThat(result.retryableFailure()).isTrue();
+        assertThat(result.error()).isEqualTo("FCM delivery failed: UNAVAILABLE");
+        var unconfirmed = tokens.stream().filter(token -> !result.successfulTokens().contains(token)
+                && !result.invalidTokens().contains(token)).toList();
+        assertThat(unconfirmed).containsExactlyElementsOf(tokens.subList(500, 1000));
+        verify(messaging, org.mockito.Mockito.times(3)).sendEachForMulticast(any(MulticastMessage.class));
+    }
+
+    private static List<String> messageTokens(MulticastMessage message) {
+        return (List<String>) ReflectionTestUtils.getField(message, "tokens");
+    }
+
+    private static BatchResponse acceptedBatch(int count) {
+        SendResponse success = ReflectionTestUtils.invokeMethod(SendResponse.class, "fromMessageId", "test-message");
+        var batch = mock(BatchResponse.class);
+        when(batch.getResponses()).thenReturn(java.util.Collections.nCopies(count, success));
+        return batch;
+    }
+
     @Test void mixedResponsesPreserveTokenOrderAndOnlyRemoveUnregisteredDevices() throws Exception {
         var messaging = mock(FirebaseMessaging.class);
         var batch = mock(BatchResponse.class);
@@ -157,4 +209,3 @@ class FcmMemberPushSenderTest {
         assertThat(FcmMemberPushSender.isExpiredToken(null)).isFalse();
     }
 }
-
