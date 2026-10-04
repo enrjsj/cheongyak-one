@@ -85,7 +85,7 @@ async function mockApi(page: Page, options: { admin?: boolean; failInitialNotice
       if (request.method() === "GET") return json(null);
       return json({ ...request.postDataJSON(), updatedAt: "2026-09-01T00:00:00Z" });
     }
-    if (path.endsWith("/recommendations")) return json({ recommendations: [], dismissedCount: 0 });
+    if (path.endsWith("/recommendations")) return json({ configured: false, recommendations: [], dismissedCount: 0 });
     if (path.endsWith("/notifications")) return json({ notifications: [], unreadCount: 0 });
     if (path.endsWith("/notification-preference")) return json({ enabled: false });
     if (path.endsWith("/device-tokens") || path.endsWith("/sessions")) return json([]);
@@ -1399,6 +1399,167 @@ test("상태 탭은 미리 받은 목록으로 로딩 없이 전환한다", asyn
   await page.waitForTimeout(400);
   expect(facetRequests).toBe(initialFacetRequests);
 });
+
+const recommendationResult = {
+  configured: true, dismissedCount: 2,
+  recommendations: [1, 2, 3, 4, 5].map(id => ({ score: 90 - id, reasons: ["지역 일치", "주택유형 일치", "전체 추천 이유 확인"], notice: { ...notices[0], id, title: "맞춤 공고 " + id } })),
+};
+
+test("맞춤 추천 전체 펼치기와 이유 확인은 재조회 없이 동작하고 모바일에서 넘치지 않는다", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page);
+  let reads = 0;
+  await page.route("**/members/me/recommendations", route => { reads++; return route.fulfill({ json: recommendationResult }); });
+  await page.goto("/"); await signup(page);
+  const panel = page.locator(".recommendation-card");
+  await expect(panel.locator(".recommendation-open")).toHaveCount(3);
+  const initial = reads;
+  await panel.getByRole("button", { name: "추천 5개 전체 보기" }).click();
+  await expect(panel.locator(".recommendation-open")).toHaveCount(5);
+  await panel.locator("summary").first().click();
+  await expect(panel.getByText("전체 추천 이유 확인", { exact: true }).first()).toBeVisible();
+  await panel.getByRole("button", { name: "추천 접기" }).click();
+  await expect(panel.locator(".recommendation-open")).toHaveCount(3);
+  expect(reads).toBe(initial);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await panel.screenshot({ path: "test-results/recommendation-mobile.png", animations: "disabled" });
+});
+
+for (const malformed of [false, true]) {
+  test(`맞춤 추천 ${malformed ? "잘못된 응답" : "조회 실패"}는 빈 결과로 표시하지 않고 새로고침으로 복구한다`, async ({ page }) => {
+    await mockApi(page); let fail = true;
+    await page.route("**/members/me/recommendations", route => fail
+      ? route.fulfill({ status: malformed ? 200 : 503, json: malformed ? {} : { detail: "추천 조회 실패" } })
+      : route.fulfill({ json: recommendationResult }));
+    await page.goto("/"); await signup(page);
+    const panel = page.locator(".recommendation-card");
+    await expect(panel.getByRole("alert")).toBeVisible();
+    await expect(panel.getByText("현재 저장 조건에 맞는 접수 예정·접수중 공고가 없습니다.")).toHaveCount(0);
+    fail = false; await panel.getByRole("button", { name: "추천 새로고침" }).click();
+    await expect(panel.locator(".recommendation-open")).toHaveCount(3);
+    await expect(panel.getByRole("alert")).toHaveCount(0);
+  });
+}
+
+test("맞춤 추천 제외는 중복 클릭을 막고 결과 재조회까지 잠금을 유지한다", async ({ page }) => {
+  await mockApi(page); let writes = 0; let changed = false; let releaseWrite!: () => void; let releaseRead!: () => void;
+  const writeWait = new Promise<void>(resolve => { releaseWrite = resolve; });
+  const readWait = new Promise<void>(resolve => { releaseRead = resolve; });
+  await page.route("**/members/me/recommendations", async route => {
+    if (changed) await readWait;
+    await route.fulfill({ json: changed ? { ...recommendationResult, dismissedCount: 3, recommendations: recommendationResult.recommendations.slice(1) } : recommendationResult });
+  });
+  await page.route("**/recommendations/1/dismiss", async route => { writes++; await writeWait; changed = true; await route.fulfill({ status: 204 }); });
+  await page.goto("/"); await signup(page);
+  const panel = page.locator(".recommendation-card");
+  const button = panel.getByRole("button", { name: "맞춤 공고 1 추천에서 제외" });
+  await expect(button).toBeEnabled();
+  await button.evaluate(element => { (element as HTMLButtonElement).click(); (element as HTMLButtonElement).click(); });
+  await expect.poll(() => writes).toBe(1);
+  await expect(panel.getByRole("button", { name: "추천 새로고침" })).toBeDisabled();
+  releaseWrite();
+  await expect(panel.getByText("추천 제외 요청을 처리했습니다.")).toBeVisible();
+  await expect(panel.getByRole("button", { name: "맞춤 공고 2 추천에서 제외" })).toBeDisabled();
+  releaseRead();
+  await expect(panel.getByText("불러온 추천 4개 · 숨김 3개")).toBeVisible();
+  await expect(button).toHaveCount(0); expect(writes).toBe(1);
+});
+
+for (const postReadFailure of [false, true]) {
+  test(`맞춤 추천 ${postReadFailure ? "변경 후 조회" : "변경 요청"} 실패는 추가 쓰기 없이 목록 조회로 복구한다`, async ({ page }) => {
+    await mockApi(page); let writes = 0; let fail = false;
+    await page.route("**/members/me/recommendations", route => fail && postReadFailure ? route.fulfill({ status: 503, json: { detail: "결과 조회 실패" } }) : route.fulfill({ json: recommendationResult }));
+    await page.route("**/recommendations/1/dismiss", route => { writes++; fail = true; return route.fulfill({ status: postReadFailure ? 204 : 503, ...(postReadFailure ? {} : { json: { detail: "변경 결과 불명" } }) }); });
+    await page.goto("/"); await signup(page);
+    const panel = page.locator(".recommendation-card");
+    await panel.getByRole("button", { name: "맞춤 공고 1 추천에서 제외" }).click();
+    await expect(panel.getByRole("alert")).toBeVisible();
+    await expect(panel.getByText("아래는 이전 조회 결과입니다.")).toBeVisible();
+    await expect(panel.getByRole("button", { name: "맞춤 공고 2 추천에서 제외" })).toBeDisabled();
+    fail = false; await panel.getByRole("button", { name: "추천 새로고침" }).click();
+    await expect(panel.getByRole("button", { name: "맞춤 공고 2 추천에서 제외" })).toBeEnabled();
+    expect(writes).toBe(1);
+  });
+}
+
+test("맞춤 추천 전체 복원은 확인과 취소를 제공하고 서버 건수를 다시 확인한다", async ({ page }) => {
+  await mockApi(page); let writes = 0;
+  await page.route("**/members/me/recommendations", route => route.fulfill({ json: { ...recommendationResult, dismissedCount: writes ? 0 : 2 } }));
+  await page.route("**/recommendations/dismissed", route => { writes++; return route.fulfill({ status: 204 }); });
+  await page.goto("/"); await signup(page);
+  const panel = page.locator(".recommendation-card");
+  await panel.getByRole("button", { name: "숨긴 공고 2개 다시 보기" }).click();
+  await panel.getByRole("button", { name: "취소", exact: true }).click(); expect(writes).toBe(0);
+  await panel.getByRole("button", { name: "숨긴 공고 2개 다시 보기" }).click();
+  await panel.getByRole("button", { name: "복원 확인" }).evaluate(element => { (element as HTMLButtonElement).click(); (element as HTMLButtonElement).click(); });
+  await expect(panel.getByText("불러온 추천 5개 · 숨김 0개")).toBeVisible(); expect(writes).toBe(1);
+});
+
+for (const status of [401, 403]) {
+  test(`맞춤 추천 권한 ${status} 후 추가 조회와 변경을 막는다`, async ({ page }) => {
+    await mockApi(page); let denied = false; let reads = 0;
+    await page.route("**/members/me/recommendations", route => { reads++; return denied ? route.fulfill({ status, json: { detail: "권한 없음" } }) : route.fulfill({ json: recommendationResult }); });
+    await page.goto("/"); await signup(page);
+    const panel = page.locator(".recommendation-card");
+    await expect(panel.locator(".recommendation-open")).toHaveCount(3);
+    denied = true; await panel.getByRole("button", { name: "추천 새로고침" }).click();
+    await expect(panel.getByText("로그인이 만료되었거나 권한이 없습니다. 다시 로그인해주세요.")).toBeVisible();
+    const count = reads;
+    await expect(panel.getByRole("button", { name: "추천 새로고침" })).toBeDisabled();
+    await expect(panel.getByRole("button", { name: "맞춤 공고 1 추천에서 제외" })).toBeDisabled();
+    expect(reads).toBe(count);
+  });
+}
+
+for (const lateStatus of [204, 401]) {
+  test(`맞춤 추천 로그아웃 뒤 늦은 변경 ${lateStatus} 응답은 새 로그인에 영향을 주지 않는다`, async ({ page }) => {
+    await mockApi(page); let reads = 0; let writes = 0; let release!: () => void;
+    const wait = new Promise<void>(resolve => { release = resolve; });
+    await page.route("**/members/me/recommendations", route => { reads++; return route.fulfill({ json: recommendationResult }); });
+    await page.route("**/recommendations/1/dismiss", async route => { writes++; await wait; await route.fulfill({ status: lateStatus, ...(lateStatus === 204 ? {} : { json: { detail: "이전 세션 오류" } }) }); });
+    await page.goto("/"); await signup(page);
+    const panel = page.locator(".recommendation-card");
+    await panel.getByRole("button", { name: "맞춤 공고 1 추천에서 제외" }).click();
+    await expect.poll(() => writes).toBe(1);
+    await page.getByRole("button", { name: "테스트 회원", exact: true }).click();
+    await page.getByRole("button", { name: "로그아웃", exact: true }).click();
+    await signup(page);
+    await expect(panel.getByRole("button", { name: "맞춤 공고 1 추천에서 제외" })).toBeEnabled();
+    const count = reads; release();
+    await page.waitForTimeout(200);
+    await expect(panel.getByRole("alert")).toHaveCount(0);
+    await expect(panel.getByText("추천 제외 요청을 처리했습니다.")).toHaveCount(0);
+    expect(reads).toBe(count);
+  });
+}
+
+for (const lateStatus of [200, 403]) {
+  test(`맞춤 추천 로그아웃 뒤 늦은 조회 ${lateStatus} 응답은 새 추천을 덮어쓰지 않는다`, async ({ page }) => {
+    await mockApi(page); let delayed = false; let reads = 0; let release!: () => void;
+    const wait = new Promise<void>(resolve => { release = resolve; });
+    await page.route("**/members/me/recommendations", async route => {
+      reads++;
+      if (delayed) {
+        delayed = false; await wait;
+        return route.fulfill({ status: lateStatus, json: lateStatus === 200 ? { ...recommendationResult, recommendations: [] } : { detail: "이전 조회 오류" } });
+      }
+      return route.fulfill({ json: recommendationResult });
+    });
+    await page.goto("/"); await signup(page);
+    const panel = page.locator(".recommendation-card");
+    await expect(panel.getByRole("button", { name: "추천 새로고침" })).toBeEnabled();
+    const initial = reads; delayed = true;
+    await panel.getByRole("button", { name: "추천 새로고침" }).evaluate(element => { (element as HTMLButtonElement).click(); (element as HTMLButtonElement).click(); });
+    await expect.poll(() => reads).toBe(initial + 1);
+    await page.getByRole("button", { name: "테스트 회원", exact: true }).click();
+    await page.getByRole("button", { name: "로그아웃", exact: true }).click();
+    await signup(page);
+    await expect(panel.getByRole("button", { name: "맞춤 공고 1 추천에서 제외" })).toBeEnabled();
+    release(); await page.waitForTimeout(200);
+    await expect(panel.locator(".recommendation-open")).toHaveCount(3);
+    await expect(panel.getByRole("alert")).toHaveCount(0);
+  });
+}
 
 test("회원가입 후 사전점검 답변을 계정에 저장한다", async ({ page }) => {
   await mockApi(page);
