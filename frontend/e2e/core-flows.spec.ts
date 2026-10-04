@@ -257,6 +257,74 @@ test("알림 설정 저장 결과와 채널 준비 상태를 구분한다", asyn
   await expect(page.getByLabel("외부 알림 채널 상태").getByText("준비 중", { exact: true })).toHaveCount(4);
 });
 
+test("알림 설정 조회 실패 시 저장을 막고 기존 설정을 수동 복구한다", async ({ page }) => {
+  await mockApi(page);
+  let recovered = false;
+  let saves = 0;
+  await page.route("**/api/v1/members/me/notifications/preference", route => {
+    if (route.request().method() === "PUT") {
+      saves++;
+      return route.fulfill({ json: route.request().postDataJSON() });
+    }
+    return recovered ? route.fulfill({ json: { deadline7dEnabled: false } }) :
+      route.fulfill({ status: 503, json: { detail: "설정 조회 실패" } });
+  });
+  await page.goto("/");
+  await signup(page);
+  await page.getByRole("button", { name: "알림 0개", exact: true }).click();
+  await page.getByRole("tab", { name: "알림 설정" }).click();
+  await expect(page.getByRole("button", { name: "알림 설정 저장" })).toBeDisabled();
+  await expect(page.getByRole("checkbox", { name: "마감 7일 전", exact: true })).toBeDisabled();
+  expect(saves).toBe(0);
+  recovered = true;
+  await page.getByRole("button", { name: "설정 다시 불러오기" }).click();
+  await expect(page.getByRole("checkbox", { name: "마감 7일 전", exact: true })).not.toBeChecked();
+  await page.getByRole("button", { name: "알림 설정 저장" }).click();
+  await expect(page.getByText("알림 설정을 저장했습니다.")).toBeVisible();
+  expect(saves).toBe(1);
+});
+
+test("알림 저장 실패는 편집값을 유지하고 수동 재시도한다", async ({ page }) => {
+  await mockApi(page);
+  let saves = 0;
+  await page.route("**/api/v1/members/me/notifications/preference", route => {
+    if (route.request().method() === "GET") return route.fulfill({ json: {} });
+    saves++;
+    return saves === 1 ? route.fulfill({ status: 503, json: { detail: "저장 실패" } }) :
+      route.fulfill({ json: route.request().postDataJSON() });
+  });
+  await page.goto("/");
+  await signup(page);
+  await page.getByRole("button", { name: "알림 0개", exact: true }).click();
+  await page.getByRole("tab", { name: "알림 설정" }).click();
+  await page.getByRole("checkbox", { name: "마감 7일 전", exact: true }).uncheck();
+  await page.getByRole("button", { name: "알림 설정 저장" }).click();
+  await expect(page.getByRole("alert")).toHaveText("저장 실패");
+  await expect(page.getByRole("checkbox", { name: "마감 7일 전", exact: true })).not.toBeChecked();
+  expect(saves).toBe(1);
+  await page.getByRole("button", { name: "알림 설정 저장" }).click();
+  await expect(page.getByText("알림 설정을 저장했습니다.")).toBeVisible();
+  expect(saves).toBe(2);
+});
+
+test("알림 저장 중 세션이 만료되면 추가 저장을 차단한다", async ({ page }) => {
+  await mockApi(page);
+  let saves = 0;
+  await page.route("**/api/v1/members/me/notifications/preference", route => {
+    if (route.request().method() === "GET") return route.fulfill({ json: {} });
+    saves++;
+    return route.fulfill({ status: 401, json: { detail: "session expired" } });
+  });
+  await page.goto("/");
+  await signup(page);
+  await page.getByRole("button", { name: "알림 0개", exact: true }).click();
+  await page.getByRole("tab", { name: "알림 설정" }).click();
+  await page.getByRole("button", { name: "알림 설정 저장" }).click();
+  await expect(page.getByText("로그인이 만료되었습니다. 다시 로그인한 뒤 알림 창을 열어주세요.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "알림 설정 저장" })).toBeDisabled();
+  expect(saves).toBe(1);
+});
+
 test("AI 미연결 상태는 신청 버튼 없이 준비 안내를 표시한다", async ({ page }) => {
   await mockApi(page);
   await page.goto("/");
