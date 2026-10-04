@@ -73,6 +73,7 @@ import NotificationsDialog from "./NotificationsDialog";
 import FavoriteCalendarDialog from "./FavoriteCalendarDialog";
 import RecommendationPanel from "./RecommendationPanel";
 import { useMemberRecommendations } from "./useMemberRecommendations";
+import { useHorizontalTabs } from "./useHorizontalTabs";
 import {
   buildEligibilityCheckResult,
   EligibilityAnswer,
@@ -592,6 +593,7 @@ export default function Home() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const recommendationState = useMemberRecommendations(member, searchPreference);
+  const statusTabProps = useHorizontalTabs(activeStatus);
   const [adminSyncOpen, setAdminSyncOpen] = useState(false);
   const [favoriteCalendarOpen, setFavoriteCalendarOpen] = useState(false);
   const [detailRouteVersion, setDetailRouteVersion] = useState(0);
@@ -1873,13 +1875,14 @@ export default function Home() {
             <span className="demo-chip live-chip">LIVE DATA</span>
             <button
               className={`saved-button ${savedOnly ? "active" : ""}`}
+              aria-label={`관심청약 ${savedIds.size}개`}
               type="button"
               onClick={() => { setSavedOnly((value) => !value); setFavoriteProgressFilter("ALL"); setActiveStatus("all"); resetVisible(); scrollToResults(); }}
               aria-pressed={savedOnly}
             >
               <Icon name="bookmark" /> <span>관심청약</span> <b>{savedIds.size}</b>
             </button>
-            {member && favoritePreparation.counts.READY > 0 && <button className="ready-favorites-button" type="button" onClick={openReadyFavorites}><Icon name="check" /> <span>신청 준비</span> <b>{favoritePreparation.counts.READY}</b></button>}
+            {member && favoritePreparation.counts.READY > 0 && <button className="ready-favorites-button" type="button" aria-label={`신청 준비 ${favoritePreparation.counts.READY}개`} onClick={openReadyFavorites}><Icon name="check" /> <span>신청 준비</span> <b>{favoritePreparation.counts.READY}</b></button>}
             {member && (
               <button className="notification-button" type="button" onClick={() => { setMemberDialog(null); setNotificationsOpen(true); }} aria-label={`알림 ${unreadNotificationCount}개`}>
                 <Icon name="bell" />
@@ -1887,13 +1890,13 @@ export default function Home() {
               </button>
             )}
             {member?.role === "ADMIN" && (
-              <button className="admin-button" type="button" onClick={() => { setMemberDialog(null); setNotificationsOpen(false); setAdminSyncOpen(true); }}>
+              <button className="admin-button" type="button" aria-label="운영 관리" onClick={() => { setMemberDialog(null); setNotificationsOpen(false); setAdminSyncOpen(true); }}>
                 <Icon name="grid" /> <span>운영 관리</span>
               </button>
             )}
             <button
               className={`account-button ${member ? "signed-in" : ""}`}
-              aria-label={member ? member.nickname : undefined}
+              aria-label={authLoading ? "회원 확인 중" : member ? member.nickname : "로그인"}
               type="button"
               onClick={() => { setNotificationsOpen(false); setMemberDialog(member ? "account" : "login"); }}
               disabled={authLoading}
@@ -1954,10 +1957,10 @@ export default function Home() {
       </section>
 
       <section className="dashboard" id="applications">
-        <div className="status-tabs" role="tablist" aria-label="청약 상태">
+        <div className="status-tabs" role="tablist" aria-label="청약 상태" {...statusTabProps}>
           {statuses.map((status) => (
             <button className={activeStatus === status.key ? "selected" : ""} type="button" role="tab" aria-selected={activeStatus === status.key} key={status.key} onClick={() => { setActiveStatus(status.key); if (status.key !== "all") setIncludeClosed(false); setSavedOnly(false); setFavoriteProgressFilter("ALL"); resetVisible(); }}>
-              <span className={`tab-icon ${status.tone}`}><Icon name={status.icon} /></span><span>{status.label}<b>{facetsUnavailable ? "–" : status.count}</b></span>
+              <span className={`tab-icon ${status.tone}`} aria-hidden="true"><Icon name={status.icon} /></span><span><span className="status-tab-label">{status.label}</span><b>{facetsUnavailable ? "–" : status.count}</b></span>
             </button>
           ))}
         </div>

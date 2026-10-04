@@ -12,6 +12,7 @@ import AdminAiUsagePanel from "./AdminAiUsagePanel";
 import AdminMemberStatisticsPanel from "./AdminMemberStatisticsPanel";
 import AdminPushNotificationPanel from "./AdminPushNotificationPanel";
 import { useDialogAccessibility } from "./useDialogAccessibility";
+import { useHorizontalTabs } from "./useHorizontalTabs";
 
 interface AdminSyncDialogProps {
   open: boolean;
@@ -45,6 +46,7 @@ function formatDuration(seconds?: number | null): string {
 
 export default function AdminSyncDialog({ open, onClose, currentMemberId }: AdminSyncDialogProps) {
   const [tab, setTab] = useState<"sync" | "members" | "statistics" | "push" | "audit" | "ai">("sync");
+  const tabProps = useHorizontalTabs(tab, open);
   const [dashboard, setDashboard] = useState<AdminSyncDashboard>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -114,7 +116,7 @@ export default function AdminSyncDialog({ open, onClose, currentMemberId }: Admi
           <button type="button" onClick={onClose} aria-label="닫기">×</button>
         </div>
 
-        <div className="admin-operation-tabs" role="tablist" aria-label="운영 관리 메뉴">
+        <div className="admin-operation-tabs" role="tablist" aria-label="운영 관리 메뉴" {...tabProps}>
           <button type="button" role="tab" aria-selected={tab === "sync"} className={tab === "sync" ? "active" : ""} onClick={() => setTab("sync")}>공고 동기화</button>
           <button type="button" role="tab" aria-selected={tab === "members"} className={tab === "members" ? "active" : ""} onClick={() => setTab("members")}>회원 관리</button>
           <button type="button" role="tab" aria-selected={tab === "statistics"} className={tab === "statistics" ? "active" : ""} onClick={() => setTab("statistics")}>회원 통계</button>
