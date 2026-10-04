@@ -16,8 +16,9 @@ import {
   filterNotifications,
   notificationCategoryLabel,
   notificationFilterOptions,
+  searchAndSortNotifications,
 } from "./notificationTools";
-import type { NotificationFilter } from "./notificationTools";
+import type { NotificationFilter, NotificationSort } from "./notificationTools";
 import { fetchNotificationChannelAvailability } from "./notificationChannelsApi";
 import type { NotificationChannelAvailability } from "./notificationChannelsApi";
 import "./notificationInbox.css";
@@ -79,6 +80,10 @@ export default function NotificationsDialog({
 }: NotificationsDialogProps) {
   const [tab, setTab] = useState<"inbox" | "settings">("inbox");
   const [filter, setFilter] = useState<NotificationFilter>("ALL");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<NotificationSort>("NEWEST");
+  const [inboxLoaded, setInboxLoaded] = useState(false);
+  const [refreshWarning, setRefreshWarning] = useState("");
   const [inbox, setInbox] = useState<NotificationInbox>({ notifications: [], unreadCount: 0 });
   const [preference, setPreference] = useState<NotificationPreference>(DEFAULT_PREFERENCE);
   const [channels, setChannels] = useState<NotificationChannelAvailability[]>(DEFAULT_OUTBOUND_CHANNELS);
@@ -94,10 +99,22 @@ export default function NotificationsDialog({
   // A request can finish after Escape closes the dialog or another session opens it.
   const requestScope = useRef(0);
   const refreshSequence = useRef(0);
+  const mutationBusy = useRef(false);
+  const refreshBusy = useRef(false);
+  const accessBlocked = useRef(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date>();
   const dialogRef = useDialogAccessibility<HTMLElement>(open, onClose);
 
+  const blockOnAuthError = (value: unknown) => {
+    if (value instanceof ApiError && (value.status === 401 || value.status === 403)) {
+      accessBlocked.current = true;
+      setSessionExpired(true);
+    }
+  };
+
   const refreshInbox = async (showProgress = false) => {
+    if (accessBlocked.current || mutationBusy.current || refreshBusy.current || loading) return;
+    refreshBusy.current = true;
     const scope = requestScope.current;
     const sequence = ++refreshSequence.current;
     const current = () => scope === requestScope.current && sequence === refreshSequence.current;
@@ -106,14 +123,18 @@ export default function NotificationsDialog({
       const result = await fetchNotificationInbox();
       if (!current()) return;
       setInbox(result);
+      setInboxLoaded(true);
+      setRefreshWarning("");
       setLastUpdatedAt(new Date());
       onUnreadCountChange(result.unreadCount);
       setError("");
     } catch (requestError) {
       if (!current()) return;
+      setRefreshWarning("최근 알림을 갱신하지 못했습니다. 표시된 목록은 이전 조회 결과일 수 있어요. 새로고침으로 다시 확인해주세요.");
       if (showProgress) setError(requestError instanceof Error ? requestError.message : "알림을 불러오지 못했습니다.");
-      if (requestError instanceof ApiError && requestError.status === 401) setSessionExpired(true);
+      blockOnAuthError(requestError);
     } finally {
+      if (scope === requestScope.current) refreshBusy.current = false;
       if (current()) setLoading(false);
     }
   };
@@ -122,6 +143,9 @@ export default function NotificationsDialog({
     ++requestScope.current;
     ++refreshSequence.current;
     if (!open) return;
+    mutationBusy.current = false;
+    refreshBusy.current = false;
+    accessBlocked.current = false;
     let cancelled = false;
     setLoading(true);
     setSaving(false);
@@ -132,15 +156,23 @@ export default function NotificationsDialog({
     setPreferenceError("");
     setSessionExpired(false);
     setFilter("ALL");
+    setQuery("");
+    setSort("NEWEST");
+    setInbox({ notifications: [], unreadCount: 0 });
+    setInboxLoaded(false);
+    setLastUpdatedAt(undefined);
+    setRefreshWarning("");
     setChannels(DEFAULT_OUTBOUND_CHANNELS);
     Promise.allSettled([fetchNotificationInbox(), fetchNotificationPreference(), fetchNotificationChannelAvailability()])
       .then(([inboxResult, preferenceResult, channelResult]) => {
         if (cancelled) return;
         const expired = [inboxResult, preferenceResult, channelResult].some(result =>
-          result.status === "rejected" && result.reason instanceof ApiError && result.reason.status === 401);
+          result.status === "rejected" && result.reason instanceof ApiError && [401, 403].includes(result.reason.status));
+        accessBlocked.current = expired;
         setSessionExpired(expired);
         if (inboxResult.status === "fulfilled") {
           setInbox(inboxResult.value);
+          setInboxLoaded(true);
           setLastUpdatedAt(new Date());
           onUnreadCountChange(inboxResult.value.unreadCount);
         } else {
@@ -176,13 +208,14 @@ export default function NotificationsDialog({
     };
   }, [open, tab, sessionExpired, loading, saving, busyId]);
 
-  const filteredNotifications = useMemo(() => filterNotifications(inbox.notifications, filter), [filter, inbox.notifications]);
+  const filteredNotifications = useMemo(() => searchAndSortNotifications(filterNotifications(inbox.notifications, filter), query, sort), [filter, inbox.notifications, query, sort]);
   const filterOptions = useMemo(() => notificationFilterOptions(inbox.notifications), [inbox.notifications]);
 
   if (!open) return null;
 
   const openNotification = async (notification: MemberNotification) => {
-    if (sessionExpired) return;
+    if (accessBlocked.current || mutationBusy.current || loading || !inboxLoaded) return;
+    mutationBusy.current = true;
     const scope = requestScope.current;
     ++refreshSequence.current;
     if (!notification.readAt) {
@@ -199,17 +232,22 @@ export default function NotificationsDialog({
       } catch (requestError) {
         if (scope !== requestScope.current) return;
         setError(requestError instanceof Error ? requestError.message : "알림을 읽음 처리하지 못했습니다.");
-        if (requestError instanceof ApiError && requestError.status === 401) setSessionExpired(true);
+        blockOnAuthError(requestError);
+        mutationBusy.current = false;
         setBusyId(undefined);
         return;
       }
       setBusyId(undefined);
     }
-    if (scope === requestScope.current) onOpenNotice(notification.noticeId);
+    if (scope === requestScope.current) {
+      mutationBusy.current = false;
+      onOpenNotice(notification.noticeId);
+    }
   };
 
   const readAll = async () => {
-    if (sessionExpired || saving) return;
+    if (accessBlocked.current || mutationBusy.current || loading || !inboxLoaded) return;
+    mutationBusy.current = true;
     const scope = requestScope.current;
     ++refreshSequence.current;
     setSaving(true);
@@ -226,15 +264,16 @@ export default function NotificationsDialog({
     } catch (requestError) {
       if (scope !== requestScope.current) return;
       setError(requestError instanceof Error ? requestError.message : "알림을 읽음 처리하지 못했습니다.");
-      if (requestError instanceof ApiError && requestError.status === 401) setSessionExpired(true);
+      blockOnAuthError(requestError);
     } finally {
-      if (scope === requestScope.current) setSaving(false);
+      if (scope === requestScope.current) { mutationBusy.current = false; setSaving(false); }
     }
   };
 
   const savePreference = async (event: FormEvent) => {
     event.preventDefault();
-    if (!preferenceLoaded || sessionExpired || saving || loading) return;
+    if (!preferenceLoaded || accessBlocked.current || mutationBusy.current || loading) return;
+    mutationBusy.current = true;
     const scope = requestScope.current;
     setSaving(true);
     setError("");
@@ -257,9 +296,9 @@ export default function NotificationsDialog({
     } catch (requestError) {
       if (scope !== requestScope.current) return;
       setError(requestError instanceof Error ? requestError.message : "알림 설정을 저장하지 못했습니다.");
-      if (requestError instanceof ApiError && requestError.status === 401) setSessionExpired(true);
+      blockOnAuthError(requestError);
     } finally {
-      if (scope === requestScope.current) setSaving(false);
+      if (scope === requestScope.current) { mutationBusy.current = false; setSaving(false); }
     }
   };
 
@@ -281,20 +320,27 @@ export default function NotificationsDialog({
           <div className="notification-inbox">
             <div className="notification-inbox-actions">
               <small aria-live="polite">{lastUpdatedAt ? `${lastUpdatedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 확인` : "확인 전"}</small>
-              <button type="button" onClick={() => void refreshInbox(true)} disabled={loading || saving || sessionExpired}>새로고침</button>
-              {inbox.unreadCount > 0 && <button className="read-all-button" type="button" onClick={() => void readAll()} disabled={saving || sessionExpired}>모두 읽음</button>}
+              <button type="button" onClick={() => void refreshInbox(true)} disabled={loading || saving || busyId !== undefined || sessionExpired}>새로고침</button>
+              {inbox.unreadCount > 0 && <button className="read-all-button" type="button" onClick={() => void readAll()} disabled={saving || busyId !== undefined || sessionExpired}>모두 읽음</button>}
             </div>
+            {refreshWarning && <p className="member-message error" role="status">{refreshWarning}</p>}
+            {inboxLoaded && <div className="notification-search">
+              <label>알림 검색<input type="search" value={query} maxLength={100} placeholder="공고명 또는 알림 내용" onChange={event => setQuery(event.target.value)} /></label>
+              <label>알림 정렬<select value={sort} onChange={event => setSort(event.target.value as NotificationSort)}><option value="NEWEST">최신순</option><option value="UNREAD_FIRST">읽지 않음 우선</option></select></label>
+              <small role="status">불러온 {inbox.notifications.length}건 중 {filteredNotifications.length}건 표시</small>
+              {query && <button type="button" onClick={() => setQuery("")}>검색 초기화</button>}
+            </div>}
             {inbox.notifications.length > 0 && <div className="notification-filter" role="group" aria-label="알림 분류">
-              {filterOptions.map((option) => <button key={option.value} type="button" className={filter === option.value ? "active" : ""} onClick={() => setFilter(option.value)}>{option.label}</button>)}
+              {filterOptions.map((option) => <button key={option.value} type="button" aria-pressed={filter === option.value} className={filter === option.value ? "active" : ""} onClick={() => setFilter(option.value)}>{option.label}</button>)}
             </div>}
             {filteredNotifications.map((item) => (
-              <button className={`notification-item${item.readAt ? " read" : ""}`} type="button" key={item.id} disabled={busyId !== undefined || sessionExpired} onClick={() => void openNotification(item)}>
+              <button className={`notification-item${item.readAt ? " read" : ""}`} type="button" key={item.id} disabled={saving || busyId !== undefined || sessionExpired} onClick={() => void openNotification(item)}>
                 <span className="notification-dot" aria-hidden="true"></span>
                 <span><b>{item.noticeTitle}</b><small>{item.message}</small><em><strong>{notificationCategoryLabel(item.type)}</strong>{notificationDateLabel(item)}</em></span>
                 <span aria-hidden="true">›</span>
               </button>
             ))}
-            {inbox.notifications.length === 0 ? <div className="notification-empty"><b>아직 도착한 알림이 없어요</b><p>관심청약 일정과 저장한 조건의 신규 공고를 알려드릴게요.</p></div> : filteredNotifications.length === 0 && <div className="notification-empty"><b>{filter === "UNREAD" ? "읽지 않은 알림이 없어요" : "해당 분류의 알림이 없어요"}</b><p>다른 분류를 선택하면 최근 알림을 확인할 수 있어요.</p></div>}
+            {!inboxLoaded ? <p className="notification-state">알림 목록을 확인하지 못했습니다. 새로고침으로 다시 불러와주세요.</p> : inbox.notifications.length === 0 ? <div className="notification-empty"><b>아직 도착한 알림이 없어요</b><p>관심청약 일정과 저장한 조건의 신규 공고를 알려드릴게요.</p></div> : filteredNotifications.length === 0 && <div className="notification-empty"><b>{query.trim() ? "검색 결과가 없어요" : filter === "UNREAD" ? "읽지 않은 알림이 없어요" : "해당 분류의 알림이 없어요"}</b><p>검색어나 분류를 바꾸면 불러온 다른 알림을 확인할 수 있어요.</p></div>}
           </div>
         ) : (
           <form className="notification-settings" onSubmit={(event) => void savePreference(event)}>
@@ -326,12 +372,12 @@ export default function NotificationsDialog({
                 </div>
               ))}
             </div>
-            <button className="primary-button" type="submit" disabled={saving || !preferenceLoaded || sessionExpired}>{saving ? "저장 중…" : "알림 설정 저장"}</button>
+            <button className="primary-button" type="submit" disabled={saving || busyId !== undefined || !preferenceLoaded || sessionExpired}>{saving ? "저장 중…" : "알림 설정 저장"}</button>
           </form>
         )}
         {notice && <p className="member-message success" role="status">{notice}</p>}
         {error && <p className="member-message error" role="alert">{error}</p>}
-        {sessionExpired && <p className="member-message error" role="alert">로그인이 만료되었습니다. 다시 로그인한 뒤 알림 창을 열어주세요.</p>}
+        {sessionExpired && <p className="member-message error" role="alert">로그인이 만료되었거나 접근 권한이 없습니다. 다시 로그인한 뒤 알림 창을 열어주세요.</p>}
       </section>
     </div>
   );

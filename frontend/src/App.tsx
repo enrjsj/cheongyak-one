@@ -1007,14 +1007,19 @@ export default function Home() {
       setUnreadNotificationCount(0);
       return;
     }
+    // The open inbox owns refreshing and the badge update. Do not race it with
+    // a second visibility/timer request from the page behind the dialog.
+    if (notificationsOpen) return;
     let cancelled = false;
+    let refreshing = false;
     const refreshUnreadCount = () => {
-      if (document.visibilityState !== "visible") return;
+      if (cancelled || refreshing || document.visibilityState !== "visible") return;
+      refreshing = true;
       fetchNotificationInbox()
         .then((inbox) => { if (!cancelled) setUnreadNotificationCount(inbox.unreadCount); })
         .catch(() => {
           // 일시적인 갱신 실패 시 기존 개수를 유지하고 다음 주기에 다시 시도한다.
-        });
+        }).finally(() => { refreshing = false; });
     };
     refreshUnreadCount();
     const timer = window.setInterval(refreshUnreadCount, 60_000);
@@ -1024,7 +1029,7 @@ export default function Home() {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", refreshUnreadCount);
     };
-  }, [member]);
+  }, [member, notificationsOpen]);
 
   useEffect(() => {
     if (!member) {

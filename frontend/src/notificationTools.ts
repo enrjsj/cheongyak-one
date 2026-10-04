@@ -1,6 +1,22 @@
 import type { MemberNotification, MemberNotificationType } from "./api";
 
 export type NotificationFilter = "ALL" | "UNREAD" | "SCHEDULE" | "NEW" | "UPDATED";
+export type NotificationSort = "NEWEST" | "UNREAD_FIRST";
+
+export function searchAndSortNotifications(notifications: MemberNotification[], query: string, sort: NotificationSort): MemberNotification[] {
+  const terms = query.normalize("NFKC").toLocaleLowerCase("ko-KR").trim().split(/\s+/).filter(Boolean);
+  const timestamp = (value: string) => {
+    const result = Date.parse(value);
+    return Number.isFinite(result) ? result : 0;
+  };
+  return notifications.filter(item => {
+    const text = `${item.noticeTitle} ${item.message}`.normalize("NFKC").toLocaleLowerCase("ko-KR");
+    return terms.every(term => text.includes(term));
+  }).sort((a, b) => {
+    if (sort === "UNREAD_FIRST" && Boolean(a.readAt) !== Boolean(b.readAt)) return a.readAt ? 1 : -1;
+    return timestamp(b.createdAt) - timestamp(a.createdAt) || b.id - a.id;
+  });
+}
 
 export interface NotificationFilterOption {
   value: NotificationFilter;
