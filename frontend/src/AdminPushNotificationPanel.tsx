@@ -1,47 +1,104 @@
-import { useEffect, useState } from "react";
-import { AdminPushNotificationDashboard, dispatchAdminPushNotifications, fetchAdminPushNotificationDashboard, retryAdminPushNotification } from "./api";
+import { useEffect, useRef, useState } from "react";
+import { ApiError, AdminPushNotificationDashboard, dispatchAdminPushNotifications, fetchAdminPushNotificationDashboard, retryAdminPushNotification } from "./api";
 
 export default function AdminPushNotificationPanel() {
   const [dashboard, setDashboard] = useState<AdminPushNotificationDashboard>();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState<number>();
-  const load = () => {
+  const [message, setMessage] = useState("");
+  const [expired, setExpired] = useState(false);
+  const [refreshRequired, setRefreshRequired] = useState(false);
+  const lifetime = useRef(0);
+  const busy = useRef(false);
+  const reading = useRef(false);
+  const blocked = useRef(false);
+  const needsRefresh = useRef(false);
+
+  function fail(value: unknown, fallback: string) {
+    const unauthorized = value instanceof ApiError && (value.status === 401 || value.status === 403);
+    blocked.current = unauthorized;
+    setExpired(unauthorized);
+    setError(unauthorized ? "로그인이 만료되었거나 관리자 권한이 없습니다. 다시 로그인해주세요." : value instanceof Error ? value.message : fallback);
+  }
+
+  async function refresh(epoch: number) {
+    reading.current = true;
     setLoading(true); setError("");
-    fetchAdminPushNotificationDashboard().then(setDashboard)
-      .catch((value: unknown) => setError(value instanceof Error ? value.message : "푸시 현황을 불러오지 못했습니다."))
-      .finally(() => setLoading(false));
-  };
-  useEffect(load, []);
-  const retry = async (notificationId: number) => {
-    setWorkingId(notificationId); setError("");
-    try { await retryAdminPushNotification(notificationId); load(); }
-    catch (value) { setError(value instanceof Error ? value.message : "재시도 대기열에 넣지 못했습니다."); }
-    finally { setWorkingId(undefined); }
-  };
-  const dispatch = async () => {
-    setWorkingId(-1); setError("");
-    try { await dispatchAdminPushNotifications(); load(); }
-    catch (value) { setError(value instanceof Error ? value.message : "대기 푸시를 발송하지 못했습니다."); }
-    finally { setWorkingId(undefined); }
-  };
-  if (loading && !dashboard) return <p className="admin-sync-loading">푸시 발송 현황을 불러오는 중…</p>;
-  if (error) return <div className="admin-sync-error"><p>{error}</p><button type="button" onClick={load}>다시 시도</button></div>;
-  if (!dashboard) return null;
+    try {
+      const value = await fetchAdminPushNotificationDashboard();
+      if (lifetime.current !== epoch) return;
+      setDashboard(value);
+      needsRefresh.current = false; setRefreshRequired(false);
+    } catch (value) {
+      if (lifetime.current !== epoch) return;
+      needsRefresh.current = true; setRefreshRequired(true);
+      fail(value, "푸시 현황을 불러오지 못했습니다.");
+    } finally {
+      if (lifetime.current === epoch) { reading.current = false; setLoading(false); }
+    }
+  }
+
+  function load() {
+    if (busy.current || reading.current || blocked.current) return;
+    void refresh(lifetime.current);
+  }
+
+  useEffect(() => {
+    const epoch = ++lifetime.current;
+    void refresh(epoch);
+    return () => { ++lifetime.current; };
+  }, []);
+
+  async function act(notificationId: number) {
+    if (busy.current || reading.current || blocked.current || needsRefresh.current) return;
+    const epoch = lifetime.current;
+    busy.current = true;
+    setWorkingId(notificationId); setError(""); setMessage("");
+    try {
+      if (notificationId === -1) {
+        const result = await dispatchAdminPushNotifications();
+        if (lifetime.current !== epoch) return;
+        setMessage(`대기 푸시 처리 완료: ${result.sentCount}건. 실제 기기 수신 여부와는 다를 수 있습니다.`);
+      } else {
+        await retryAdminPushNotification(notificationId);
+        if (lifetime.current !== epoch) return;
+        setMessage("재시도 대기열에 등록했습니다. 실제 발송 완료를 의미하지 않습니다.");
+      }
+      // Keep the action locked until its refreshed result has been applied.
+      await refresh(epoch);
+    } catch (value) {
+      if (lifetime.current !== epoch) return;
+      needsRefresh.current = true; setRefreshRequired(true);
+      fail(value, "처리 결과를 확인하지 못했습니다. 현황을 새로고침해주세요.");
+    } finally {
+      if (lifetime.current === epoch) { busy.current = false; setWorkingId(undefined); }
+    }
+  }
+
+  const disabled = expired || loading || workingId !== undefined || refreshRequired;
   return <div className="admin-push-panel">
+    {loading && <p className="admin-sync-loading" role="status">푸시 발송 현황을 불러오는 중…</p>}
+    {message && <p role="status">{message}</p>}
+    {error && <div className="admin-sync-error" role="alert"><p>{error}</p>
+      {!expired && <button type="button" onClick={load} disabled={loading || workingId !== undefined}>현황 다시 불러오기</button>}
+    </div>}
+    {dashboard && <>
     <div className="admin-sync-summary">
       <div><span>등록 기기</span><strong>{dashboard.registeredDeviceCount}</strong></div>
       <div><span>발송 대기</span><strong>{dashboard.pendingCount}</strong></div>
       <div className={dashboard.permanentlyFailedCount > 0 ? "danger" : ""}><span>최종 실패</span><strong>{dashboard.permanentlyFailedCount}</strong></div>
       <div><span>24시간 발송</span><strong>{dashboard.sentLast24Hours}</strong></div>
     </div>
-    <div className="admin-sync-headline"><b>최종 실패 최근 10건</b><span><button type="button" onClick={() => void dispatch()} disabled={workingId !== undefined}>대기 발송</button><button type="button" onClick={load} disabled={loading}>새로고침</button></span></div>
+    <div className="admin-sync-headline"><b>최종 실패 최근 10건</b><span><button type="button" onClick={() => void act(-1)} disabled={disabled}>대기 발송</button><button type="button" onClick={load} disabled={expired || loading || workingId !== undefined}>새로고침</button></span></div>
     <div className="admin-sync-list">
       {dashboard.recentFailures.map((item) => <article key={item.notificationId}>
         <div className="admin-sync-row"><span className="sync-status failed">실패</span><b>{item.noticeTitle}</b><small>{item.attempts}회 시도</small></div>
-        <code>{item.error || "알 수 없는 오류"}</code><button type="button" onClick={() => void retry(item.notificationId)} disabled={workingId !== undefined}>{workingId === item.notificationId ? "처리 중…" : "재시도"}</button>
+        <code>{item.error || "알 수 없는 오류"}</code><button type="button" onClick={() => void act(item.notificationId)} disabled={disabled}>{workingId === item.notificationId ? "처리 중…" : "재시도"}</button>
       </article>)}
       {dashboard.recentFailures.length === 0 && <p className="admin-sync-empty">최종 실패한 푸시가 없습니다.</p>}
     </div>
+    </>}
   </div>;
 }
+

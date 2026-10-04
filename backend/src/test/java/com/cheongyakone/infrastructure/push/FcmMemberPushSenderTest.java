@@ -2,6 +2,13 @@ package com.cheongyakone.infrastructure.push;
 
 import com.google.firebase.messaging.MessagingErrorCode;
 import com.google.firebase.messaging.Message;
+import com.google.firebase.messaging.BatchResponse;
+import com.google.firebase.messaging.FirebaseMessaging;
+import com.google.firebase.messaging.FirebaseMessagingException;
+import com.google.firebase.messaging.MulticastMessage;
+import com.google.firebase.messaging.SendResponse;
+import com.google.firebase.FirebaseException;
+import com.google.firebase.ErrorCode;
 import com.google.api.client.json.gson.GsonFactory;
 import com.cheongyakone.domain.member.MemberNotification;
 import com.cheongyakone.domain.member.NotificationType;
@@ -14,8 +21,66 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.verify;
 
 class FcmMemberPushSenderTest {
+    @Test void mixedResponsesPreserveTokenOrderAndOnlyRemoveUnregisteredDevices() throws Exception {
+        var messaging = mock(FirebaseMessaging.class);
+        var batch = mock(BatchResponse.class);
+        SendResponse success = ReflectionTestUtils.invokeMethod(SendResponse.class, "fromMessageId", "message-id");
+        when(batch.getResponses()).thenReturn(List.of(success, failed(MessagingErrorCode.UNREGISTERED),
+                failed(MessagingErrorCode.UNAVAILABLE), failed(MessagingErrorCode.INVALID_ARGUMENT)));
+        when(batch.getFailureCount()).thenReturn(3);
+        when(messaging.sendEachForMulticast(any(MulticastMessage.class))).thenReturn(batch);
+        var sender = sender(messaging);
+        var result = sender.send(notification(42L), List.of("ok", "expired", "retry", "bad-payload"));
+        assertThat(result.successfulTokens()).containsExactly("ok");
+        assertThat(result.invalidTokens()).containsExactly("expired");
+        assertThat(result.retryableFailure()).isTrue();
+        assertThat(result.error()).isEqualTo("FCM partial delivery failure");
+        verify(messaging).sendEachForMulticast(any(MulticastMessage.class));
+    }
+
+    @Test void confirmedInvalidDevicesAloneDoNotRequireAnotherAttempt() throws Exception {
+        var messaging = mock(FirebaseMessaging.class);
+        var batch = mock(BatchResponse.class);
+        when(batch.getResponses()).thenReturn(List.of(failed(MessagingErrorCode.UNREGISTERED)));
+        when(batch.getFailureCount()).thenReturn(1);
+        when(messaging.sendEachForMulticast(any(MulticastMessage.class))).thenReturn(batch);
+        var result = sender(messaging).send(notification(42L), List.of("expired"));
+        assertThat(result.retryableFailure()).isFalse();
+        assertThat(result.successfulTokens()).isEmpty();
+        assertThat(result.invalidTokens()).containsExactly("expired");
+        assertThat(result.error()).isNull();
+    }
+
+    @Test void wholeRequestFailureCannotConfirmOrDeleteAnyDevice() throws Exception {
+        var messaging = mock(FirebaseMessaging.class);
+        when(messaging.sendEachForMulticast(any(MulticastMessage.class))).thenThrow(failure(MessagingErrorCode.UNAVAILABLE));
+        var result = sender(messaging).send(notification(42L), List.of("device-a", "device-b"));
+        assertThat(result.retryableFailure()).isTrue();
+        assertThat(result.successfulTokens()).isEmpty();
+        assertThat(result.invalidTokens()).isEmpty();
+        assertThat(result.error()).isEqualTo("FCM delivery failed: UNAVAILABLE");
+        assertThat(result.error()).doesNotContain("private-provider-detail");
+    }
+
+    private static FcmMemberPushSender sender(FirebaseMessaging messaging) {
+        var sender = new FcmMemberPushSender("");
+        ReflectionTestUtils.setField(sender, "messaging", messaging);
+        return sender;
+    }
+
+    private static FirebaseMessagingException failure(MessagingErrorCode code) {
+        return ReflectionTestUtils.invokeMethod(FirebaseMessagingException.class, "withMessagingErrorCode",
+                new FirebaseException(ErrorCode.UNAVAILABLE, "private-provider-detail", null), code);
+    }
+
+    private static SendResponse failed(MessagingErrorCode code) {
+        return ReflectionTestUtils.invokeMethod(SendResponse.class, "fromException", failure(code));
+    }
+
     @Test void retriesKeepDisplayIdentityAndExistingPayloadForEveryDevice() throws Exception {
         var first = payloads(42L, List.of("device-a", "device-b"));
         var retry = payloads(42L, List.of("device-b"));
