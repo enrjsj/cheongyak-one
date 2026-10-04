@@ -5,6 +5,110 @@ const notices = [
   { id: 2, sourceSystem: "MYHOME_PUBLIC_RENTAL", housingCategory: "PUBLIC_RENTAL", status: "UPCOMING", title: "E2E 경기 행복주택", regionCode: "경기", address: "경기도 고양시", noticeDate: "2026-09-02", applyStartDate: "2026-09-21", applyEndDate: "2026-09-25", winnerAnnounceDate: "2026-10-03", totalUnits: 80, officialUrl: "https://applyhome.example/2", syncedAt: "2026-09-01T00:00:00Z" },
 ];
 
+async function mockLinkClipboard(page: Page, mode: "success" | "fail" | "pending") {
+  await page.addInitScript(mode => {
+    (window as any).__linkCopies = [];
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: (url: string) => {
+      const entry: any = { url }; (window as any).__linkCopies.push(entry);
+      if (mode === "success") return Promise.resolve();
+      if (mode === "fail") return Promise.reject(new Error("denied"));
+      return new Promise<void>((resolve, reject) => { entry.resolve = resolve; entry.reject = reject; });
+    } } });
+  }, mode);
+}
+
+test("링크 공유 검색 링크는 허용된 검색조건만 복사한다", async ({ page }) => {
+  await mockApi(page); await mockLinkClipboard(page, "success");
+  await page.goto("/?region=서울&category=OFFICETEL&token=secret#private");
+  await page.getByRole("button", { name: "검색 공유", exact: true }).click();
+  await expect(page.getByText("현재 검색조건 링크를 복사했어요.")).toBeVisible();
+  const value = await page.evaluate(() => (window as any).__linkCopies[0].url);
+  const url = new URL(value); expect(url.searchParams.get("region")).toBe("서울");
+  expect(url.searchParams.get("category")).toBe("OFFICETEL"); expect(url.searchParams.has("token")).toBe(false); expect(url.hash).toBe("");
+});
+
+test("링크 공유 복사 거부 시 모바일에서 정확한 공고 링크를 직접 선택한다", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 }); await mockApi(page); await mockLinkClipboard(page, "fail");
+  await page.goto("/?notice=1&compare=1,2&q=서울&token=secret");
+  const dialog = page.getByRole("dialog", { name: notices[0].title });
+  await dialog.getByRole("button", { name: "링크 복사", exact: true }).click();
+  const field = dialog.getByLabel("직접 복사할 공유 링크");
+  await expect(field).toHaveValue("http://127.0.0.1:4173/?notice=1");
+  await dialog.getByRole("button", { name: "링크 전체 선택" }).click();
+  await expect(field).toBeFocused();
+  expect(await field.evaluate((element: HTMLTextAreaElement) => element.selectionEnd - element.selectionStart)).toBe((await field.inputValue()).length);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await dialog.getByRole("region", { name: "링크 공유 안내" }).screenshot({ path: "test-results/link-share-mobile.png", animations: "disabled" });
+  await dialog.getByRole("button", { name: "공유 안내 닫기" }).click();
+  await expect(field).toHaveCount(0);
+});
+
+test("링크 공유 비교 링크는 비교 ID만 포함한다", async ({ page }) => {
+  await mockApi(page); await mockLinkClipboard(page, "success"); await page.goto("/?compare=1,2&region=서울&token=secret");
+  await page.getByRole("button", { name: "비교하기", exact: true }).click();
+  await page.getByRole("button", { name: "비교 링크 복사" }).click();
+  await expect(page.getByText("비교 링크를 복사했어요.")).toBeVisible();
+  const value = await page.evaluate(() => (window as any).__linkCopies[0].url);
+  expect([...new URL(value).searchParams]).toEqual([["compare", "1,2"]]);
+});
+
+for (const action of ["조건 변경", "대기 취소"]) {
+  test(`링크 공유 중복 클릭을 차단하고 ${action} 뒤 늦은 결과를 무시한다`, async ({ page }) => {
+    await mockApi(page); await mockLinkClipboard(page, "pending"); await page.goto("/");
+    const button = page.getByRole("button", { name: "검색 공유", exact: true });
+    await button.evaluate(element => { (element as HTMLButtonElement).click(); (element as HTMLButtonElement).click(); });
+    await expect(button).toBeDisabled(); expect(await page.evaluate(() => (window as any).__linkCopies.length)).toBe(1);
+    if (action === "대기 취소") await page.getByRole("button", { name: "복사 대기 취소" }).click();
+    else await page.getByRole("button", { name: "마감 공고 포함", exact: true }).click();
+    await expect(button).toBeEnabled();
+    await page.evaluate(() => (window as any).__linkCopies[0].reject(new Error("late")));
+    await expect(page.getByRole("region", { name: "링크 공유 안내" })).toHaveCount(0);
+  });
+}
+
+test("링크 공유 시간 초과 후 수동 링크를 유지하고 늦은 성공은 표시하지 않는다", async ({ page }) => {
+  await mockApi(page); await mockLinkClipboard(page, "pending"); await page.goto("/");
+  await page.clock.install();
+  await page.getByRole("button", { name: "검색 공유", exact: true }).click();
+  await page.clock.fastForward(8100);
+  await expect(page.getByLabel("직접 복사할 공유 링크")).toBeVisible();
+  await page.evaluate(() => (window as any).__linkCopies[0].resolve());
+  await expect(page.getByText("현재 검색조건 링크를 복사했어요.")).toHaveCount(0);
+  await expect(page.getByLabel("직접 복사할 공유 링크")).toBeVisible();
+});
+
+test("링크 공유 클립보드 미지원에서도 직접 복사할 수 있다", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined }));
+  await page.goto("/"); await page.getByRole("button", { name: "검색 공유", exact: true }).click();
+  await expect(page.getByLabel("직접 복사할 공유 링크")).toHaveValue("http://127.0.0.1:4173/");
+  await expect(page.getByRole("button", { name: "검색 공유", exact: true })).toBeEnabled();
+});
+
+test("링크 공유 공고 재열기 뒤 이전 복사 실패는 새 안내를 덮어쓰지 않는다", async ({ page }) => {
+  await mockApi(page); await mockLinkClipboard(page, "pending"); await page.goto("/?notice=1");
+  const dialog = page.getByRole("dialog", { name: notices[0].title });
+  await dialog.getByRole("button", { name: "링크 복사", exact: true }).click();
+  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+  await page.locator("article").filter({ hasText: notices[0].title }).getByRole("button", { name: /공고 핵심만 보기/ }).click();
+  await dialog.getByRole("button", { name: "링크 복사", exact: true }).click();
+  await page.evaluate(() => { (window as any).__linkCopies[1].resolve(); (window as any).__linkCopies[0].reject(new Error("late")); });
+  await expect(dialog.getByText("공고 링크를 복사했어요.")).toBeVisible();
+  await expect(dialog.getByLabel("직접 복사할 공유 링크")).toHaveCount(0);
+});
+
+test("링크 공유 비교창 닫기 뒤 늦은 성공은 다시 연 창에 표시되지 않는다", async ({ page }) => {
+  await mockApi(page); await mockLinkClipboard(page, "pending"); await page.goto("/?compare=1,2");
+  await page.getByRole("button", { name: "비교하기", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "청약 공고 비교" });
+  await dialog.getByRole("button", { name: "비교 링크 복사" }).click();
+  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+  await page.getByRole("button", { name: "비교하기", exact: true }).click();
+  await page.evaluate(() => (window as any).__linkCopies[0].resolve());
+  await expect(dialog.getByRole("region", { name: "링크 공유 안내" })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "비교 링크 복사" })).toBeEnabled();
+});
+
 async function mockApi(page: Page, options: { admin?: boolean; failInitialNoticeLoad?: boolean; failNoticeLoads?: number; noticeFailureStatus?: number; failFacetLoads?: number; facetFailureStatus?: number } = {}) {
   let member: Record<string, unknown> | undefined;
   let favoriteIds: number[] = [];
