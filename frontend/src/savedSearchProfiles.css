@@ -8,6 +8,9 @@
 .saved-profile-manager button:disabled { opacity: .55; cursor: default; }
 .saved-profile-manager > .saved-profile-create, .saved-profile-manager > .saved-profile-confirm { display: block; padding: 12px; border: 1px solid #cfd9ea; border-radius: 10px; margin: 12px 0; }
 .saved-profile-manager [role="alert"] { color: #9a4545; }
+.saved-profile-manager > .saved-profile-filters { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.saved-profile-manager button[aria-pressed="true"] { background: #e3edff; border-color: #7399df; color: #143f82; }
+.saved-profile-manager .saved-profile-more { width: 100%; margin-top: 12px; }
 @media (max-width: 680px) {
   .saved-search-profiles.saved-profile-manager article { align-items: stretch; flex-direction: column; gap: 10px; }
   .saved-profile-manager button { min-height: 44px; }

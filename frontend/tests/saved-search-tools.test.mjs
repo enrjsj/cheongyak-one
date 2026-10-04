@@ -1,7 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { checkedSavedProfiles, savedProfileInputError, selectSavedProfiles } from "../src/savedSearchTools.ts";
+import { checkedSavedProfiles, filterSavedProfiles, savedProfileInputError, selectSavedProfiles } from "../src/savedSearchTools.ts";
 const row = { id: 1, name: "서울 ＡＰＴ", region: "서울", status: "ALL", sort: "LATEST", defaultProfile: false, newNoticeEnabled: true, updatedAt: "2026-10-01" };
+test("saved profile state filters combine without mutating their source", () => {
+  const rows = [row, { ...row, id: 2, defaultProfile: true, newNoticeEnabled: false }, { ...row, id: 3, newNoticeEnabled: false }];
+  const before = structuredClone(rows);
+  assert.deepEqual(filterSavedProfiles(rows, "ALL", false), rows);
+  assert.deepEqual(filterSavedProfiles(rows, "ON", false).map(x => x.id), [1]);
+  assert.deepEqual(filterSavedProfiles(rows, "OFF", false).map(x => x.id), [2, 3]);
+  assert.deepEqual(filterSavedProfiles(rows, "OFF", true).map(x => x.id), [2]);
+  assert.deepEqual(filterSavedProfiles(rows, "ON", true), []);
+  assert.deepEqual(filterSavedProfiles([], "ALL", true), []);
+  assert.deepEqual(rows, before);
+});
 test("saved profile names and inverted ranges are validated", () => {
   for (const name of ["", "  ", "가".repeat(41)]) assert.ok(savedProfileInputError(name, {}));
   assert.equal(savedProfileInputError(" 이름 ", { minArea: 59, maxArea: 84 }), "");
