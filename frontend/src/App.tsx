@@ -69,6 +69,9 @@ import FavoriteCalendarDialog from "./FavoriteCalendarDialog";
 import RecommendationPanel from "./RecommendationPanel";
 import { useMemberRecommendations } from "./useMemberRecommendations";
 import { useHorizontalTabs } from "./useHorizontalTabs";
+import { useLinkCopy } from "./useLinkCopy";
+import LinkCopyFeedback from "./LinkCopyFeedback";
+import { publicShareUrl } from "./shareLinkTools";
 import { useSavedSearchProfiles } from "./useSavedSearchProfiles";
 import SavedSearchProfilesPanel from "./SavedSearchProfilesPanel";
 import { savedProfileInputError } from "./savedSearchTools";
@@ -1631,47 +1634,17 @@ export default function Home() {
     const anchor = document.createElement("a"); anchor.href = url; anchor.download = "cheongyak-favorite-results.csv"; anchor.click(); URL.revokeObjectURL(url);
   };
 
-  const copyComparisonLink = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setToast("비교 링크를 복사했어요.");
-    } catch {
-      setToast("주소창의 링크를 직접 복사해주세요.");
-    }
-  };
-
-  const copyNoticeLink = async (noticeId: number) => {
-    try {
-      await navigator.clipboard.writeText(noticeUrl(window.location.href, noticeId));
-      setToast("공고 링크를 복사했어요.");
-    } catch {
-      setToast("주소창의 링크를 직접 복사해주세요.");
-    }
-  };
-
-  const copySearchLink = async () => {
-    const sharedUrl = new URL(noticeSearchUrl(window.location.href, {
-      query,
-      status: activeStatus,
-      includeClosed,
-      region: region === "전체" ? undefined : region,
-      category: categoryValue(category),
-      supplyType,
-      minPriceManwon: priceInManwon(minPriceManwon),
-      maxPriceManwon: priceInManwon(maxPriceManwon),
-      minArea: priceInManwon(minArea),
-      maxArea: priceInManwon(maxArea),
-      sort: sortKey,
-    }));
-    sharedUrl.searchParams.delete("notice");
-    sharedUrl.searchParams.delete("compare");
-    try {
-      await navigator.clipboard.writeText(sharedUrl.toString());
-      setToast("현재 검색조건 링크를 복사했어요.");
-    } catch {
-      setToast("주소창의 링크를 직접 복사해주세요.");
-    }
-  };
+  const searchShareScope = JSON.stringify([query, activeStatus, includeClosed, region, category, supplyType, minPriceManwon, maxPriceManwon, minArea, maxArea, sortKey, savedOnly, member?.id]);
+  const searchCopy = useLinkCopy(searchShareScope);
+  const noticeCopy = useLinkCopy(JSON.stringify([selected?.id, member?.id]));
+  const comparisonCopy = useLinkCopy(JSON.stringify([comparisonOpen, comparisonIds, member?.id]));
+  const copyComparisonLink = () => comparisonCopy.copy(publicShareUrl(window.location.href, "comparison", comparisonIds), "비교 링크를 복사했어요.");
+  const copyNoticeLink = (noticeId: number) => noticeCopy.copy(publicShareUrl(window.location.href, "notice", [noticeId]), "공고 링크를 복사했어요.");
+  const copySearchLink = () => searchCopy.copy(publicShareUrl(noticeSearchUrl(window.location.href, {
+    query, status: activeStatus, includeClosed, region: region === "전체" ? undefined : region,
+    category: categoryValue(category), supplyType, minPriceManwon: priceInManwon(minPriceManwon),
+    maxPriceManwon: priceInManwon(maxPriceManwon), minArea: priceInManwon(minArea), maxArea: priceInManwon(maxArea), sort: sortKey,
+  }), "search"), "현재 검색조건 링크를 복사했어요.");
 
   const applyQuickFilter = (value: string) => {
     setSavedOnly(false);
@@ -1964,10 +1937,11 @@ export default function Home() {
                 {savedOnly && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={() => downloadCalendar(savedNotices, "cheongyak-saved.ics")}><Icon name="calendar" /> 관심 일정 저장</button>}
                 {savedOnly && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={() => setFavoriteCalendarOpen(true)}><Icon name="calendar" /> 전체 일정 보기</button>}
                 {savedOnly && member && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={downloadFavoriteResults}>내 기록 CSV</button>}
-                <button className="search-share-button" type="button" onClick={() => void copySearchLink()}><Icon name="arrow" /> 검색 공유</button>
+                <button className="search-share-button" type="button" disabled={searchCopy.busy} onClick={() => void copySearchLink()}><Icon name="arrow" /> 검색 공유</button>
                 <button className="filter-button" type="button" onClick={() => setFilterOpen(true)} disabled={loading} aria-label={`청약 필터 열기${activeFilterCount > 0 ? ` ${activeFilterCount}개 적용됨` : ""}`}><Icon name="filter" /> 지역·유형·예산 필터 {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button>
               </div>
             </div>
+            <LinkCopyFeedback state={searchCopy} />
             {!savedOnly && activeFilterLabels.length > 0 && <p className="active-filter-summary" aria-live="polite">적용 중: {activeFilterLabels.join(" · ")}</p>}
 
             {loadRetryPending && (
@@ -2378,7 +2352,8 @@ export default function Home() {
               </div>
             )}
             <AiConsultationPanel key={detailApplication.id} noticeId={detailApplication.id} signedIn={Boolean(member)} />
-            <div className="detail-actions"><button type="button" className="secondary-button" onClick={() => void toggleSaved(detailApplication.id)} disabled={favoritePendingId === detailApplication.id}><Icon name="bookmark" /> {savedIds.has(detailApplication.id) ? "관심 해제" : "관심 저장"}</button><button type="button" className="secondary-button" onClick={() => void copyNoticeLink(detailApplication.id)}>링크 복사</button>{detailApplication.officialUrl ? <a className="primary-button" href={detailApplication.officialUrl} target="_blank" rel="noreferrer">공식 공고 보기 <Icon name="arrow" /></a> : <button type="button" className="primary-button" disabled>공식 링크 확인 중</button>}</div>
+            <LinkCopyFeedback state={noticeCopy} />
+            <div className="detail-actions"><button type="button" className="secondary-button" onClick={() => void toggleSaved(detailApplication.id)} disabled={favoritePendingId === detailApplication.id}><Icon name="bookmark" /> {savedIds.has(detailApplication.id) ? "관심 해제" : "관심 저장"}</button><button type="button" className="secondary-button" disabled={noticeCopy.busy} onClick={() => void copyNoticeLink(detailApplication.id)}>링크 복사</button>{detailApplication.officialUrl ? <a className="primary-button" href={detailApplication.officialUrl} target="_blank" rel="noreferrer">공식 공고 보기 <Icon name="arrow" /></a> : <button type="button" className="primary-button" disabled>공식 링크 확인 중</button>}</div>
           </section>
         </div>
       )}
@@ -2402,7 +2377,8 @@ export default function Home() {
                 </tbody>
               </table>
             </div>
-            <div className="compare-footer"><p>최종 신청 전 공식 공고문의 자격과 일정을 확인하세요.</p><div><button type="button" onClick={copyComparisonLink}>비교 링크 복사</button><button type="button" onClick={() => downloadCalendar(comparisonNotices, "cheongyak-comparison.ics")}><Icon name="calendar" /> 비교 일정 저장</button></div></div>
+            <LinkCopyFeedback state={comparisonCopy} />
+            <div className="compare-footer"><p>최종 신청 전 공식 공고문의 자격과 일정을 확인하세요.</p><div><button type="button" disabled={comparisonCopy.busy} onClick={copyComparisonLink}>비교 링크 복사</button><button type="button" onClick={() => downloadCalendar(comparisonNotices, "cheongyak-comparison.ics")}><Icon name="calendar" /> 비교 일정 저장</button></div></div>
           </section>
         </div>
       )}
