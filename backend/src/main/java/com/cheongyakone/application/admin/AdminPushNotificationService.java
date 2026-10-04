@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.HttpStatus;
 
 import java.time.Clock;
+import static com.cheongyakone.domain.member.MemberNotification.PushCompletionReason.*;
 
 @Service
 public class AdminPushNotificationService {
@@ -36,11 +37,16 @@ public class AdminPushNotificationService {
     public AdminPushNotificationResponse dashboard(String rawToken) {
         memberService.requireAdmin(rawToken);
         var now = clock.instant();
+        var since = now.minus(java.time.Duration.ofHours(24));
         return new AdminPushNotificationResponse(
                 deviceTokenRepository.count(),
                 notificationRepository.countPendingPushDeliveries(MAXIMUM_ATTEMPTS),
                 notificationRepository.countFailedPushDeliveries(MAXIMUM_ATTEMPTS),
-                notificationRepository.countByPushSentAtAfter(now.minus(java.time.Duration.ofHours(24))),
+                notificationRepository.countByPushSentAtAfterAndPushCompletionReason(since, ACCEPTED),
+                notificationRepository.countByPushSentAtAfterAndPushCompletionReason(since, NO_DEVICES),
+                notificationRepository.countByPushSentAtAfterAndPushCompletionReason(since, INVALID_TOKENS),
+                notificationRepository.countByPushSentAtAfterAndPushCompletionReason(since, UNKNOWN)
+                        + notificationRepository.countByPushSentAtAfterAndPushCompletionReasonIsNull(since),
                 notificationRepository.findRecentFailedPushDeliveries(MAXIMUM_ATTEMPTS, PageRequest.of(0, 10)).stream()
                         .map(AdminPushNotificationResponse.Failure::from).toList(),
                 now
@@ -63,3 +69,4 @@ public class AdminPushNotificationService {
         return pushDispatcher.deliverPendingPushes();
     }
 }
+

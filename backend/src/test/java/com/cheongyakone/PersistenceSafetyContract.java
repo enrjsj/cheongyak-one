@@ -103,12 +103,29 @@ abstract class PersistenceSafetyContract {
             }
             assertThat(new MemberPushReceiptStore(jdbc).completed(ids[2]))
                     .containsExactly(MemberPushReceiptStore.hash("test-device"));
+            assertThat(receipts.completionReason(ids[2])).isEqualTo(MemberNotification.PushCompletionReason.UNKNOWN);
+            var since = clock.instant().minusSeconds(1);
+            for (var reason : MemberNotification.PushCompletionReason.values()) {
+                long before = notifications.countByPushSentAtAfterAndPushCompletionReason(since, reason);
+                tx.executeWithoutResult(status -> notifications.findForPushDelivery(ids[2]).orElseThrow()
+                        .markPushCompleted(clock.instant(), reason));
+                assertThat(notifications.countByPushSentAtAfterAndPushCompletionReason(since, reason)).isEqualTo(before + 1);
+            }
+            long legacyBefore = notifications.countByPushSentAtAfterAndPushCompletionReasonIsNull(since);
+            jdbc.update("UPDATE MEMBER_NOTIFICATION SET PUSH_COMPLETION_REASON=NULL WHERE ID=?", ids[2]);
+            assertThat(notifications.countByPushSentAtAfterAndPushCompletionReasonIsNull(since)).isEqualTo(legacyBefore + 1);
             tx.executeWithoutResult(status -> {
                 notifications.findForPushDelivery(ids[2]).orElseThrow();
                 receipts.record(ids[2], List.of("rolled-back-device"), clock.instant());
                 status.setRollbackOnly();
             });
             assertThat(receipts.completed(ids[2])).hasSize(1);
+            tx.executeWithoutResult(status -> {
+                notifications.findForPushDelivery(ids[2]).orElseThrow();
+                receipts.recordAccepted(ids[2], List.of("accepted-device"), clock.instant());
+                receipts.recordInvalid(ids[2], List.of("invalid-device"), clock.instant());
+            });
+            assertThat(receipts.completionReason(ids[2])).isEqualTo(MemberNotification.PushCompletionReason.ACCEPTED);
             jdbc.update("DELETE FROM MEMBER_NOTIFICATION WHERE ID=?", ids[2]);
             assertThat(receipts.completed(ids[2])).isEmpty();
         } finally {
@@ -118,3 +135,4 @@ abstract class PersistenceSafetyContract {
         }
     }
 }
+

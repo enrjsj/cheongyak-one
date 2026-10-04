@@ -15,7 +15,7 @@ class MemberPushReceiptTest {
         var source = new JdbcDataSource();
         source.setURL("jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1");
         var jdbc = new JdbcTemplate(source);
-        jdbc.execute("CREATE TABLE MEMBER_PUSH_RECEIPT (NOTIFICATION_ID BIGINT, TOKEN_HASH VARCHAR(64), COMPLETED_AT TIMESTAMP WITH TIME ZONE, PRIMARY KEY(NOTIFICATION_ID,TOKEN_HASH))");
+        jdbc.execute("CREATE TABLE MEMBER_PUSH_RECEIPT (NOTIFICATION_ID BIGINT, TOKEN_HASH VARCHAR(64), COMPLETED_AT TIMESTAMP WITH TIME ZONE, OUTCOME VARCHAR(24), PRIMARY KEY(NOTIFICATION_ID,TOKEN_HASH))");
         var receipts = new MemberPushReceiptStore(jdbc);
         var members = mock(Member.class);
         when(members.getId()).thenReturn(7L);
@@ -56,3 +56,4 @@ class MemberPushReceiptTest {
         return device;
     }
 }
+

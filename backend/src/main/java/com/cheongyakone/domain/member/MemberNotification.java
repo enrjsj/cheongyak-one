@@ -33,6 +33,11 @@ import java.util.Objects;
         )
 )
 public class MemberNotification {
+    public enum PushCompletionReason { ACCEPTED, NO_DEVICES, INVALID_TOKENS, UNKNOWN }
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "PUSH_COMPLETION_REASON", length = 32)
+    private PushCompletionReason pushCompletionReason;
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "memberNotificationSequence")
@@ -148,7 +153,8 @@ public class MemberNotification {
                 && !pushNextAttemptAt.isAfter(now);
     }
 
-    public void markPushSent(Instant now) {
+    public void markPushCompleted(Instant now, PushCompletionReason reason) {
+        pushCompletionReason = Objects.requireNonNull(reason);
         pushSentAt = Objects.requireNonNull(now);
         pushNextAttemptAt = null;
         pushLastError = null;
@@ -212,6 +218,8 @@ public class MemberNotification {
     }
 
     public int getPushAttempts() { return pushAttempts; }
+    public PushCompletionReason getPushCompletionReason() { return pushCompletionReason; }
     public Instant getPushNextAttemptAt() { return pushNextAttemptAt; }
     public String getPushLastError() { return pushLastError; }
 }
+

@@ -59,7 +59,9 @@ export default function AdminPushNotificationPanel() {
       if (notificationId === -1) {
         const result = await dispatchAdminPushNotifications();
         if (lifetime.current !== epoch) return;
-        setMessage(`대기 푸시 처리 완료: ${result.sentCount}건. 실제 기기 수신 여부와는 다를 수 있습니다.`);
+        setMessage(result.acceptedCount === undefined
+          ? `대기 푸시 처리 완료: ${result.sentCount}건. 구버전 서버의 처리 종료 집계입니다. 실제 기기 수신을 보장하지 않습니다.`
+          : `공급사 접수 확인 후 종료: ${result.acceptedCount}건. 기기 없음·토큰 만료 종료는 제외하며 실제 기기 수신을 보장하지 않습니다.`);
       } else {
         await retryAdminPushNotification(notificationId);
         if (lifetime.current !== epoch) return;
@@ -88,8 +90,14 @@ export default function AdminPushNotificationPanel() {
       <div><span>등록 기기</span><strong>{dashboard.registeredDeviceCount}</strong></div>
       <div><span>발송 대기</span><strong>{dashboard.pendingCount}</strong></div>
       <div className={dashboard.permanentlyFailedCount > 0 ? "danger" : ""}><span>최종 실패</span><strong>{dashboard.permanentlyFailedCount}</strong></div>
-      <div><span>24시간 발송</span><strong>{dashboard.sentLast24Hours}</strong></div>
+      <div><span>{dashboard.unknownLast24Hours === undefined ? "24시간 처리 종료 (구버전)" : "24시간 공급사 접수 확인"}</span><strong>{dashboard.sentLast24Hours}</strong></div>
     </div>
+    {dashboard.unknownLast24Hours === undefined ? <p>서버 업데이트 후 발송 결과를 구분해 표시합니다.</p> : <div className="admin-sync-summary">
+      <div><span>24시간 기기 없음 종료</span><strong>{dashboard.noDevicesLast24Hours}</strong></div>
+      <div><span>24시간 토큰 만료 종료</span><strong>{dashboard.invalidTokensLast24Hours}</strong></div>
+      <div><span>24시간 결과 확인 불가</span><strong>{dashboard.unknownLast24Hours}</strong></div>
+    </div>}
+    <p>알림 건수 기준입니다. 공급사 접수 확인은 하나 이상의 기기가 접수되고 처리가 종료된 경우이며, 실제 기기 수신을 보장하지 않습니다. 이전 기록은 확인 불가로 표시될 수 있습니다.</p>
     <div className="admin-sync-headline"><b>최종 실패 최근 10건</b><span><button type="button" onClick={() => void act(-1)} disabled={disabled}>대기 발송</button><button type="button" onClick={load} disabled={expired || loading || workingId !== undefined}>새로고침</button></span></div>
     <div className="admin-sync-list">
       {dashboard.recentFailures.map((item) => <article key={item.notificationId}>

@@ -32,6 +32,7 @@ class MemberPushSafetyTest {
         when(token.getPushToken()).thenReturn("retry-device");
         when(devices.findAllByMember_IdOrderByUpdatedAtDesc(7L)).thenReturn(List.of(token));
         when(receipts.completed(42L)).thenReturn(java.util.Set.of());
+        when(receipts.completionReason(42L)).thenReturn(MemberNotification.PushCompletionReason.ACCEPTED);
         when(sender.enabled()).thenReturn(true);
         when(sender.send(notification, List.of("retry-device")))
                 .thenReturn(MemberPushSender.PushDeliveryResult.retryableFailure("FCM unavailable"))
@@ -40,14 +41,15 @@ class MemberPushSafetyTest {
         assertThat(delivery.deliver(42L)).isFalse();
         assertThat(notification.getPushAttempts()).isEqualTo(1);
         assertThat(notification.getPushNextAttemptAt()).isEqualTo(now.plusSeconds(60));
-        verify(receipts, times(2)).record(42L, List.of(), now);
+        verify(receipts).recordAccepted(42L, List.of(), now);
+        verify(receipts).recordInvalid(42L, List.of(), now);
         verify(devices, never()).deleteByPushTokenIn(any());
         assertThat(delivery.deliver(42L)).isFalse();
         verify(sender, times(1)).send(any(), any());
         when(clock.instant()).thenReturn(now.plusSeconds(60));
         assertThat(delivery.deliver(42L)).isTrue();
         verify(sender, times(2)).send(notification, List.of("retry-device"));
-        verify(receipts).record(42L, List.of("retry-device"), now.plusSeconds(60));
+        verify(receipts).recordAccepted(42L, List.of("retry-device"), now.plusSeconds(60));
     }
 
     @Test void disabledTransportLeavesQueueUntouched() {

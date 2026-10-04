@@ -118,7 +118,12 @@ public interface MemberNotificationRepository extends JpaRepository<MemberNotifi
 
     long countByPushSentAtAfter(Instant since);
 
+    long countByPushSentAtAfterAndPushCompletionReason(Instant since, MemberNotification.PushCompletionReason reason);
+
+    long countByPushSentAtAfterAndPushCompletionReasonIsNull(Instant since);
+
     @EntityGraph(attributePaths = "notice")
     @Query("select notification from MemberNotification notification where notification.pushDeliveryRequested = true and notification.pushSentAt is null and notification.pushAttempts >= :maximumAttempts order by notification.id desc")
     List<MemberNotification> findRecentFailedPushDeliveries(@Param("maximumAttempts") int maximumAttempts, Pageable pageable);
 }
+

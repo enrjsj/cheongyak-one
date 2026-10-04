@@ -10,6 +10,9 @@ public record AdminPushNotificationResponse(
         long pendingCount,
         long permanentlyFailedCount,
         long sentLast24Hours,
+        long noDevicesLast24Hours,
+        long invalidTokensLast24Hours,
+        long unknownLast24Hours,
         List<Failure> recentFailures,
         Instant generatedAt
 ) {
@@ -20,3 +23,4 @@ public record AdminPushNotificationResponse(
         }
     }
 }
+

@@ -916,6 +916,9 @@ export function reactivateAdminMember(memberId: number): Promise<AdminMember> {
 }
 
 export interface AdminPushNotificationDashboard {
+  noDevicesLast24Hours?: number;
+  invalidTokensLast24Hours?: number;
+  unknownLast24Hours?: number;
   registeredDeviceCount: number;
   pendingCount: number;
   permanentlyFailedCount: number;
@@ -928,8 +931,8 @@ export function fetchAdminPushNotificationDashboard(): Promise<AdminPushNotifica
   return requestJson<AdminPushNotificationDashboard>("/api/v1/admin/notifications/push");
 }
 
-export function dispatchAdminPushNotifications(): Promise<{ sentCount: number }> {
-  return requestJson<{ sentCount: number }>("/api/v1/admin/notifications/push/dispatch", { method: "POST" });
+export function dispatchAdminPushNotifications(): Promise<{ sentCount: number; acceptedCount?: number }> {
+  return requestJson<{ sentCount: number; acceptedCount?: number }>("/api/v1/admin/notifications/push/dispatch", { method: "POST" });
 }
 
 export function retryAdminPushNotification(notificationId: number): Promise<void> {
@@ -939,3 +942,4 @@ export function retryAdminPushNotification(notificationId: number): Promise<void
 export function fetchAdminAuditLogs(): Promise<AdminAuditLog[]> {
   return requestJson<AdminAuditLog[]>("/api/v1/admin/audit-logs");
 }
+
