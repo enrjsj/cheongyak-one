@@ -325,6 +325,91 @@ test("알림 저장 중 세션이 만료되면 추가 저장을 차단한다", a
   expect(saves).toBe(1);
 });
 
+test("닫힌 알림창의 늦은 새로고침이 새 창의 읽지 않은 개수를 덮어쓰지 않는다", async ({ page }) => {
+  await mockApi(page);
+  let delayNext = false;
+  let release!: () => void;
+  let held = false;
+  await page.route("**/api/v1/members/me/notifications", async route => {
+    if (delayNext) {
+      delayNext = false; held = true;
+      await new Promise<void>(resolve => { release = resolve; });
+      return route.fulfill({ json: { notifications: [], unreadCount: 99 } });
+    }
+    return route.fulfill({ json: { notifications: [], unreadCount: 3 } });
+  });
+  await page.goto("/");
+  await signup(page);
+  await page.getByRole("button", { name: "알림 3개", exact: true }).click();
+  await expect(page.getByRole("button", { name: "새로고침", exact: true })).toBeVisible();
+  delayNext = true;
+  await page.getByRole("button", { name: "새로고침", exact: true }).click();
+  await expect.poll(() => held).toBe(true);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "알림 3개", exact: true }).click();
+  await expect(page.getByRole("button", { name: "새로고침", exact: true })).toBeVisible();
+  const completed = page.waitForResponse(async response => response.url().endsWith("/notifications") && (await response.json()).unreadCount === 99);
+  release();
+  await completed;
+  await page.getByRole("tab", { name: "알림 설정", exact: true }).click();
+  await expect(page.getByRole("button", { name: "알림 3개", exact: true })).toBeVisible();
+});
+
+test("이전 알림창의 저장 실패가 다시 연 창에 만료 오류를 표시하지 않는다", async ({ page }) => {
+  await mockApi(page);
+  let release!: () => void;
+  let held = false;
+  await page.route("**/api/v1/members/me/notifications/preference", async route => {
+    if (route.request().method() === "GET") return route.fulfill({ json: { deadline7dEnabled: false } });
+    held = true;
+    await new Promise<void>(resolve => { release = resolve; });
+    return route.fulfill({ status: 401, json: { detail: "old session expired" } });
+  });
+  await page.goto("/");
+  await signup(page);
+  await page.getByRole("button", { name: "알림 0개", exact: true }).click();
+  await page.getByRole("tab", { name: "알림 설정" }).click();
+  await page.getByRole("button", { name: "알림 설정 저장" }).click();
+  await expect.poll(() => held).toBe(true);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "알림 0개", exact: true }).click();
+  await expect(page.getByRole("button", { name: "알림 설정 저장" })).toBeEnabled();
+  const completed = page.waitForResponse(response => response.url().endsWith("/preference") && response.status() === 401);
+  release();
+  await completed;
+  await page.getByRole("checkbox", { name: "마감 7일 전", exact: true }).check();
+  await expect(page.getByRole("button", { name: "알림 설정 저장" })).toBeEnabled();
+  await expect(page.getByText(/다시 로그인한 뒤 알림 창/)).toHaveCount(0);
+});
+
+test("닫힌 알림창의 읽음 응답이 뒤늦게 공고 상세를 열지 않는다", async ({ page }) => {
+  await mockApi(page);
+  const notification = { id: 11, noticeId: 1, noticeTitle: "테스트 일정 알림", type: "APPLY_START",
+    eventDate: "2026-10-04", createdAt: "2026-10-04T00:00:00Z", message: "접수를 확인하세요.", readAt: null };
+  let release!: () => void;
+  let held = false;
+  await page.route("**/api/v1/members/me/notifications", route =>
+    route.fulfill({ json: { notifications: [notification], unreadCount: 1 } }));
+  await page.route("**/api/v1/members/me/notifications/11/read", async route => {
+    held = true;
+    await new Promise<void>(resolve => { release = resolve; });
+    return route.fulfill({ json: { ...notification, readAt: "2026-10-04T01:00:00Z" } });
+  });
+  await page.goto("/");
+  await signup(page);
+  await page.getByRole("button", { name: "알림 1개", exact: true }).click();
+  await page.locator(".notification-item").click();
+  await expect.poll(() => held).toBe(true);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "알림 1개", exact: true }).click();
+  await expect(page.locator(".notification-item")).toBeEnabled();
+  const completed = page.waitForResponse(response => response.url().endsWith("/11/read"));
+  release();
+  await completed;
+  await page.getByRole("tab", { name: "알림 설정" }).click();
+  await expect(page.getByRole("dialog", { name: "맞춤 청약 알림" })).toBeVisible();
+});
+
 test("AI 미연결 상태는 신청 버튼 없이 준비 안내를 표시한다", async ({ page }) => {
   await mockApi(page);
   await page.goto("/");
