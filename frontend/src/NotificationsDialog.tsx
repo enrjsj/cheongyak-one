@@ -2,6 +2,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useDialogAccessibility } from "./useDialogAccessibility";
 import {
+  ApiError,
   fetchNotificationInbox,
   fetchNotificationPreference,
   markAllNotificationsRead,
@@ -86,6 +87,10 @@ export default function NotificationsDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [preferenceLoaded, setPreferenceLoaded] = useState(false);
+  const [preferenceError, setPreferenceError] = useState("");
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [loadVersion, setLoadVersion] = useState(0);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date>();
   const dialogRef = useDialogAccessibility<HTMLElement>(open, onClose);
 
@@ -99,6 +104,7 @@ export default function NotificationsDialog({
       setError("");
     } catch (requestError) {
       if (showProgress) setError(requestError instanceof Error ? requestError.message : "알림을 불러오지 못했습니다.");
+      if (requestError instanceof ApiError && requestError.status === 401) setSessionExpired(true);
     } finally {
       if (showProgress) setLoading(false);
     }
@@ -110,11 +116,17 @@ export default function NotificationsDialog({
     setLoading(true);
     setError("");
     setNotice("");
+    setPreferenceLoaded(false);
+    setPreferenceError("");
+    setSessionExpired(false);
     setFilter("ALL");
     setChannels(DEFAULT_OUTBOUND_CHANNELS);
     Promise.allSettled([fetchNotificationInbox(), fetchNotificationPreference(), fetchNotificationChannelAvailability()])
       .then(([inboxResult, preferenceResult, channelResult]) => {
         if (cancelled) return;
+        const expired = [inboxResult, preferenceResult, channelResult].some(result =>
+          result.status === "rejected" && result.reason instanceof ApiError && result.reason.status === 401);
+        setSessionExpired(expired);
         if (inboxResult.status === "fulfilled") {
           setInbox(inboxResult.value);
           setLastUpdatedAt(new Date());
@@ -125,8 +137,9 @@ export default function NotificationsDialog({
         if (preferenceResult.status === "fulfilled") {
           // 순차 배포 중 이전 백엔드 응답에 신규 설정값이 없어도 체크박스를 안정적으로 유지한다.
           setPreference({ ...DEFAULT_PREFERENCE, ...preferenceResult.value });
-        } else if (inboxResult.status === "fulfilled") {
-          setError("알림은 불러왔지만 알림 설정을 확인하지 못했습니다.");
+          setPreferenceLoaded(true);
+        } else {
+          setPreferenceError("기존 알림 설정을 확인하지 못했습니다. 설정을 다시 불러온 뒤 저장해주세요.");
         }
         if (channelResult.status === "fulfilled" && Array.isArray(channelResult.value.channels)) {
           setChannels(channelResult.value.channels);
@@ -136,10 +149,10 @@ export default function NotificationsDialog({
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [open, onUnreadCountChange]);
+  }, [open, onUnreadCountChange, loadVersion]);
 
   useEffect(() => {
-    if (!open || tab !== "inbox") return;
+    if (!open || tab !== "inbox" || sessionExpired) return;
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") void refreshInbox();
     };
@@ -149,7 +162,7 @@ export default function NotificationsDialog({
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [open, tab]);
+  }, [open, tab, sessionExpired]);
 
   const filteredNotifications = useMemo(() => filterNotifications(inbox.notifications, filter), [filter, inbox.notifications]);
   const filterOptions = useMemo(() => notificationFilterOptions(inbox.notifications), [inbox.notifications]);
@@ -157,6 +170,7 @@ export default function NotificationsDialog({
   if (!open) return null;
 
   const openNotification = async (notification: MemberNotification) => {
+    if (sessionExpired) return;
     if (!notification.readAt) {
       setBusyId(notification.id);
       try {
@@ -169,6 +183,7 @@ export default function NotificationsDialog({
         onUnreadCountChange(nextUnreadCount);
       } catch (requestError) {
         setError(requestError instanceof Error ? requestError.message : "알림을 읽음 처리하지 못했습니다.");
+        if (requestError instanceof ApiError && requestError.status === 401) setSessionExpired(true);
         setBusyId(undefined);
         return;
       }
@@ -178,6 +193,7 @@ export default function NotificationsDialog({
   };
 
   const readAll = async () => {
+    if (sessionExpired || saving) return;
     setSaving(true);
     setError("");
     try {
@@ -190,6 +206,7 @@ export default function NotificationsDialog({
       onUnreadCountChange(0);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "알림을 읽음 처리하지 못했습니다.");
+      if (requestError instanceof ApiError && requestError.status === 401) setSessionExpired(true);
     } finally {
       setSaving(false);
     }
@@ -197,6 +214,7 @@ export default function NotificationsDialog({
 
   const savePreference = async (event: FormEvent) => {
     event.preventDefault();
+    if (!preferenceLoaded || sessionExpired || saving || loading) return;
     setSaving(true);
     setError("");
     setNotice("");
@@ -215,6 +233,7 @@ export default function NotificationsDialog({
       setNotice("알림 설정을 저장했습니다.");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "알림 설정을 저장하지 못했습니다.");
+      if (requestError instanceof ApiError && requestError.status === 401) setSessionExpired(true);
     } finally {
       setSaving(false);
     }
@@ -238,14 +257,14 @@ export default function NotificationsDialog({
           <div className="notification-inbox">
             <div className="notification-inbox-actions">
               <small aria-live="polite">{lastUpdatedAt ? `${lastUpdatedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 확인` : "확인 전"}</small>
-              <button type="button" onClick={() => void refreshInbox(true)} disabled={loading || saving}>새로고침</button>
-              {inbox.unreadCount > 0 && <button className="read-all-button" type="button" onClick={() => void readAll()} disabled={saving}>모두 읽음</button>}
+              <button type="button" onClick={() => void refreshInbox(true)} disabled={loading || saving || sessionExpired}>새로고침</button>
+              {inbox.unreadCount > 0 && <button className="read-all-button" type="button" onClick={() => void readAll()} disabled={saving || sessionExpired}>모두 읽음</button>}
             </div>
             {inbox.notifications.length > 0 && <div className="notification-filter" role="group" aria-label="알림 분류">
               {filterOptions.map((option) => <button key={option.value} type="button" className={filter === option.value ? "active" : ""} onClick={() => setFilter(option.value)}>{option.label}</button>)}
             </div>}
             {filteredNotifications.map((item) => (
-              <button className={`notification-item${item.readAt ? " read" : ""}`} type="button" key={item.id} disabled={busyId !== undefined} onClick={() => void openNotification(item)}>
+              <button className={`notification-item${item.readAt ? " read" : ""}`} type="button" key={item.id} disabled={busyId !== undefined || sessionExpired} onClick={() => void openNotification(item)}>
                 <span className="notification-dot" aria-hidden="true"></span>
                 <span><b>{item.noticeTitle}</b><small>{item.message}</small><em><strong>{notificationCategoryLabel(item.type)}</strong>{notificationDateLabel(item)}</em></span>
                 <span aria-hidden="true">›</span>
@@ -256,19 +275,22 @@ export default function NotificationsDialog({
         ) : (
           <form className="notification-settings" onSubmit={(event) => void savePreference(event)}>
             <p>관심청약 일정과 저장한 검색조건 알림을 선택하세요.</p>
+            {preferenceError && <div role="alert"><p>{preferenceError}</p>
+              {!sessionExpired && <button type="button" onClick={() => setLoadVersion(value => value + 1)}>설정 다시 불러오기</button>}
+            </div>}
             {PREFERENCE_OPTIONS.map((option) => (
               <label key={option.key}>
                 <span>{option.label}</span>
-                <input type="checkbox" checked={preference[option.key]} onChange={(event) => setPreference((current) => ({ ...current, [option.key]: event.target.checked }))} />
+                <input type="checkbox" disabled={!preferenceLoaded || saving || sessionExpired} checked={preference[option.key]} onChange={(event) => setPreference((current) => ({ ...current, [option.key]: event.target.checked }))} />
               </label>
             ))}
             <label className="email-notification-option">
               <span><b>이메일로도 받기</b><small>인증한 회원 이메일로 선택한 일정을 보내드려요.</small></span>
-              <input type="checkbox" checked={preference.emailEnabled} onChange={(event) => setPreference((current) => ({ ...current, emailEnabled: event.target.checked }))} />
+              <input type="checkbox" disabled={!preferenceLoaded || saving || sessionExpired} checked={preference.emailEnabled} onChange={(event) => setPreference((current) => ({ ...current, emailEnabled: event.target.checked }))} />
             </label>
             <label className="email-notification-option">
               <span><b>앱 푸시로 받기</b><small>하이브리드 앱에서 알림 권한과 기기를 등록한 경우에만 발송돼요.</small></span>
-              <input type="checkbox" checked={preference.appPushEnabled} onChange={(event) => setPreference((current) => ({ ...current, appPushEnabled: event.target.checked }))} />
+              <input type="checkbox" disabled={!preferenceLoaded || saving || sessionExpired} checked={preference.appPushEnabled} onChange={(event) => setPreference((current) => ({ ...current, appPushEnabled: event.target.checked }))} />
             </label>
             <div className="notification-channel-status" aria-label="외부 알림 채널 상태">
               <b>알림 채널 연결 상태</b>
@@ -280,11 +302,12 @@ export default function NotificationsDialog({
                 </div>
               ))}
             </div>
-            <button className="primary-button" type="submit" disabled={saving}>{saving ? "저장 중…" : "알림 설정 저장"}</button>
+            <button className="primary-button" type="submit" disabled={saving || !preferenceLoaded || sessionExpired}>{saving ? "저장 중…" : "알림 설정 저장"}</button>
           </form>
         )}
         {notice && <p className="member-message success" role="status">{notice}</p>}
         {error && <p className="member-message error" role="alert">{error}</p>}
+        {sessionExpired && <p className="member-message error" role="alert">로그인이 만료되었습니다. 다시 로그인한 뒤 알림 창을 열어주세요.</p>}
       </section>
     </div>
   );
