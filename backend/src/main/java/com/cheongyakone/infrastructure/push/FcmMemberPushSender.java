@@ -8,6 +8,10 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.messaging.BatchResponse;
+import com.google.firebase.messaging.AndroidConfig;
+import com.google.firebase.messaging.AndroidNotification;
+import com.google.firebase.messaging.ApnsConfig;
+import com.google.firebase.messaging.Aps;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.MulticastMessage;
@@ -54,18 +58,8 @@ public class FcmMemberPushSender implements MemberPushSender {
     @Override
     public PushDeliveryResult send(MemberNotification notification, List<String> pushTokens) {
         if (pushTokens.isEmpty()) return PushDeliveryResult.none();
-        MulticastMessage.Builder builder = MulticastMessage.builder()
-                .addAllTokens(pushTokens)
-                .putData("notificationId", String.valueOf(notification.getId()))
-                .putData("noticeId", String.valueOf(notification.getNoticeId()))
-                .putData("type", notification.getType().name())
-                .putData("deepLink", "cheongyakone://notices/" + notification.getNoticeId())
-                .setNotification(com.google.firebase.messaging.Notification.builder()
-                        .setTitle(notification.getNoticeTitle())
-                        .setBody(notification.getType().message())
-                        .build());
         try {
-            BatchResponse response = messaging.sendEachForMulticast(builder.build());
+            BatchResponse response = messaging.sendEachForMulticast(buildMessage(notification, pushTokens));
             List<String> invalidTokens = new ArrayList<>();
             List<String> successfulTokens = new ArrayList<>();
             for (int index = 0; index < response.getResponses().size(); index++) {
@@ -92,6 +86,33 @@ public class FcmMemberPushSender implements MemberPushSender {
         }
     }
 
+    static MulticastMessage buildMessage(MemberNotification notification, List<String> pushTokens) {
+        if (notification.getId() == null || notification.getId() <= 0) {
+            throw new IllegalArgumentException("A persisted notification is required for push delivery");
+        }
+        // Reuse this identity after ambiguous delivery/DB failures. This mitigates duplicate
+        // display, not duplicate delivery; separate notification events must not share a key.
+        String displayKey = "cheongyak-notification-" + notification.getId();
+        return MulticastMessage.builder()
+                .addAllTokens(pushTokens)
+                .putData("notificationId", String.valueOf(notification.getId()))
+                .putData("noticeId", String.valueOf(notification.getNoticeId()))
+                .putData("type", notification.getType().name())
+                .putData("deepLink", "cheongyakone://notices/" + notification.getNoticeId())
+                .setNotification(com.google.firebase.messaging.Notification.builder()
+                        .setTitle(notification.getNoticeTitle())
+                        .setBody(notification.getType().message())
+                        .build())
+                .setAndroidConfig(AndroidConfig.builder()
+                        .setNotification(AndroidNotification.builder().setTag(displayKey).build())
+                        .build())
+                .setApnsConfig(ApnsConfig.builder()
+                        .putHeader("apns-collapse-id", displayKey)
+                        .setAps(Aps.builder().build())
+                        .build())
+                .build();
+    }
+
     private boolean isInvalidToken(FirebaseMessagingException exception) {
         return exception != null && isExpiredToken(exception.getMessagingErrorCode());
     }
@@ -101,3 +122,4 @@ public class FcmMemberPushSender implements MemberPushSender {
         return code == com.google.firebase.messaging.MessagingErrorCode.UNREGISTERED;
     }
 }
+
