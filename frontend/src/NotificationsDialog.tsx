@@ -1,5 +1,5 @@
 // 읽음 처리와 공고 상세 이동을 제공하는 회원 알림함 모달이다.
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useDialogAccessibility } from "./useDialogAccessibility";
 import {
   ApiError,
@@ -91,29 +91,41 @@ export default function NotificationsDialog({
   const [preferenceError, setPreferenceError] = useState("");
   const [sessionExpired, setSessionExpired] = useState(false);
   const [loadVersion, setLoadVersion] = useState(0);
+  // A request can finish after Escape closes the dialog or another session opens it.
+  const requestScope = useRef(0);
+  const refreshSequence = useRef(0);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date>();
   const dialogRef = useDialogAccessibility<HTMLElement>(open, onClose);
 
   const refreshInbox = async (showProgress = false) => {
+    const scope = requestScope.current;
+    const sequence = ++refreshSequence.current;
+    const current = () => scope === requestScope.current && sequence === refreshSequence.current;
     if (showProgress) setLoading(true);
     try {
       const result = await fetchNotificationInbox();
+      if (!current()) return;
       setInbox(result);
       setLastUpdatedAt(new Date());
       onUnreadCountChange(result.unreadCount);
       setError("");
     } catch (requestError) {
+      if (!current()) return;
       if (showProgress) setError(requestError instanceof Error ? requestError.message : "알림을 불러오지 못했습니다.");
       if (requestError instanceof ApiError && requestError.status === 401) setSessionExpired(true);
     } finally {
-      if (showProgress) setLoading(false);
+      if (current()) setLoading(false);
     }
   };
 
   useEffect(() => {
+    ++requestScope.current;
+    ++refreshSequence.current;
     if (!open) return;
     let cancelled = false;
     setLoading(true);
+    setSaving(false);
+    setBusyId(undefined);
     setError("");
     setNotice("");
     setPreferenceLoaded(false);
@@ -148,11 +160,11 @@ export default function NotificationsDialog({
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; ++requestScope.current; ++refreshSequence.current; };
   }, [open, onUnreadCountChange, loadVersion]);
 
   useEffect(() => {
-    if (!open || tab !== "inbox" || sessionExpired) return;
+    if (!open || tab !== "inbox" || sessionExpired || loading || saving || busyId !== undefined) return;
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") void refreshInbox();
     };
@@ -162,7 +174,7 @@ export default function NotificationsDialog({
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [open, tab, sessionExpired]);
+  }, [open, tab, sessionExpired, loading, saving, busyId]);
 
   const filteredNotifications = useMemo(() => filterNotifications(inbox.notifications, filter), [filter, inbox.notifications]);
   const filterOptions = useMemo(() => notificationFilterOptions(inbox.notifications), [inbox.notifications]);
@@ -171,10 +183,13 @@ export default function NotificationsDialog({
 
   const openNotification = async (notification: MemberNotification) => {
     if (sessionExpired) return;
+    const scope = requestScope.current;
+    ++refreshSequence.current;
     if (!notification.readAt) {
       setBusyId(notification.id);
       try {
         const updated = await markNotificationRead(notification.id);
+        if (scope !== requestScope.current) return;
         const nextUnreadCount = Math.max(0, inbox.unreadCount - 1);
         setInbox((current) => ({
           unreadCount: nextUnreadCount,
@@ -182,6 +197,7 @@ export default function NotificationsDialog({
         }));
         onUnreadCountChange(nextUnreadCount);
       } catch (requestError) {
+        if (scope !== requestScope.current) return;
         setError(requestError instanceof Error ? requestError.message : "알림을 읽음 처리하지 못했습니다.");
         if (requestError instanceof ApiError && requestError.status === 401) setSessionExpired(true);
         setBusyId(undefined);
@@ -189,15 +205,18 @@ export default function NotificationsDialog({
       }
       setBusyId(undefined);
     }
-    onOpenNotice(notification.noticeId);
+    if (scope === requestScope.current) onOpenNotice(notification.noticeId);
   };
 
   const readAll = async () => {
     if (sessionExpired || saving) return;
+    const scope = requestScope.current;
+    ++refreshSequence.current;
     setSaving(true);
     setError("");
     try {
       await markAllNotificationsRead();
+      if (scope !== requestScope.current) return;
       const readAt = new Date().toISOString();
       setInbox((current) => ({
         unreadCount: 0,
@@ -205,21 +224,23 @@ export default function NotificationsDialog({
       }));
       onUnreadCountChange(0);
     } catch (requestError) {
+      if (scope !== requestScope.current) return;
       setError(requestError instanceof Error ? requestError.message : "알림을 읽음 처리하지 못했습니다.");
       if (requestError instanceof ApiError && requestError.status === 401) setSessionExpired(true);
     } finally {
-      setSaving(false);
+      if (scope === requestScope.current) setSaving(false);
     }
   };
 
   const savePreference = async (event: FormEvent) => {
     event.preventDefault();
     if (!preferenceLoaded || sessionExpired || saving || loading) return;
+    const scope = requestScope.current;
     setSaving(true);
     setError("");
     setNotice("");
     try {
-      setPreference(await saveNotificationPreference({
+      const updated = await saveNotificationPreference({
         applyStartEnabled: preference.applyStartEnabled,
         deadline7dEnabled: preference.deadline7dEnabled,
         deadline3dEnabled: preference.deadline3dEnabled,
@@ -229,13 +250,16 @@ export default function NotificationsDialog({
         noticeUpdatedEnabled: preference.noticeUpdatedEnabled,
         emailEnabled: preference.emailEnabled,
         appPushEnabled: preference.appPushEnabled,
-      }));
+      });
+      if (scope !== requestScope.current) return;
+      setPreference(updated);
       setNotice("알림 설정을 저장했습니다.");
     } catch (requestError) {
+      if (scope !== requestScope.current) return;
       setError(requestError instanceof Error ? requestError.message : "알림 설정을 저장하지 못했습니다.");
       if (requestError instanceof ApiError && requestError.status === 401) setSessionExpired(true);
     } finally {
-      setSaving(false);
+      if (scope === requestScope.current) setSaving(false);
     }
   };
 
