@@ -1,4 +1,4 @@
-import { expect, Page, test } from "@playwright/test";
+import { expect, Page, Route, test } from "@playwright/test";
 
 const notices = [
   { id: 1, sourceSystem: "REB_APT", housingCategory: "APARTMENT", status: "OPEN", title: "E2E 서울 공공분양", regionCode: "서울", address: "서울특별시 강남구", noticeDate: "2026-09-01", applyStartDate: "2026-09-10", applyEndDate: "2026-09-20", winnerAnnounceDate: "2026-09-30", totalUnits: 120, minPrice: 500000000, maxPrice: 600000000, officialUrl: "https://applyhome.example/1", syncedAt: "2026-09-01T00:00:00Z" },
@@ -108,6 +108,189 @@ async function signup(page: Page) {
   await page.getByRole("checkbox", { name: /개인정보 처리방침 동의/ }).check();
   await page.getByRole("button", { name: "가입 완료하기" }).click();
   await expect(page.getByRole("button", { name: "테스트 회원" })).toBeVisible();
+}
+
+// Deliberately ignore AbortSignal for consultation POSTs: stale-response protection
+// must work even if a transport cannot cancel an already-started request.
+async function ignoreConsultationAbort(page: Page) {
+  await page.addInitScript(() => {
+    const original = window.fetch.bind(window);
+    window.fetch = (input, init) => original(input,
+      String(input).endsWith("/ai-consultations") && init?.method === "POST" ? { ...init, signal: undefined } : init);
+  });
+}
+
+for (const scenario of ["다른 공고", "같은 공고 재열기", "대기 취소 후 재요청"]) {
+  test(`상담 이전 응답은 ${scenario}의 새 답변을 덮어쓰지 않는다`, async ({ page }) => {
+    await mockApi(page);
+    await ignoreConsultationAbort(page);
+    let pending: Route | undefined;
+    let calls = 0;
+    await page.route("**/api/v1/members/me/ai-consultations**", route => {
+      if (route.request().method() === "GET") return route.fulfill({ json: { available: true } });
+      if (++calls === 1) { pending = route; return; }
+      return route.fulfill({ json: { answer: "현재 공고의 새 답변", disclaimer: "공식 공고 확인", noticeSyncedAt: "2026-10-04T00:00:00Z" } });
+    });
+    await page.goto("/"); await signup(page);
+    await page.locator("article").filter({ hasText: notices[0].title }).getByRole("button", { name: /공고 핵심만 보기/ }).click();
+    const panel = page.locator(".ai-consultation");
+    await panel.getByRole("checkbox").check();
+    await panel.getByRole("button", { name: "확인 항목 정리하기" }).click();
+    await expect.poll(() => Boolean(pending)).toBe(true);
+    if (scenario === "대기 취소 후 재요청") {
+      await panel.getByRole("button", { name: "응답 대기 취소" }).click();
+    } else {
+      await page.getByRole("dialog").getByLabel("닫기", { exact: true }).click();
+      await page.locator("article").filter({ hasText: notices[scenario === "다른 공고" ? 1 : 0].title }).getByRole("button", { name: /공고 핵심만 보기/ }).click();
+      await expect(panel.getByRole("checkbox")).not.toBeChecked();
+      await panel.getByRole("checkbox").check();
+    }
+    await panel.getByRole("button", { name: /확인 항목 정리하기|답변 다시 요청/ }).click();
+    await expect(panel.getByText("현재 공고의 새 답변")).toBeVisible();
+    const received = page.waitForResponse(response => response.url().endsWith("/ai-consultations"));
+    await pending!.fulfill(scenario === "같은 공고 재열기"
+      ? { status: 401, json: { detail: "이전 요청의 세션 만료" } }
+      : { json: { answer: "이전 공고의 늦은 답변", disclaimer: "old" } });
+    await (await received).finished();
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(panel.getByText("현재 공고의 새 답변")).toBeVisible();
+    await expect(panel.getByText("이전 공고의 늦은 답변")).toHaveCount(0);
+    await expect(panel.getByRole("alert")).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: "확인 항목 정리하기" })).toBeEnabled();
+    expect(calls).toBe(2);
+  });
+}
+
+const pushDashboard = {
+  registeredDeviceCount: 2, pendingCount: 0, permanentlyFailedCount: 1, sentLast24Hours: 0,
+  recentFailures: [{ notificationId: 42, noticeTitle: "실패한 푸시 공고", type: "APPLY_START", attempts: 5, error: "FCM unavailable" }],
+  generatedAt: "2026-10-04T00:00:00Z",
+};
+
+async function openPushAdmin(page: Page) {
+  await page.route("**/api/v1/admin/sync-executions", route => route.fulfill({ json: { runningCount: 0, failuresLast24Hours: 0, executions: [] } }));
+  await page.goto("/"); await signup(page);
+  await page.getByRole("button", { name: "운영 관리" }).click();
+  await page.getByRole("tab", { name: "푸시 발송" }).click();
+}
+
+test("관리자 푸시 재시도는 결과 갱신까지 중복 요청을 차단하고 발송 결과를 구분한다", async ({ page }) => {
+  await mockApi(page, { admin: true });
+  let queued = false;
+  let retryCalls = 0;
+  let dispatchCalls = 0;
+  let pending: Route | undefined;
+  await page.route("**/api/v1/admin/notifications/push**", route => {
+    const url = route.request().url();
+    if (url.endsWith("/retry")) { retryCalls++; queued = true; return route.fulfill({ status: 204 }); }
+    if (url.endsWith("/dispatch")) { dispatchCalls++; return route.fulfill({ json: { sentCount: 1 } }); }
+    if (queued && !dispatchCalls) { pending = route; return; }
+    return route.fulfill({ json: dispatchCalls ? { ...pushDashboard, recentFailures: [], permanentlyFailedCount: 0, sentLast24Hours: 1 } : pushDashboard });
+  });
+  await openPushAdmin(page);
+  const panel = page.locator(".admin-push-panel");
+  await panel.getByRole("button", { name: "재시도", exact: true }).evaluate((button: HTMLButtonElement) => { button.click(); button.click(); });
+  await expect.poll(() => Boolean(pending)).toBe(true);
+  await expect(panel.getByRole("button", { name: "처리 중…" })).toBeDisabled();
+  await expect(panel.getByRole("button", { name: "대기 발송" })).toBeDisabled();
+  await expect(panel.getByRole("button", { name: "새로고침" })).toBeDisabled();
+  expect(retryCalls).toBe(1);
+  await pending!.fulfill({ json: { ...pushDashboard, recentFailures: [], permanentlyFailedCount: 0, pendingCount: 1 } });
+  await expect(panel.getByText(/실제 발송 완료를 의미하지 않습니다/)).toBeVisible();
+  await expect(panel.getByText("최종 실패한 푸시가 없습니다.")).toBeVisible();
+  await panel.getByRole("button", { name: "대기 발송" }).click();
+  await expect(panel.getByText(/대기 푸시 처리 완료: 1건/)).toBeVisible();
+  expect(dispatchCalls).toBe(1);
+});
+
+test("관리자 푸시 재시도 성공 후 조회 실패는 재발송 없이 현황만 복구한다", async ({ page }) => {
+  await mockApi(page, { admin: true });
+  let queued = false;
+  let recovered = false;
+  let retryCalls = 0;
+  await page.route("**/api/v1/admin/notifications/push**", route => {
+    if (route.request().method() === "POST") { retryCalls++; queued = true; return route.fulfill({ status: 204 }); }
+    if (queued && !recovered) return route.fulfill({ status: 503, json: { detail: "현황 조회 실패" } });
+    return route.fulfill({ json: recovered ? { ...pushDashboard, recentFailures: [], permanentlyFailedCount: 0, pendingCount: 1 } : pushDashboard });
+  });
+  await openPushAdmin(page);
+  const panel = page.locator(".admin-push-panel");
+  await panel.getByRole("button", { name: "재시도", exact: true }).click();
+  await expect(panel.getByRole("alert")).toContainText("현황 조회 실패");
+  await expect(panel.getByText(/재시도 대기열에 등록했습니다/)).toBeVisible();
+  await expect(panel.getByRole("button", { name: "재시도", exact: true })).toBeDisabled();
+  recovered = true;
+  await panel.getByRole("button", { name: "현황 다시 불러오기" }).click();
+  await expect(panel.getByText("최종 실패한 푸시가 없습니다.")).toBeVisible();
+  expect(retryCalls).toBe(1);
+});
+
+test("관리자 푸시 초기 조회와 발송 오류를 현황 재조회로 복구한다", async ({ page }) => {
+  await mockApi(page, { admin: true });
+  let recovered = false;
+  let posts = 0;
+  await page.route("**/api/v1/admin/notifications/push**", route => {
+    if (route.request().method() === "POST") { posts++; return route.fulfill({ status: 503, json: { detail: "발송 결과 확인 불가" } }); }
+    return recovered ? route.fulfill({ json: pushDashboard }) : route.fulfill({ status: 503, json: { detail: "초기 조회 실패" } });
+  });
+  await openPushAdmin(page);
+  const panel = page.locator(".admin-push-panel");
+  await expect(panel.getByRole("alert")).toContainText("초기 조회 실패");
+  recovered = true;
+  await panel.getByRole("button", { name: "현황 다시 불러오기" }).click();
+  await panel.getByRole("button", { name: "대기 발송" }).click();
+  await expect(panel.getByRole("alert")).toContainText("발송 결과 확인 불가");
+  await expect(panel.getByRole("button", { name: "대기 발송" })).toBeDisabled();
+  await panel.getByRole("button", { name: "현황 다시 불러오기" }).click();
+  await expect(panel.getByRole("button", { name: "대기 발송" })).toBeEnabled();
+  expect(posts).toBe(1);
+});
+
+test("닫힌 관리자 푸시 화면의 늦은 재시도 응답은 새 화면을 갱신하지 않는다", async ({ page }) => {
+  await mockApi(page, { admin: true });
+  let pending: Route | undefined;
+  let reads = 0;
+  await page.route("**/api/v1/admin/notifications/push**", route => {
+    if (route.request().method() === "POST") { pending = route; return; }
+    reads++;
+    return route.fulfill({ json: pushDashboard });
+  });
+  await openPushAdmin(page);
+  const panel = page.locator(".admin-push-panel");
+  await panel.getByRole("button", { name: "재시도", exact: true }).click();
+  await expect.poll(() => Boolean(pending)).toBe(true);
+  await page.getByRole("dialog").getByLabel("닫기", { exact: true }).click();
+  await page.getByRole("button", { name: "운영 관리" }).click();
+  await expect(panel.getByRole("button", { name: "재시도", exact: true })).toBeEnabled();
+  const before = reads;
+  const received = page.waitForResponse(response => response.url().endsWith("/42/retry"));
+  await pending!.fulfill({ status: 204 });
+  // A 204 has no body to drain; wait for its headers and React's next paint.
+  await received;
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  expect(reads).toBe(before);
+  await expect(panel.getByText(/재시도 대기열에 등록했습니다/)).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "재시도", exact: true })).toBeEnabled();
+});
+
+for (const status of [401, 403]) {
+  test(`관리자 푸시 ${status} 응답 후 추가 발송과 조회를 차단한다`, async ({ page }) => {
+    await mockApi(page, { admin: true });
+    let posts = 0;
+    await page.route("**/api/v1/admin/notifications/push**", route => {
+      if (route.request().method() === "POST") { posts++; return route.fulfill({ status, json: { detail: "권한 없음" } }); }
+      return route.fulfill({ json: pushDashboard });
+    });
+    await openPushAdmin(page);
+    const panel = page.locator(".admin-push-panel");
+    await panel.getByRole("button", { name: "재시도", exact: true }).click();
+    await expect(panel.getByRole("alert")).toContainText("다시 로그인해주세요");
+    await expect(panel.getByRole("button", { name: "재시도", exact: true })).toBeDisabled();
+    await expect(panel.getByRole("button", { name: "대기 발송" })).toBeDisabled();
+    await expect(panel.getByRole("button", { name: "새로고침" })).toBeDisabled();
+    await expect(panel.getByRole("button", { name: "현황 다시 불러오기" })).toHaveCount(0);
+    expect(posts).toBe(1);
+  });
 }
 
 test("AI 상담은 로그인과 동의 후 실행하고 답변을 안전한 텍스트로 표시한다", async ({ page }) => {
@@ -669,3 +852,4 @@ test("저장 조건을 수정하고 신규 공고 알림을 개별로 끈다", a
   await page.getByRole("button", { name: "신규 알림 켜짐", exact: true }).click();
   await expect(page.getByRole("button", { name: "신규 알림 꺼짐", exact: true })).toBeVisible();
 });
+
