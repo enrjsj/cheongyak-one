@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import AppErrorBoundary from "./AppErrorBoundary";
 import "./index.css";
 
 // 개발 서버의 오래된 자산 캐시를 피하고, 배포된 공개 화면에서만 설치형 앱을 활성화한다.
@@ -14,6 +15,6 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <AppErrorBoundary><App /></AppErrorBoundary>
   </StrictMode>
 );

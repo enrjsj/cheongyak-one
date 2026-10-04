@@ -1025,3 +1025,13 @@ footer { background: var(--navy); color: white; }
 .profile-editor-summary b { color: #233759; font-size: 12px; }
 .profile-editor-summary p { margin: 0; font-size: 13px; }
 .profile-editor-summary small { color: #71809a; line-height: 1.5; }
+/* Recovery UI remains usable at narrow widths and high zoom. */
+.app-recovery { max-width: 640px; margin: 10vh auto; padding: 24px; line-height: 1.7; }
+.app-recovery button { min-height: 44px; padding: 10px 16px; margin: 8px 8px 0 0; }
+.connection-banner { padding: 16px 24px; background: #fff5d8; color: #493900; line-height: 1.6; overflow-wrap: anywhere; }
+.connection-banner p { margin: 4px 0; }
+html { scroll-padding-block: 100px; }
+@media (max-width: 680px) {
+  html { scroll-padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
+  .detail-link { scroll-margin-block: 100px; }
+}

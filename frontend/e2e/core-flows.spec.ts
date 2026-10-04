@@ -1478,7 +1478,7 @@ test("Render 기동 중 첫 공고 요청이 실패하면 자동으로 다시 �
   await mockApi(page, { failInitialNoticeLoad: true });
   await page.goto("/");
 
-  await expect(page.getByText(/서버를 깨우는 중이에요/)).toBeVisible();
+  await expect(page.getByText(/서버에 연결하지 못했어요/)).toBeVisible();
   await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible({ timeout: 7_000 });
 });
 
@@ -1494,19 +1494,19 @@ test("503 응답이 세 번 이어져도 대기 안내를 유지하고 공고를
   await expect(page.getByText(/14초 후 자동으로 다시 시도/)).toBeVisible();
   await page.clock.fastForward(15_000);
   await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
-  await expect(page.getByText(/서버를 깨우는 중이에요/)).toHaveCount(0);
+  await expect(page.getByText(/서버에 연결하지 못했어요/)).toHaveCount(0);
 });
 
 test("자동 대기 시간이 지나면 중단하고 수동 재시도로 새 대기를 시작한다", async ({ page }) => {
   await page.clock.install();
   await mockApi(page, { failNoticeLoads: Infinity, noticeFailureStatus: 503 });
   await page.goto("/");
-  await expect(page.getByText(/서버를 깨우는 중이에요/)).toBeVisible();
+  await expect(page.getByText(/서버에 연결하지 못했어요/)).toBeVisible();
   await page.clock.fastForward(5 * 60_000 + 1_000);
   await expect(page.getByRole("alert")).toBeVisible();
-  await expect(page.getByText(/서버를 깨우는 중이에요/)).toHaveCount(0);
+  await expect(page.getByText(/서버에 연결하지 못했어요/)).toHaveCount(0);
   await page.getByRole("button", { name: "다시 불러오기", exact: true }).click();
-  await expect(page.getByText(/서버를 깨우는 중이에요/)).toBeVisible();
+  await expect(page.getByText(/서버에 연결하지 못했어요/)).toBeVisible();
 });
 
 test("요청 오류는 자동 재시도하지 않고 검색 조건 변경은 이전 대기를 취소한다", async ({ page }) => {
@@ -1524,10 +1524,10 @@ test("요청 오류는 자동 재시도하지 않고 검색 조건 변경은 이
   expect(requests).toBe(1);
   options.noticeFailureStatus = 503;
   await page.getByRole("button", { name: "다시 불러오기", exact: true }).click();
-  await expect(page.getByText(/서버를 깨우는 중이에요/)).toBeVisible();
+  await expect(page.getByText(/서버에 연결하지 못했어요/)).toBeVisible();
   await page.getByRole("tab", { name: /접수중/ }).click();
   await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
-  await expect(page.getByText(/서버를 깨우는 중이에요/)).toHaveCount(0);
+  await expect(page.getByText(/서버에 연결하지 못했어요/)).toHaveCount(0);
   const completedRequests = requests;
   await page.clock.fastForward(30_000);
   expect(requests).toBe(completedRequests);
@@ -1540,7 +1540,7 @@ test("서버 응답을 기다리는 동안 최근에 불러온 목록을 유지�
   await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
   options.failNoticeLoads = Infinity;
   await page.reload();
-  await expect(page.getByText(/서버를 깨우는 중이에요/)).toBeVisible();
+  await expect(page.getByText(/서버에 연결하지 못했어요/)).toBeVisible();
   await expect(page.getByRole("heading", { name: "E2E 서울 공공분양" })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
