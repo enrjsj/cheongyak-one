@@ -1,0 +1,15 @@
+.saved-profile-manager .saved-profile-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.saved-profile-manager > .saved-profile-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin: 12px 0; }
+.saved-profile-manager label { display: grid; gap: 6px; font-size: 12px; min-width: 0; }
+.saved-profile-manager input, .saved-profile-manager select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 8px; border: 1px solid #cfd9ea; border-radius: 8px; background: white; color: #233759; }
+.saved-profile-manager article > span { min-width: 0; overflow-wrap: anywhere; }
+.saved-profile-manager article > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.saved-profile-manager button { min-height: 40px; padding: 8px 10px; }
+.saved-profile-manager button:disabled { opacity: .55; cursor: default; }
+.saved-profile-manager > .saved-profile-create, .saved-profile-manager > .saved-profile-confirm { display: block; padding: 12px; border: 1px solid #cfd9ea; border-radius: 10px; margin: 12px 0; }
+.saved-profile-manager [role="alert"] { color: #9a4545; }
+@media (max-width: 680px) {
+  .saved-search-profiles.saved-profile-manager article { align-items: stretch; flex-direction: column; gap: 10px; }
+  .saved-profile-manager button { min-height: 44px; }
+  .saved-profile-manager > .saved-profile-controls { grid-template-columns: 1fr; }
+}
