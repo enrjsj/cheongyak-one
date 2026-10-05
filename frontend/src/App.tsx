@@ -73,6 +73,7 @@ import { useLinkCopy } from "./useLinkCopy";
 import LinkCopyFeedback from "./LinkCopyFeedback";
 import ComparisonTable from "./ComparisonTable";
 import { useOnlineStatus } from "./useOnlineStatus";
+import { appendUniqueNotices } from "./noticePagination";
 import { publicShareUrl } from "./shareLinkTools";
 import { useSavedSearchProfiles } from "./useSavedSearchProfiles";
 import SavedSearchProfilesPanel from "./SavedSearchProfilesPanel";
@@ -540,6 +541,10 @@ export default function Home() {
   const [noticePage, setNoticePage] = useState(0);
   const [noticeTotal, setNoticeTotal] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState("");
+  const [moreMessage, setMoreMessage] = useState("");
+  const [moreEnded, setMoreEnded] = useState(false);
+  const [firstAddedNoticeId, setFirstAddedNoticeId] = useState<number>();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [loadRetryPending, setLoadRetryPending] = useState(false);
@@ -577,6 +582,9 @@ export default function Home() {
   const [selectedDetail, setSelectedDetail] = useState<NoticeDetail | null>(null);
   const [selectedChanges, setSelectedChanges] = useState<NoticeChange[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
+  const detailRequest = useRef<AbortController | null>(null);
+  const moreRequest = useRef<AbortController | null>(null);
   const [qualOpen, setQualOpen] = useState(false);
   const [qualStep, setQualStep] = useState(0);
   const [answers, setAnswers] = useState<EligibilityAnswer[]>([]);
@@ -606,6 +614,7 @@ export default function Home() {
   const [detailRouteVersion, setDetailRouteVersion] = useState(0);
   const [recentNoticeIds, setRecentNoticeIds] = useState<number[]>(initialRecentNoticeIds);
   const [recentSearches, setRecentSearches] = useState<RecentNoticeSearch[]>(initialRecentSearches);
+  const [searchUndo, setSearchUndo] = useState<{ before: NoticeSearchState; after: NoticeSearchState }>();
   const freshnessLoaded = useRef(false);
 
   const rememberNotice = (noticeId: number) => {
@@ -630,6 +639,9 @@ export default function Home() {
   };
 
   const clearDetail = () => {
+    detailRequest.current?.abort();
+    detailRequest.current = null;
+    setDetailError("");
     setSelected(null);
     setSelectedDetail(null);
     setSelectedChanges([]);
@@ -642,6 +654,7 @@ export default function Home() {
       return;
     }
     if (window.history.state?.cheongyakNoticeModal) {
+      clearDetail();
       window.history.back();
       return;
     }
@@ -707,7 +720,7 @@ export default function Home() {
     });
   };
 
-  const applyRecentSearch = (state: NoticeSearchState) => {
+  const applyRecentSearch = (state: NoticeSearchState, recordHistory = true) => {
     setQuery(state.query);
     setDebouncedQuery(state.query);
     setActiveStatus(state.status);
@@ -722,7 +735,7 @@ export default function Home() {
     setSortKey(state.sort);
     setSavedOnly(false);
     resetVisible();
-    rememberSearch(state);
+    if (recordHistory) rememberSearch(state);
     scrollToResults();
   };
 
@@ -897,11 +910,22 @@ export default function Home() {
 
   const loadMoreNotices = async () => {
     if (!online) return;
-    if (loadingMore || notices.length >= noticeTotal) return;
+    if (moreRequest.current || loadingMore || loading || moreEnded || notices.length >= noticeTotal) return;
+    const controller = new AbortController();
+    moreRequest.current = controller;
     setLoadingMore(true);
+    setMoreError("");
+    setMoreMessage("");
+    setFirstAddedNoticeId(undefined);
     try {
-      const page = await fetchNoticePage({ ...currentSearchRequest(), page: noticePage + 1 });
-      setNotices((items) => [...items, ...page.content]);
+      const page = await fetchNoticePage({ ...currentSearchRequest(), page: noticePage + 1 }, controller.signal);
+      if (controller.signal.aborted || moreRequest.current !== controller) return;
+      const merged = appendUniqueNotices(notices, page.content);
+      setNotices(merged.items);
+      setNoticeTotal(page.totalElements);
+      setMoreEnded(page.content.length === 0 || page.number + 1 >= page.totalPages);
+      setMoreMessage(merged.added.length ? `공고 ${merged.added.length}건을 추가로 불러왔습니다.` : "추가로 표시할 공고가 없습니다. 최신 목록이 필요하면 다시 불러오세요.");
+      setFirstAddedNoticeId(merged.added[0]?.id);
       setNoticePage(page.number);
       setKnownNotices((known) => {
         const next = new Map(known);
@@ -909,11 +933,25 @@ export default function Home() {
         return next;
       });
     } catch (error) {
-      setToast(error instanceof Error ? error.message : "다음 공고를 불러오지 못했습니다.");
+      if (controller.signal.aborted || moreRequest.current !== controller) return;
+      setMoreError(error instanceof Error ? error.message : "다음 공고를 불러오지 못했습니다.");
     } finally {
-      setLoadingMore(false);
+      if (moreRequest.current === controller) { moreRequest.current = null; setLoadingMore(false); }
     }
   };
+
+  useEffect(() => {
+    moreRequest.current?.abort();
+    moreRequest.current = null;
+    setLoadingMore(false);
+    setMoreError("");
+    setMoreMessage("");
+    setMoreEnded(false);
+    setFirstAddedNoticeId(undefined);
+    return () => { moreRequest.current?.abort(); };
+  }, [online, activeStatus, category, debouncedQuery, includeClosed, loadVersion, maxArea, maxPriceManwon, minArea, minPriceManwon, region, savedIds, savedOnly, sortKey, supplyType]);
+
+  useEffect(() => () => { detailRequest.current?.abort(); }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1066,13 +1104,17 @@ export default function Home() {
       return;
     }
 
+    detailRequest.current?.abort();
     const controller = new AbortController();
+    detailRequest.current = controller;
+    setDetailError("");
     setDetailLoading(true);
     Promise.all([
       fetchNotice(noticeId, controller.signal),
       fetchNoticeChanges(noticeId, controller.signal).catch(() => [] as NoticeChange[]),
     ])
       .then(([detail, changes]) => {
+        if (controller.signal.aborted || detailRequest.current !== controller) return;
         setSelected(toApplication(detail));
         setSelectedDetail(detail);
         setSelectedChanges(changes);
@@ -1080,13 +1122,14 @@ export default function Home() {
         rememberNotice(detail.id);
       })
       .catch((error: unknown) => {
+        if (controller.signal.aborted || detailRequest.current !== controller) return;
         if (error instanceof DOMException && error.name === "AbortError") return;
         clearDetail();
         window.history.replaceState(window.history.state, "", noticeUrl(window.location.href));
         setToast(error instanceof Error ? error.message : "공고 상세 링크를 확인하지 못했습니다.");
       })
       .finally(() => {
-        if (!controller.signal.aborted) setDetailLoading(false);
+        if (!controller.signal.aborted && detailRequest.current === controller) setDetailLoading(false);
       });
     return () => controller.abort();
   }, [detailRouteVersion]);
@@ -1273,8 +1316,38 @@ export default function Home() {
   const today = koreaToday();
   const [, thisMonth, thisDay] = today.split("-").map(Number);
 
-  const scrollToResults = () => document.querySelector("#applications")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const scrollToResults = () => {
+    const results = document.getElementById("applications");
+    results?.focus({ preventScroll: true });
+    results?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  };
   const resetVisible = () => setVisibleCount(6);
+  const resetSearchConditions = () => {
+    setSearchUndo({ before: currentSearchState(), after: { query: "", status: "all", includeClosed: false, sort: sortKey } });
+    setQuery(""); setDebouncedQuery(""); setRegion("전체"); setCategory("전체");
+    setSupplyType(undefined); setMinPriceManwon(""); setMaxPriceManwon("");
+    setMinArea(""); setMaxArea(""); setIncludeClosed(false);
+    setActiveStatus("all"); setSavedOnly(false); resetVisible();
+  };
+  const removableConditions = [
+    ...(query ? [{ key: "query", label: `검색어: ${query}`, clear: () => { setQuery(""); setDebouncedQuery(""); } }] : []),
+    ...(region !== "전체" ? [{ key: "region", label: `지역: ${region}`, clear: () => setRegion("전체") }] : []),
+    ...(category !== "전체" ? [{ key: "category", label: `유형: ${category}`, clear: () => setCategory("전체") }] : []),
+    ...(supplyType ? [{ key: "supply", label: `공급: ${SUPPLY_TYPE_LABELS[supplyType]}`, clear: () => setSupplyType(undefined) }] : []),
+    ...(minPriceManwon || maxPriceManwon ? [{ key: "price", label: "예산", clear: () => { setMinPriceManwon(""); setMaxPriceManwon(""); } }] : []),
+    ...(minArea || maxArea ? [{ key: "area", label: "면적", clear: () => { setMinArea(""); setMaxArea(""); } }] : []),
+    ...(includeClosed ? [{ key: "closed", label: "마감 공고 포함", clear: () => setIncludeClosed(false) }] : []),
+    ...(activeStatus !== "all" ? [{ key: "status", label: `상태: ${statuses.find(status => status.key === activeStatus)?.label}`, clear: () => setActiveStatus("all") }] : []),
+  ];
+  const conditionResets: Record<string, Partial<NoticeSearchState>> = {
+    query: { query: "" }, region: { region: undefined }, category: { category: undefined },
+    supply: { supplyType: undefined }, price: { minPriceManwon: undefined, maxPriceManwon: undefined },
+    area: { minArea: undefined, maxArea: undefined }, closed: { includeClosed: false }, status: { status: "all" },
+  };
+  const searchStateKey = noticeSearchUrl("https://search.invalid/", currentSearchState());
+  useEffect(() => {
+    if (searchUndo && (savedOnly || searchStateKey !== noticeSearchUrl("https://search.invalid/", searchUndo.after))) setSearchUndo(undefined);
+  }, [searchStateKey, savedOnly, searchUndo]);
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
     setDebouncedQuery(query);
@@ -1686,21 +1759,28 @@ export default function Home() {
   };
 
   const openDetail = async (item: Application) => {
+    detailRequest.current?.abort();
+    const controller = new AbortController();
+    detailRequest.current = controller;
     const targetUrl = noticeUrl(window.location.href, item.id);
     if (noticeIdFromSearch(window.location.search) !== item.id) {
       window.history.pushState({ ...window.history.state, cheongyakNoticeModal: true }, "", targetUrl);
     }
     setSelected(item);
     setSelectedDetail(null);
+    setSelectedChanges([]);
+    setDetailError("");
     setDetailLoading(true);
     try {
-      const detail = await fetchNotice(item.id);
+      const detail = await fetchNotice(item.id, controller.signal);
+      if (controller.signal.aborted || detailRequest.current !== controller) return;
       setSelectedDetail(detail);
       rememberNotice(detail.id);
     } catch (error) {
-      setToast(error instanceof Error ? error.message : "상세 정보를 불러오지 못했습니다.");
+      if (controller.signal.aborted || detailRequest.current !== controller) return;
+      setDetailError(error instanceof Error ? error.message : "상세 정보를 불러오지 못했습니다.");
     } finally {
-      setDetailLoading(false);
+      if (!controller.signal.aborted && detailRequest.current === controller) setDetailLoading(false);
     }
   };
 
@@ -1711,17 +1791,22 @@ export default function Home() {
       await openDetail(application);
       return;
     }
+    detailRequest.current?.abort();
+    const controller = new AbortController();
+    detailRequest.current = controller;
     try {
       window.history.pushState(
         { ...window.history.state, cheongyakNoticeModal: true },
         "",
         noticeUrl(window.location.href, noticeId),
       );
-      const detail = await fetchNotice(noticeId);
+      const detail = await fetchNotice(noticeId, controller.signal);
+      if (controller.signal.aborted || detailRequest.current !== controller) return;
       setSelected(toApplication(detail));
       setSelectedDetail(detail);
       rememberNotice(detail.id);
     } catch (error) {
+      if (controller.signal.aborted || detailRequest.current !== controller) return;
       window.history.replaceState(window.history.state, "", noticeUrl(window.location.href));
       clearDetail();
       setToast(error instanceof Error ? error.message : "알림의 공고를 불러오지 못했습니다.");
@@ -1908,7 +1993,7 @@ export default function Home() {
         </aside>
       </section>
 
-      <section className="dashboard" id="applications">
+      <section className="dashboard" id="applications" tabIndex={-1} aria-label="청약 검색 결과">
         <div className="status-tabs" role="tablist" aria-label="청약 상태" {...statusTabProps}>
           {statuses.map((status) => (
             <button className={activeStatus === status.key ? "selected" : ""} type="button" role="tab" aria-selected={activeStatus === status.key} key={status.key} onClick={() => { setActiveStatus(status.key); if (status.key !== "all") setIncludeClosed(false); setSavedOnly(false); setFavoriteProgressFilter("ALL"); resetVisible(); }}>
@@ -1960,6 +2045,34 @@ export default function Home() {
             </div>
             <LinkCopyFeedback state={searchCopy} />
             {!savedOnly && activeFilterLabels.length > 0 && <p className="active-filter-summary" aria-live="polite">적용 중: {activeFilterLabels.join(" · ")}</p>}
+            {!savedOnly && removableConditions.length > 0 && (
+              <div className="filter-removal-controls" role="group" aria-label="검색 조건 해제">
+                {removableConditions.map(condition => <button key={condition.key} type="button" aria-label={`${condition.label} 조건 해제`} onClick={() => {
+                  document.getElementById("applications")?.focus({ preventScroll: true });
+                  const before = currentSearchState();
+                  setSearchUndo({ before, after: { ...before, ...conditionResets[condition.key] } });
+                  condition.clear(); resetVisible();
+                }}>{condition.label} ×</button>)}
+                <button type="button" onClick={() => {
+                  document.getElementById("applications")?.focus({ preventScroll: true });
+                  resetSearchConditions();
+                }}>검색 조건 전체 초기화</button>
+              </div>
+            )}
+            {!savedOnly && searchUndo && (
+              <div className="search-undo">
+                <p role="status">검색 조건을 해제했습니다. 직전 조건으로 되돌릴 수 있습니다.</p>
+                <button type="button" onClick={() => {
+                  const previous = searchUndo.before;
+                  setSearchUndo(undefined);
+                  applyRecentSearch(previous, false);
+                }}>검색 조건 되돌리기</button>
+                <button type="button" aria-label="검색 조건 복원 안내 닫기" onClick={() => {
+                  document.getElementById("applications")?.focus({ preventScroll: true });
+                  setSearchUndo(undefined);
+                }}>닫기</button>
+              </div>
+            )}
 
             {loadRetryPending && (
               <div className="notice-load-status" role="status">
@@ -2046,7 +2159,7 @@ export default function Home() {
                 )}
                 <div className="application-list">
                   {visible.map((item) => (
-                    <article className="application-card" key={item.id}>
+                    <article className="application-card" key={item.id} id={`notice-card-${item.id}`} tabIndex={-1} aria-label={item.title}>
                       <div className="card-topline">
                         <div className="tags"><span className={`state ${item.stateTone}`}>{item.state}</span><span className="type-tag">{item.type}</span></div>
                         <button className={`bookmark ${savedIds.has(item.id) ? "saved" : ""}`} type="button" onClick={() => void toggleSaved(item.id)} disabled={favoritePendingId === item.id} aria-label={`${item.title} 관심청약 ${savedIds.has(item.id) ? "해제" : "저장"}`} aria-pressed={savedIds.has(item.id)}><Icon name="bookmark" /></button>
@@ -2111,14 +2224,20 @@ export default function Home() {
                     </article>
                   ))}
                 </div>
-                {notices.length < noticeTotal && <button className="more-button" type="button" onClick={() => void loadMoreNotices()} disabled={loadingMore || !online}>{loadingMore ? "불러오는 중" : `다음 ${Math.min(NOTICE_PAGE_SIZE, noticeTotal - notices.length)}건 더보기`} <Icon name="arrow" /></button>}
+                <div className="pagination-feedback">
+                  {moreError && <p role="alert">다음 공고를 불러오지 못했습니다. 현재 목록은 유지됩니다. {moreError}</p>}
+                  <p role="status" aria-live="polite" aria-atomic="true">{loadingMore ? "다음 공고를 불러오는 중입니다." : moreMessage}</p>
+                  {firstAddedNoticeId && visible.some(item => item.id === firstAddedNoticeId) && <button type="button" onClick={() => document.getElementById(`notice-card-${firstAddedNoticeId}`)?.focus()}>새로 불러온 공고로 이동</button>}
+                  {moreEnded && <button type="button" disabled={!online || loading} onClick={retryNoticeLoad}>목록 새로고침</button>}
+                  {(notices.length < noticeTotal || moreMessage) && <button className="more-button" type="button" onClick={() => void loadMoreNotices()} disabled={loadingMore || loading || !online || moreEnded || notices.length >= noticeTotal}>{loadingMore ? "불러오는 중" : moreEnded || notices.length >= noticeTotal ? "추가 조회 완료" : moreError ? "다음 공고 다시 불러오기" : `다음 ${Math.min(NOTICE_PAGE_SIZE, noticeTotal - notices.length)}건 더보기`} <Icon name="arrow" /></button>}
+                </div>
               </>
             ) : (
               <div className="empty-state">
                 <span className="empty-icon"><Icon name={savedOnly ? "bookmark" : "search"} /></span>
                 <h3>{savedOnly ? favoriteKeyword ? "검색 조건에 맞는 관심청약이 없어요" : favoriteProgressFilter === "ALL" ? "저장한 관심청약이 없어요" : favoriteProgressFilter === "INCOMPLETE" ? "확인 항목이 남은 관심청약이 없어요" : favoriteProgressFilter === "URGENT" ? "마감이 임박한 관심청약이 없어요" : favoriteProgressFilter === "RESULT_DUE" ? "확인이 필요한 당첨 발표가 없어요" : applicationResultFromFilter(favoriteProgressFilter) ? "선택한 신청 결과의 관심청약이 없어요" : "선택한 준비 상태의 관심청약이 없어요" : "조건에 맞는 공고가 없어요"}</h3>
                 <p>{savedOnly ? favoriteKeyword ? "공고명·지역 또는 작성한 메모를 바꿔 검색해 보세요." : favoriteProgressFilter === "ALL" ? "관심 있는 공고의 북마크를 눌러 모아보세요." : favoriteProgressFilter === "INCOMPLETE" ? "현재 보이는 관심청약의 체크리스트를 모두 완료했어요." : favoriteProgressFilter === "URGENT" ? "현재 접수 마감 3일 이내인 관심청약이 없습니다." : favoriteProgressFilter === "RESULT_DUE" ? "당첨 발표일이 지난 신청 건의 결과를 모두 기록했어요." : applicationResultFromFilter(favoriteProgressFilter) ? "신청 결과를 기록한 뒤 다시 확인해 보세요." : "다른 준비 상태를 선택하거나 전체 관심청약을 확인해 보세요." : "검색어나 지역·유형 필터를 조금 넓혀보세요."}</p>
-                <button type="button" onClick={() => { if (savedOnly && (favoriteProgressFilter !== "ALL" || favoriteKeyword)) { setFavoriteProgressFilter("ALL"); setFavoriteKeyword(""); return; } setQuery(""); setRegion("전체"); setCategory("전체"); setActiveStatus("all"); setSavedOnly(false); resetVisible(); }}>{savedOnly && (favoriteProgressFilter !== "ALL" || favoriteKeyword) ? "전체 관심청약 보기" : "전체 청약 보기"}</button>
+                <button type="button" onClick={() => { document.getElementById("applications")?.focus({ preventScroll: true }); if (savedOnly && (favoriteProgressFilter !== "ALL" || favoriteKeyword)) { setFavoriteProgressFilter("ALL"); setFavoriteKeyword(""); return; } resetSearchConditions(); }}>{savedOnly && (favoriteProgressFilter !== "ALL" || favoriteKeyword) ? "전체 관심청약 보기" : "전체 청약 보기"}</button>
               </div>
             )}
           </div>
@@ -2268,6 +2387,7 @@ export default function Home() {
           <section ref={detailDialogRef} tabIndex={-1} className="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title" aria-busy={detailLoading}>
             <div className="modal-head"><div><span>OFFICIAL NOTICE</span><h2 id="detail-title">{detailApplication.title}</h2></div><button type="button" onClick={closeDetail} aria-label="닫기"><Icon name="close" /></button></div>
             {detailLoading && <div className="detail-loading" role="status">최신 상세 정보를 확인하고 있어요.</div>}
+            {detailError && <div className="notice-load-status" role="alert"><p>최신 상세 정보를 확인하지 못했습니다. 목록의 요약 정보를 표시합니다.</p><p>{detailError}</p><button type="button" disabled={!online || detailLoading} onClick={() => { if (selected && !detailLoading) void openDetail(selected); }}>상세 다시 불러오기</button></div>}
             {selectedDetail?.contentChangedAt && selectedDetail.lastChangeSummary && (
               <div className="notice-change-banner" role="status">
                 <span><Icon name="bell" /></span>
