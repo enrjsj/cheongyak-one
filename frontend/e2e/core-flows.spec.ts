@@ -45,6 +45,7 @@ test("사용자 여정 중첩 편집창에서 Tab과 Shift Tab은 최상위 창 
   await prepareSavedProfiles(page); const panel = await openSavedProfiles(page);
   await panel.getByRole("button", { name: "수정", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "저장 조건 수정", exact: true });
+  await expect(editor.getByLabel("조건 이름", { exact: true })).toBeFocused();
   await editor.getByRole("button", { name: "저장", exact: true }).focus();
   await page.keyboard.press("Tab"); await expect(editor.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
   await page.keyboard.press("Shift+Tab"); await expect(editor.getByRole("button", { name: "저장", exact: true })).toBeFocused();
@@ -1651,7 +1652,7 @@ test("기본 목록은 모집 중·예정 공고를 우선하고 최근 검색�
   await page.getByRole("combobox", { name: "청약 공고 정렬" }).selectOption("PRICE_ASC");
   await page.getByRole("textbox", { name: "청약 검색어" }).fill("서울");
   await page.getByRole("button", { name: /청약 찾기/ }).click();
-  await expect(page.getByLabel("최근 검색").getByRole("button", { name: "서울", exact: true })).toBeVisible();
+  await expect(page.getByLabel("최근 검색", { exact: true }).getByRole("button", { name: "최근 검색 적용: 검색어 서울 · 낮은 분양가순", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "마감 공고 포함" }).click();
   await expect(page.getByText(/마감 공고를 포함한 공고/)).toBeVisible();
 });

@@ -33,6 +33,8 @@ export function useDialogAccessibility<T extends HTMLElement>(open: boolean, onC
 
     const focusTimer = window.setTimeout(() => {
       if (dialogStack.at(-1) !== dialog) return;
+      // Do not overwrite focus already placed by the user or a nested form.
+      if (dialog.contains(document.activeElement)) return;
       const first = dialog.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
       (first ?? dialog)?.focus();
     });
