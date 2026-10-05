@@ -73,6 +73,7 @@ import { useLinkCopy } from "./useLinkCopy";
 import LinkCopyFeedback from "./LinkCopyFeedback";
 import ComparisonTable from "./ComparisonTable";
 import { useOnlineStatus } from "./useOnlineStatus";
+import RangeFilter from "./RangeFilter";
 import { appendUniqueNotices } from "./noticePagination";
 import { recentSearchLabel, removeRecentSearch } from "./recentSearchTools";
 import { publicShareUrl } from "./shareLinkTools";
@@ -579,6 +580,11 @@ export default function Home() {
   const [comparisonOpen, setComparisonOpen] = useState(false);
   const [, setVisibleCount] = useState(6);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [priceInvalid, setPriceInvalid] = useState(false);
+  const [rangeResetVersion, setRangeResetVersion] = useState(0);
+  const [areaInvalid, setAreaInvalid] = useState(false);
+  const rangeInvalid = priceInvalid || areaInvalid;
+  useEffect(() => { if (!filterOpen) { setPriceInvalid(false); setAreaInvalid(false); } }, [filterOpen]);
   const [selected, setSelected] = useState<Application | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<NoticeDetail | null>(null);
   const [selectedChanges, setSelectedChanges] = useState<NoticeChange[]>([]);
@@ -2347,8 +2353,8 @@ export default function Home() {
             <div className="filter-group"><h3>지역</h3><div className="choice-grid">{["전체", ...availableRegions].map((item) => <button className={region === item ? "active" : ""} type="button" key={item} onClick={() => { setRegion(item); resetVisible(); }}>{item}</button>)}</div></div>
             <div className="filter-group"><h3>주택 유형</h3><div className="choice-grid">{["전체", ...availableCategories].map((item) => <button className={category === item ? "active" : ""} type="button" key={item} onClick={() => { setCategory(item); resetVisible(); }}>{item}</button>)}</div></div>
             <div className="filter-group"><h3>공급 방식</h3><div className="choice-grid">{([undefined, "SALE", "PUBLIC_RENTAL"] as const).map((item) => <button className={supplyType === item ? "active" : ""} type="button" key={item ?? "ALL"} onClick={() => { setSupplyType(item); resetVisible(); }}>{item ? SUPPLY_TYPE_LABELS[item] : "전체"}</button>)}</div><p className="price-help">분양은 아파트·오피스텔 청약 공고이며, 일반 부동산 매매 매물은 포함하지 않습니다.</p></div>
-            <div className="filter-group"><h3>분양가 예산 <small>(만원 · 주택형 가격대 기준)</small></h3><div className="price-range"><label>최소<input type="number" min="0" max="1000000" inputMode="numeric" value={minPriceManwon} onChange={(event) => { setMinPriceManwon(event.target.value); resetVisible(); }} placeholder="예: 30000" /></label><span>~</span><label>최대<input type="number" min="0" max="1000000" inputMode="numeric" value={maxPriceManwon} onChange={(event) => { setMaxPriceManwon(event.target.value); resetVisible(); }} placeholder="예: 60000" /></label></div><p className="price-help">입력한 예산과 주택형 분양가 범위가 겹치는 공고를 보여줍니다. 가격 정보가 없는 공고는 제외됩니다.</p></div>
-            <div className="filter-group"><h3>공급면적 <small>(㎡ · 주택형 기준)</small></h3><div className="price-range"><label>최소<input type="number" min="0" max="1000" inputMode="numeric" value={minArea} onChange={(event) => { setMinArea(event.target.value); resetVisible(); }} placeholder="예: 59" /></label><span>~</span><label>최대<input type="number" min="0" max="1000" inputMode="numeric" value={maxArea} onChange={(event) => { setMaxArea(event.target.value); resetVisible(); }} placeholder="예: 84" /></label></div><p className="price-help">입력한 면적 범위에 해당하는 주택형이 하나라도 있는 공고만 보여줍니다. 면적 데이터가 없는 공고는 제외됩니다.</p></div>
+            <div className="filter-group"><h3>분양가 예산 <small>(만원 · 주택형 가격대 기준)</small></h3><RangeFilter presets={[{ label: "3억 이하", min: "", max: "30000" }, { label: "5억 이하", min: "", max: "50000" }, { label: "10억 이하", min: "", max: "100000" }]} key={`price-${rangeResetVersion}`} label="예산" unit="만원" limit={1000000} min={minPriceManwon} max={maxPriceManwon} placeholders={["예: 30000", "예: 60000"]} onInvalid={setPriceInvalid} onChange={(min, max) => { setMinPriceManwon(min); setMaxPriceManwon(max); resetVisible(); }} /><p className="price-help">입력한 예산과 주택형 분양가 범위가 겹치는 공고를 보여줍니다. 가격 정보가 없는 공고는 제외됩니다.</p></div>
+            <div className="filter-group"><h3>공급면적 <small>(㎡ · 주택형 기준)</small></h3><RangeFilter presets={[{ label: "60㎡ 이하", min: "", max: "60" }, { label: "85㎡ 이하", min: "", max: "85" }, { label: "100㎡ 이상", min: "100", max: "" }]} key={`area-${rangeResetVersion}`} label="면적" unit="㎡" limit={1000} min={minArea} max={maxArea} placeholders={["예: 59", "예: 84"]} onInvalid={setAreaInvalid} onChange={(min, max) => { setMinArea(min); setMaxArea(max); resetVisible(); }} /><p className="price-help">입력한 면적 범위에 해당하는 주택형이 하나라도 있는 공고만 보여줍니다. 면적 데이터가 없는 공고는 제외됩니다.</p></div>
             <div className="search-preference-box">
               <div><b>내 맞춤 검색조건</b><span>지역·유형·예산·상태·정렬을 계정에 저장합니다.</span></div>
               {member ? (
@@ -2360,17 +2366,17 @@ export default function Home() {
                       <button type="button" onClick={() => void handleDeleteSearchPreference()} disabled={preferenceBusy}>삭제</button>
                     </div>
                   )}
-                  <button className="save-preference-button" type="button" onClick={() => void handleSaveSearchPreference()} disabled={preferenceBusy}>{preferenceBusy ? "처리 중…" : "현재 조건 계정에 저장"}</button>
-                  <SavedSearchProfilesPanel key={member.id} state={profilesState} disabled={preferenceBusy} input={currentSearchInput()}
+                  <button className="save-preference-button" type="button" onClick={() => void handleSaveSearchPreference()} disabled={preferenceBusy || rangeInvalid}>{preferenceBusy ? "처리 중…" : "현재 조건 계정에 저장"}</button>
+                  <SavedSearchProfilesPanel key={member.id} state={profilesState} disabled={preferenceBusy || rangeInvalid} input={currentSearchInput()}
                     summary={profile => `${profile.region ?? "전국"} · ${profile.housingCategory ? CATEGORY_LABELS[profile.housingCategory] : "전체 유형"} · ${profile.supplyType ? SUPPLY_TYPE_LABELS[profile.supplyType] : "전체 공급"} · ${formatPricePreference(profile)} · ${formatAreaPreference(profile)}`}
                     onApply={profile => { applySearchPreference(profile); setToast(`'${profile.name}' 조건을 적용했습니다.`); }}
                     onEdit={openSavedSearchProfileEditor} />
                 </>
               ) : (
-                <button className="save-preference-button" type="button" onClick={() => void handleSaveSearchPreference()}>로그인하고 조건 저장</button>
+                <button className="save-preference-button" type="button" disabled={rangeInvalid} onClick={() => void handleSaveSearchPreference()}>로그인하고 조건 저장</button>
               )}
             </div>
-            <div className="modal-actions"><button className="reset-button" type="button" onClick={() => { setRegion("전체"); setCategory("전체"); setSupplyType(undefined); setMinPriceManwon(""); setMaxPriceManwon(""); setMinArea(""); setMaxArea(""); setIncludeClosed(false); resetVisible(); }}>초기화</button><button className="primary-button" type="button" onClick={() => { rememberSearch(); setFilterOpen(false); setSavedOnly(false); }}>공고 {noticeTotal}건 보기</button></div>
+            <div className="modal-actions"><button className="reset-button" type="button" onClick={() => { setRangeResetVersion(version => version + 1); setRegion("전체"); setCategory("전체"); setSupplyType(undefined); setMinPriceManwon(""); setMaxPriceManwon(""); setMinArea(""); setMaxArea(""); setIncludeClosed(false); resetVisible(); }}>초기화</button><button className="primary-button" type="button" disabled={rangeInvalid} onClick={() => { rememberSearch(); setFilterOpen(false); setSavedOnly(false); }}>공고 {noticeTotal}건 보기</button></div>
           </section>
         </div>
       )}
@@ -2593,3 +2599,4 @@ export default function Home() {
     </main>
   );
 }
+

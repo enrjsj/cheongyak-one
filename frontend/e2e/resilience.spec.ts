@@ -1,5 +1,96 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 
+test("빠른 범위: 예산 선택은 잘못된 초안을 교체하고 금액과 선택 상태를 유지한다", async ({ page }) => {
+  await mockPublicApi(page); await page.goto("/");
+  await page.getByRole("button", { name: /청약 필터 열기/ }).click();
+  const dialog = page.getByRole("dialog", { name: "청약 조건 선택" });
+  const min = dialog.getByLabel("예산 최소 (만원)", { exact: true });
+  await min.fill("-1");
+  await expect(dialog.getByRole("alert")).toBeVisible();
+  const preset = dialog.getByRole("button", { name: "5억 이하", exact: true });
+  await preset.click();
+  await expect(min).toHaveValue("");
+  await expect(dialog.getByLabel("예산 최대 (만원)", { exact: true })).toHaveValue("50000");
+  await expect(preset).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  await expect(dialog.getByText("입력 금액: 최소 제한 없음 ~ 5억", { exact: true })).toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.get("maxPriceManwon")).toBe("50000");
+  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+  await page.reload();
+  await page.getByRole("button", { name: /청약 필터 열기/ }).click();
+  await expect(preset).toHaveAttribute("aria-pressed", "true");
+  await dialog.getByRole("button", { name: "예산 범위 해제", exact: true }).click();
+  await expect(preset).toHaveAttribute("aria-pressed", "false");
+});
+
+test("빠른 범위: 공급면적 선택은 이전 상한을 해제하고 모바일 키보드로 조작한다", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await mockPublicApi(page); await page.goto("/");
+  await page.getByRole("button", { name: /청약 필터 열기/ }).click();
+  const dialog = page.getByRole("dialog", { name: "청약 조건 선택" });
+  await dialog.getByRole("button", { name: "85㎡ 이하", exact: true }).click();
+  const over = dialog.getByRole("button", { name: "100㎡ 이상", exact: true });
+  await over.focus(); await over.press("Enter");
+  await expect(dialog.getByLabel("면적 최소 (㎡)", { exact: true })).toHaveValue("100");
+  await expect(dialog.getByLabel("면적 최대 (㎡)", { exact: true })).toHaveValue("");
+  await expect(over).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => new URL(page.url()).searchParams.get("minArea")).toBe("100");
+  expect(new URL(page.url()).searchParams.has("maxArea")).toBe(false);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const sizes = await dialog.locator(".range-presets button").evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().height));
+  expect(sizes.every(height => height >= 44)).toBe(true);
+});
+
+test("범위 필터: 입력 중에는 조회하지 않고 Enter 후 유효한 값만 반영한다", async ({ page }) => {
+  const searches = await mockPublicApi(page); await page.goto("/");
+  await page.getByRole("button", { name: /청약 필터 열기/ }).click();
+  const dialog = page.getByRole("dialog", { name: "청약 조건 선택" });
+  const min = dialog.getByLabel("예산 최소 (만원)", { exact: true });
+  await min.fill("30000"); await page.waitForTimeout(700);
+  expect(searches.some(q => new URLSearchParams(q).has("minPrice"))).toBe(false);
+  await min.press("Enter");
+  await expect.poll(() => searches.some(q => new URLSearchParams(q).get("minPrice") === "300000000")).toBe(true);
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "예산 범위 해제" }).click();
+  await expect(min).toHaveValue("");
+  await expect.poll(() => new URL(page.url()).searchParams.has("minPriceManwon")).toBe(false);
+});
+
+test("범위 필터: 역전 범위는 조회와 저장을 막고 수정하면 복구한다", async ({ page }) => {
+  const searches = await mockPublicApi(page); await page.goto("/?maxArea=84");
+  await page.getByRole("button", { name: /청약 필터 열기/ }).click();
+  const dialog = page.getByRole("dialog", { name: "청약 조건 선택" });
+  const min = dialog.getByLabel("면적 최소 (㎡)", { exact: true });
+  await min.fill("100"); await min.press("Tab");
+  await expect(dialog.getByRole("alert")).toContainText("최소값은 최대값보다");
+  await expect(dialog.getByRole("button", { name: /공고 .*건 보기/ })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "로그인하고 조건 저장" })).toBeDisabled();
+  expect(searches.some(q => new URLSearchParams(q).get("minArea") === "100")).toBe(false);
+  await min.fill("59"); await min.press("Enter");
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  await expect.poll(() => new URL(page.url()).searchParams.get("minArea")).toBe("59");
+  await expect(dialog.getByRole("button", { name: /공고 .*건 보기/ })).toBeEnabled();
+});
+
+test("범위 필터: 잘못된 초안은 초기화 또는 닫기로 폐기하고 모바일 폭을 유지한다", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 }); await mockPublicApi(page); await page.goto("/");
+  await page.getByRole("button", { name: /청약 필터 열기/ }).click();
+  const dialog = page.getByRole("dialog", { name: "청약 조건 선택" });
+  const min = dialog.getByLabel("예산 최소 (만원)", { exact: true });
+  await min.fill("-1"); await min.press("Enter");
+  await expect(min).toHaveAttribute("aria-invalid", "true");
+  await dialog.getByRole("button", { name: "초기화", exact: true }).click();
+  await expect(min).toHaveValue("");
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  await min.fill("1000001");
+  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+  await page.getByRole("button", { name: /청약 필터 열기/ }).click();
+  await expect(min).toHaveValue("");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const widths = await dialog.locator(".range-filter input").evaluateAll(inputs => inputs.map(input => input.getBoundingClientRect().width));
+  expect(widths.every(width => width >= 90)).toBe(true);
+});
+
 async function seedRecentSearches(page: Page) {
   await page.addInitScript(() => {
     if (sessionStorage.getItem("recent-seeded")) return;
@@ -328,3 +419,4 @@ test("목록 탐색: 모바일 관심 메뉴는 검색 결과로 키보드 초�
   await expect(page.getByRole("region", { name: "청약 검색 결과", exact: true })).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
