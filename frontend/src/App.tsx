@@ -74,6 +74,7 @@ import LinkCopyFeedback from "./LinkCopyFeedback";
 import ComparisonTable from "./ComparisonTable";
 import { useOnlineStatus } from "./useOnlineStatus";
 import { appendUniqueNotices } from "./noticePagination";
+import { recentSearchLabel, removeRecentSearch } from "./recentSearchTools";
 import { publicShareUrl } from "./shareLinkTools";
 import { useSavedSearchProfiles } from "./useSavedSearchProfiles";
 import SavedSearchProfilesPanel from "./SavedSearchProfilesPanel";
@@ -741,10 +742,24 @@ export default function Home() {
 
   const clearRecentSearches = () => {
     setRecentSearches([]);
+    document.querySelector<HTMLInputElement>('input[aria-label="청약 검색어"]')?.focus({ preventScroll: true });
     try {
       window.localStorage.removeItem(RECENT_SEARCH_STORAGE_KEY);
+      setToast("최근 검색을 모두 삭제했습니다.");
     } catch {
-      // 저장소가 차단된 경우에도 화면의 최근 검색 목록은 비운다.
+      setToast("화면에서 삭제했습니다. 브라우저 저장소에 반영하지 못해 새로고침하면 다시 나타날 수 있습니다.");
+    }
+  };
+
+  const deleteRecentSearch = (item: RecentNoticeSearch) => {
+    const next = removeRecentSearch(recentSearches, item);
+    setRecentSearches(next);
+    document.querySelector<HTMLInputElement>('input[aria-label="청약 검색어"]')?.focus({ preventScroll: true });
+    try {
+      window.localStorage.setItem(RECENT_SEARCH_STORAGE_KEY, JSON.stringify(next));
+      setToast("선택한 최근 검색을 삭제했습니다.");
+    } catch {
+      setToast("화면에서 삭제했습니다. 브라우저 저장소에 반영하지 못해 새로고침하면 다시 나타날 수 있습니다.");
     }
   };
 
@@ -1964,7 +1979,10 @@ export default function Home() {
           {recentSearches.length > 0 && (
             <div className="recent-searches" aria-label="최근 검색">
               <span>최근 검색</span>
-              {recentSearches.map((item) => <button type="button" key={`${item.usedAt}-${item.state.query}`} onClick={() => applyRecentSearch(item.state)}>{item.state.query || item.state.region || (item.state.category ? CATEGORY_LABELS[item.state.category] : item.state.includeClosed ? "마감 공고 포함" : "저장한 조건")}</button>)}
+              {recentSearches.map((item) => <div className="recent-search-entry" key={`${item.usedAt}-${noticeSearchUrl("https://search.invalid/", item.state)}`}>
+                <button type="button" title={recentSearchLabel(item.state)} aria-label={`최근 검색 적용: ${recentSearchLabel(item.state)}`} onClick={() => applyRecentSearch(item.state)}>{recentSearchLabel(item.state)}</button>
+                <button type="button" aria-label={`최근 검색 삭제: ${recentSearchLabel(item.state)}`} onClick={() => deleteRecentSearch(item)}>×</button>
+              </div>)}
               <button className="recent-searches-clear" type="button" onClick={clearRecentSearches}>지우기</button>
             </div>
           )}

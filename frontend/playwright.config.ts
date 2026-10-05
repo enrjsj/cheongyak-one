@@ -10,6 +10,9 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
+    ...(process.env.IPHONE_TEST ? [
+      { name: "iphone-webkit", testMatch: /resilience\.spec\.ts/, use: { ...devices["iPhone 13"], browserName: "webkit" as const } },
+    ] : []),
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     ...(process.env.CROSS_BROWSER ? [
       { name: "firefox", testMatch: /resilience\.spec\.ts/, use: { ...devices["Desktop Firefox"] } },

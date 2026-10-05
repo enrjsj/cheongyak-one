@@ -1042,6 +1042,12 @@ footer { background: var(--navy); color: white; }
 .search-undo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 16px; padding: 12px; border-radius: 8px; background: #f5f8fe; color: #24416b; }
 .search-undo p { flex: 1 1 220px; margin: 0; line-height: 1.6; }
 .search-undo button { min-height: 44px; padding: 8px 12px; border: 1px solid #ccd8eb; border-radius: 8px; background: white; color: inherit; cursor: pointer; }
+.recent-searches { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; padding-bottom: 6px; }
+.recent-searches > span, .recent-searches > button { flex: 0 0 auto; }
+.recent-search-entry { display: flex; align-items: stretch; flex: 0 0 auto; gap: 4px; }
+.recent-searches .recent-search-entry button { min-height: 44px; height: auto; max-width: 240px; white-space: normal; overflow-wrap: anywhere; padding: 8px 10px; }
+.recent-searches .recent-search-entry button + button { min-width: 44px; }
+.recent-searches .recent-searches-clear { min-height: 44px; height: auto; }
 html { scroll-padding-block: 100px; }
 @media (max-width: 680px) {
   html { scroll-padding-bottom: calc(100px + env(safe-area-inset-bottom)); }

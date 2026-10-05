@@ -1,5 +1,52 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 
+async function seedRecentSearches(page: Page) {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("recent-seeded")) return;
+    sessionStorage.setItem("recent-seeded", "yes");
+    const state = { query: "", region: "서울", status: "all", sort: "LATEST", includeClosed: false };
+    localStorage.setItem("cheongyak-one-recent-searches", JSON.stringify([
+      { state: { ...state, category: "OFFICETEL", minArea: 20 }, usedAt: 1 },
+      { state: { ...state, category: "APARTMENT", minPriceManwon: 100 }, usedAt: 1 },
+    ]));
+  });
+}
+
+test("최근 검색: 같은 지역의 다른 조건을 구분하고 개별 삭제는 현재 검색을 유지한다", async ({ page }) => {
+  await mockPublicApi(page); await seedRecentSearches(page);
+  await page.goto("/?region=경기");
+  await page.getByRole("button", { name: "최근 검색 삭제: 서울 · 오피스텔 · 20~무제한㎡", exact: true }).click();
+  await expect(page.getByRole("button", { name: /최근 검색 적용: 서울 · 오피스텔/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /최근 검색 적용: 서울 · 아파트/ })).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("region")).toBe("경기");
+  await expect(page.getByLabel("청약 검색어", { exact: true })).toBeFocused();
+  await page.reload();
+  await expect(page.getByRole("button", { name: /최근 검색 적용: 서울 · 오피스텔/ })).toHaveCount(0);
+  await page.getByRole("button", { name: /최근 검색 적용: 서울 · 아파트/ }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get("minPriceManwon")).toBe("100");
+  expect(new URL(page.url()).searchParams.get("category")).toBe("APARTMENT");
+});
+
+test("최근 검색: 모바일 전체 삭제는 키보드 초점을 보존하고 기록을 비운다", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await mockPublicApi(page); await seedRecentSearches(page); await page.goto("/");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const clear = page.getByLabel("최근 검색", { exact: true }).getByRole("button", { name: "지우기", exact: true });
+  await clear.focus(); await page.keyboard.press("Enter");
+  await expect(page.getByLabel("최근 검색", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("청약 검색어", { exact: true })).toBeFocused();
+  expect(await page.evaluate(() => localStorage.getItem("cheongyak-one-recent-searches"))).toBeNull();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("최근 검색: 저장소 실패는 화면 삭제와 영구 삭제를 구분해 안내한다", async ({ page }) => {
+  await mockPublicApi(page); await seedRecentSearches(page); await page.goto("/");
+  await page.evaluate(() => { Storage.prototype.setItem = () => { throw new Error("blocked"); }; });
+  await page.getByRole("button", { name: /최근 검색 삭제: 서울 · 오피스텔/ }).click();
+  await expect(page.getByRole("button", { name: /최근 검색 적용: 서울 · 오피스텔/ })).toHaveCount(0);
+  await expect(page.getByText(/새로고침하면 다시 나타날 수 있습니다/)).toBeVisible();
+});
+
 test("조건 되돌리기: 전체 초기화 후 URL과 모든 조건을 복원한다", async ({ page }) => {
   await mockPublicApi(page);
   await page.goto("/?q=강남&region=서울&category=OFFICETEL&supplyType=SALE&minPriceManwon=100&maxPriceManwon=200&minArea=20&maxArea=30&includeClosed=true&status=upcoming&sort=DEADLINE");
