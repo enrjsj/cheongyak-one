@@ -1,5 +1,63 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 
+test("필터 결과 이동: 확인은 검색 결과로, 닫기는 원래 버튼으로 초점을 돌린다", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockPublicApi(page); await page.goto("/");
+  const opener = page.getByRole("button", { name: /청약 필터 열기/ });
+  await expect(opener).toBeEnabled();
+  await opener.focus(); await opener.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "청약 조건 선택" });
+  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+  await expect(opener).toBeFocused();
+  await opener.press("Enter");
+  await dialog.getByRole("button", { name: /공고 .*건 보기/ }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "청약 검색 결과", exact: true })).toBeFocused();
+});
+
+test("필터 결과 이동: 지연 중에는 오래된 건수 대신 조회 상태를 표시한다", async ({ page }) => {
+  await mockPublicApi(page); await page.goto("/");
+  await page.getByRole("button", { name: /청약 필터 열기/ }).click();
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/api/v1/notices?**", async route => {
+    if (new URL(route.request().url()).searchParams.has("maxPrice")) await gate;
+    await route.fallback();
+  });
+  const dialog = page.getByRole("dialog", { name: "청약 조건 선택" });
+  await dialog.getByRole("button", { name: "5억 이하", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "검색 중 · 결과 화면 보기" })).toBeVisible();
+  await dialog.getByRole("button", { name: "검색 중 · 결과 화면 보기" }).click();
+  await expect(page.getByRole("region", { name: "청약 검색 결과", exact: true })).toBeFocused();
+  release();
+});
+
+test("통합 경계: 0원·0㎡ 상한은 무제한 검색으로 조용히 바뀌지 않는다", async ({ page }) => {
+  await mockPublicApi(page); await page.goto("/");
+  await page.getByRole("button", { name: /청약 필터 열기/ }).click();
+  const dialog = page.getByRole("dialog", { name: "청약 조건 선택" });
+  for (const label of ["예산 최대 (만원)", "면적 최대 (㎡)"]) {
+    const input = dialog.getByLabel(label, { exact: true });
+    await input.fill("0"); await input.press("Enter");
+    await expect(input).toHaveAttribute("aria-invalid", "true");
+    await expect(dialog.getByRole("button", { name: /공고 .*건 보기/ })).toBeDisabled();
+    await input.fill("");
+  }
+  await expect(dialog.getByRole("button", { name: /공고 .*건 보기/ })).toBeEnabled();
+});
+
+test("통합 경계: 초안에서 빠른 선택으로 이동할 때 중간 검색을 전송하지 않는다", async ({ page }) => {
+  const requests = await mockPublicApi(page); await page.goto("/");
+  await page.getByRole("button", { name: /청약 필터 열기/ }).click();
+  const dialog = page.getByRole("dialog", { name: "청약 조건 선택" });
+  const input = dialog.getByLabel("예산 최소 (만원)", { exact: true });
+  await input.fill("30000");
+  const preset = dialog.getByRole("button", { name: "5억 이하", exact: true });
+  await preset.focus(); await page.waitForTimeout(700); await preset.press("Enter");
+  await expect.poll(() => requests.some(q => new URLSearchParams(q).get("maxPrice") === "500000000")).toBe(true);
+  expect(requests.some(q => new URLSearchParams(q).has("minPrice"))).toBe(false);
+});
+
 test("빠른 범위: 예산 선택은 잘못된 초안을 교체하고 금액과 선택 상태를 유지한다", async ({ page }) => {
   await mockPublicApi(page); await page.goto("/");
   await page.getByRole("button", { name: /청약 필터 열기/ }).click();

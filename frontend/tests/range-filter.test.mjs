@@ -12,4 +12,9 @@ test("budget hints preserve exact amounts without rounding", () => {
     assert.equal(formatManwonInput(input), expected);
   }
 });
+test("zero upper limits cannot silently become unlimited", () => {
+  assert.notEqual(rangeFilterError("", "0", 1000), "");
+  assert.notEqual(rangeFilterError("0", "000", 1000000), "");
+  assert.equal(rangeFilterError("0", "", 1000), "");
+});
 

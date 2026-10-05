@@ -2376,7 +2376,7 @@ export default function Home() {
                 <button className="save-preference-button" type="button" disabled={rangeInvalid} onClick={() => void handleSaveSearchPreference()}>로그인하고 조건 저장</button>
               )}
             </div>
-            <div className="modal-actions"><button className="reset-button" type="button" onClick={() => { setRangeResetVersion(version => version + 1); setRegion("전체"); setCategory("전체"); setSupplyType(undefined); setMinPriceManwon(""); setMaxPriceManwon(""); setMinArea(""); setMaxArea(""); setIncludeClosed(false); resetVisible(); }}>초기화</button><button className="primary-button" type="button" disabled={rangeInvalid} onClick={() => { rememberSearch(); setFilterOpen(false); setSavedOnly(false); }}>공고 {noticeTotal}건 보기</button></div>
+            <div className="modal-actions"><button className="reset-button" type="button" onClick={() => { setRangeResetVersion(version => version + 1); setRegion("전체"); setCategory("전체"); setSupplyType(undefined); setMinPriceManwon(""); setMaxPriceManwon(""); setMinArea(""); setMaxArea(""); setIncludeClosed(false); resetVisible(); }}>초기화</button><button className="primary-button" type="button" disabled={rangeInvalid} onClick={() => { rememberSearch(); setFilterOpen(false); setSavedOnly(false); window.setTimeout(scrollToResults, 0); }}>{loading || loadRetryPending ? "검색 중 · 결과 화면 보기" : loadError ? "조회 상태 확인하기" : `공고 ${noticeTotal}건 보기`}</button></div>
           </section>
         </div>
       )}
