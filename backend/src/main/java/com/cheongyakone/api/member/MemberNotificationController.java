@@ -1,6 +1,9 @@
 package com.cheongyakone.api.member;
 
 import com.cheongyakone.application.member.MemberNotificationService;
+import com.cheongyakone.application.member.NotificationInboxQuery;
+import org.springframework.web.bind.annotation.RequestParam;
+import java.time.LocalDate;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
@@ -32,8 +35,18 @@ public class MemberNotificationController {
     }
 
     @GetMapping
-    public NotificationInboxResponse inbox(HttpServletRequest request) {
-        return notificationService.inbox(cookieSupport.read(request));
+    public NotificationInboxResponse inbox(HttpServletRequest request,
+            @RequestParam(defaultValue = "") String query,
+            @RequestParam(defaultValue = "ALL") NotificationInboxQuery.Filter filter,
+            @RequestParam(defaultValue = "NEWEST") NotificationInboxQuery.Order sort,
+            @RequestParam(defaultValue = "ALL") NotificationInboxQuery.ReadStatus readStatus,
+            @RequestParam(required = false) LocalDate from,
+            @RequestParam(required = false) LocalDate to,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(required = false) Long snapshotId) {
+        return notificationService.inbox(cookieSupport.read(request),
+                new NotificationInboxQuery(query, filter, sort, readStatus, from, to, page, size, snapshotId));
     }
 
     @PatchMapping("/{notificationId}/read")

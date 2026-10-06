@@ -33,12 +33,13 @@ export async function verifyDeployment(frontend, api, revision, {
   }
   while (now() - started < deadlineMs) {
     const budget = Math.min(requestTimeoutMs, deadlineMs - (now() - started));
-    const [webReady, apiReady] = await Promise.all([
+    const [webReady, apiReady, proxyReady] = await Promise.all([
       checkRevision(`${frontend}/release.json?revision=${revision}&at=${now()}`, budget),
       checkRevision(`${api}/api/v1/release?revision=${revision}`, budget),
+      checkRevision(`${frontend}/api/v1/release?revision=${revision}`, budget),
     ]);
-    const attempt = { at: new Date(now()).toISOString(), webReady, apiReady };
-    if (webReady && apiReady && now() - started < deadlineMs) {
+    const attempt = { at: new Date(now()).toISOString(), webReady, apiReady, proxyReady };
+    if (webReady && apiReady && proxyReady && now() - started < deadlineMs) {
       attempt.checks = await smokeDeployment(frontend, api, request, { timeoutMs: Math.min(requestTimeoutMs, deadlineMs - (now() - started)) });
       attempt.ok = attempt.checks.every(check => check.ok);
     }

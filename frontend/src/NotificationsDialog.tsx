@@ -82,6 +82,12 @@ export default function NotificationsDialog({
   const [filter, setFilter] = useState<NotificationFilter>("ALL");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<NotificationSort>("NEWEST");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [readStatus, setReadStatus] = useState<"ALL" | "UNREAD" | "READ">("ALL");
+  const [historyPending, setHistoryPending] = useState(false);
+  const criteriaKey = JSON.stringify([query, filter, sort, readStatus, from, to]);
+  const appliedCriteria = useRef(criteriaKey);
   const [inboxLoaded, setInboxLoaded] = useState(false);
   const [refreshWarning, setRefreshWarning] = useState("");
   const [inbox, setInbox] = useState<NotificationInbox>({ notifications: [], unreadCount: 0 });
@@ -112,8 +118,37 @@ export default function NotificationsDialog({
     }
   };
 
+  const serverHistory = inbox.page !== undefined;
+  const invalidPeriod = Boolean(from && to && from > to);
+  const historyOptions = (page = 0, snapshotId?: number) => ({ query, filter, sort, readStatus, from, to, page, snapshotId });
+  const loadHistory = async (page = 0, snapshotId?: number) => {
+    if (accessBlocked.current || mutationBusy.current || invalidPeriod) { setHistoryPending(false); return; }
+    const scope = requestScope.current;
+    const sequence = ++refreshSequence.current;
+    const current = () => scope === requestScope.current && sequence === refreshSequence.current;
+    setHistoryPending(true);
+    try {
+      const result = await fetchNotificationInbox(historyOptions(page, snapshotId));
+      if (!current()) return;
+      setInbox(result);
+      appliedCriteria.current = criteriaKey;
+      setInboxLoaded(true);
+      setRefreshWarning("");
+      setError("");
+      setLastUpdatedAt(new Date());
+      onUnreadCountChange(result.unreadCount);
+    } catch (requestError) {
+      if (!current()) return;
+      setRefreshWarning("알림을 조회하지 못했습니다. 표시된 목록은 이전 조회 결과입니다. 새로고침으로 다시 확인해주세요.");
+      blockOnAuthError(requestError);
+    } finally {
+      if (current()) setHistoryPending(false);
+    }
+  };
+
   const refreshInbox = async (showProgress = false) => {
-    if (accessBlocked.current || mutationBusy.current || refreshBusy.current || loading) return;
+    if (accessBlocked.current || mutationBusy.current || refreshBusy.current || loading || historyPending) return;
+    if (serverHistory) { await loadHistory(); return; }
     refreshBusy.current = true;
     const scope = requestScope.current;
     const sequence = ++refreshSequence.current;
@@ -156,6 +191,11 @@ export default function NotificationsDialog({
     setPreferenceError("");
     setSessionExpired(false);
     setFilter("ALL");
+    setFrom("");
+    setTo("");
+    setReadStatus("ALL");
+    setHistoryPending(false);
+    appliedCriteria.current = JSON.stringify(["", "ALL", "NEWEST", "ALL", "", ""]);
     setQuery("");
     setSort("NEWEST");
     setInbox({ notifications: [], unreadCount: 0 });
@@ -196,7 +236,7 @@ export default function NotificationsDialog({
   }, [open, onUnreadCountChange, loadVersion]);
 
   useEffect(() => {
-    if (!open || tab !== "inbox" || sessionExpired || loading || saving || busyId !== undefined) return;
+    if (!open || tab !== "inbox" || sessionExpired || loading || saving || busyId !== undefined || historyPending || (inbox.page ?? 0) > 0 || appliedCriteria.current !== criteriaKey) return;
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") void refreshInbox();
     };
@@ -206,15 +246,29 @@ export default function NotificationsDialog({
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [open, tab, sessionExpired, loading, saving, busyId]);
+  }, [open, tab, sessionExpired, loading, saving, busyId, historyPending, criteriaKey, inbox.page]);
 
-  const filteredNotifications = useMemo(() => searchAndSortNotifications(filterNotifications(inbox.notifications, filter), query, sort), [filter, inbox.notifications, query, sort]);
-  const filterOptions = useMemo(() => notificationFilterOptions(inbox.notifications), [inbox.notifications]);
+  useEffect(() => {
+    if (!open || !serverHistory || sessionExpired) return;
+    // Invalidate a previous search immediately, including during the debounce window.
+    ++refreshSequence.current;
+    if (appliedCriteria.current === criteriaKey) { setHistoryPending(false); return; }
+    if (invalidPeriod) { setHistoryPending(false); return; }
+    setHistoryPending(true);
+    const timer = window.setTimeout(() => void loadHistory(), 300);
+    return () => { window.clearTimeout(timer); ++refreshSequence.current; };
+  }, [open, serverHistory, sessionExpired, criteriaKey]);
+
+  const filteredNotifications = useMemo(() => serverHistory ? inbox.notifications : searchAndSortNotifications(filterNotifications(inbox.notifications, filter), query, sort), [serverHistory, filter, inbox.notifications, query, sort]);
+  const filterOptions = useMemo(() => serverHistory ? [
+    { value: "ALL" as const, label: "전체" }, { value: "UNREAD" as const, label: "읽지 않음" },
+    { value: "SCHEDULE" as const, label: "일정" }, { value: "NEW" as const, label: "신규" }, { value: "UPDATED" as const, label: "변경" },
+  ] : notificationFilterOptions(inbox.notifications), [serverHistory, inbox.notifications]);
 
   if (!open) return null;
 
   const openNotification = async (notification: MemberNotification) => {
-    if (accessBlocked.current || mutationBusy.current || loading || !inboxLoaded) return;
+    if (accessBlocked.current || mutationBusy.current || loading || historyPending || !inboxLoaded) return;
     mutationBusy.current = true;
     const scope = requestScope.current;
     ++refreshSequence.current;
@@ -225,6 +279,7 @@ export default function NotificationsDialog({
         if (scope !== requestScope.current) return;
         const nextUnreadCount = Math.max(0, inbox.unreadCount - 1);
         setInbox((current) => ({
+          ...current,
           unreadCount: nextUnreadCount,
           notifications: current.notifications.map((item) => item.id === updated.id ? updated : item),
         }));
@@ -246,7 +301,7 @@ export default function NotificationsDialog({
   };
 
   const readAll = async () => {
-    if (accessBlocked.current || mutationBusy.current || loading || !inboxLoaded) return;
+    if (accessBlocked.current || mutationBusy.current || loading || historyPending || !inboxLoaded) return;
     mutationBusy.current = true;
     const scope = requestScope.current;
     ++refreshSequence.current;
@@ -257,10 +312,26 @@ export default function NotificationsDialog({
       if (scope !== requestScope.current) return;
       const readAt = new Date().toISOString();
       setInbox((current) => ({
+        ...current,
         unreadCount: 0,
         notifications: current.notifications.map((item) => ({ ...item, readAt: item.readAt ?? readAt })),
       }));
       onUnreadCountChange(0);
+      if (serverHistory) {
+        // Reading changes unread-first order and membership; start a fresh page snapshot.
+        try {
+          const result = await fetchNotificationInbox(historyOptions());
+          if (scope !== requestScope.current) return;
+          setInbox(result);
+          appliedCriteria.current = criteriaKey;
+          onUnreadCountChange(result.unreadCount);
+        } catch (requestError) {
+          if (scope !== requestScope.current) return;
+          setInbox(current => ({ ...current, page: 0, totalPages: 1, notifications: [], totalElements: 0 }));
+          setRefreshWarning("읽음 처리는 완료됐지만 목록을 갱신하지 못했습니다. 새로고침으로 다시 확인해주세요.");
+          blockOnAuthError(requestError);
+        }
+      }
     } catch (requestError) {
       if (scope !== requestScope.current) return;
       setError(requestError instanceof Error ? requestError.message : "알림을 읽음 처리하지 못했습니다.");
@@ -320,27 +391,39 @@ export default function NotificationsDialog({
           <div className="notification-inbox">
             <div className="notification-inbox-actions">
               <small aria-live="polite">{lastUpdatedAt ? `${lastUpdatedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 확인` : "확인 전"}</small>
-              <button type="button" onClick={() => void refreshInbox(true)} disabled={loading || saving || busyId !== undefined || sessionExpired}>새로고침</button>
-              {inbox.unreadCount > 0 && <button className="read-all-button" type="button" onClick={() => void readAll()} disabled={saving || busyId !== undefined || sessionExpired}>모두 읽음</button>}
+              <button type="button" onClick={() => void refreshInbox(true)} disabled={loading || historyPending || invalidPeriod || saving || busyId !== undefined || sessionExpired}>새로고침</button>
+              {inbox.unreadCount > 0 && <button className="read-all-button" type="button" onClick={() => void readAll()} disabled={saving || historyPending || busyId !== undefined || sessionExpired}>모두 읽음</button>}
             </div>
             {refreshWarning && <p className="member-message error" role="status">{refreshWarning}</p>}
             {inboxLoaded && <div className="notification-search">
-              <label>알림 검색<input type="search" value={query} maxLength={100} placeholder="공고명 또는 알림 내용" onChange={event => setQuery(event.target.value)} /></label>
-              <label>알림 정렬<select value={sort} onChange={event => setSort(event.target.value as NotificationSort)}><option value="NEWEST">최신순</option><option value="UNREAD_FIRST">읽지 않음 우선</option></select></label>
-              <small role="status">불러온 {inbox.notifications.length}건 중 {filteredNotifications.length}건 표시</small>
+              <label>알림 검색<input disabled={saving || sessionExpired} type="search" value={query} maxLength={100} placeholder="공고명 또는 알림 내용" onChange={event => setQuery(event.target.value)} /></label>
+              <label>알림 정렬<select disabled={saving || sessionExpired} value={sort} onChange={event => setSort(event.target.value as NotificationSort)}><option value="NEWEST">최신순</option><option value="UNREAD_FIRST">읽지 않음 우선</option></select></label>
+              {serverHistory && <>
+                <label>읽음 상태<select aria-label="읽음 상태" disabled={saving || sessionExpired} value={readStatus} onChange={event => setReadStatus(event.target.value as typeof readStatus)}><option value="ALL">모든 상태</option><option value="UNREAD">읽지 않음</option><option value="READ">읽음</option></select></label>
+                <label>받은 날짜부터<input disabled={saving || sessionExpired} type="date" min="1900-01-01" max="9999-12-31" value={from} onChange={event => setFrom(event.target.value)} /></label>
+                <label>받은 날짜까지<input disabled={saving || sessionExpired} type="date" min="1900-01-01" max="9999-12-31" value={to} onChange={event => setTo(event.target.value)} /></label>
+                <small>받은 날짜는 한국 시간 기준입니다. 모두 읽음은 전체 이력에 적용됩니다.</small>
+              </>}
+              {invalidPeriod && <p role="alert">시작일은 종료일보다 늦을 수 없습니다.</p>}
+              <small role="status">{historyPending ? "전체 알림 이력을 조회하고 있습니다…" : serverHistory ? `검색 결과 ${inbox.totalElements ?? 0}건 · ${inbox.notifications.length}건 표시` : `불러온 ${inbox.notifications.length}건 중 ${filteredNotifications.length}건 표시`}</small>
               {query && <button type="button" onClick={() => setQuery("")}>검색 초기화</button>}
             </div>}
-            {inbox.notifications.length > 0 && <div className="notification-filter" role="group" aria-label="알림 분류">
-              {filterOptions.map((option) => <button key={option.value} type="button" aria-pressed={filter === option.value} className={filter === option.value ? "active" : ""} onClick={() => setFilter(option.value)}>{option.label}</button>)}
+            {(serverHistory || inbox.notifications.length > 0) && <div className="notification-filter" role="group" aria-label="알림 분류">
+              {filterOptions.map((option) => <button key={option.value} type="button" disabled={saving || sessionExpired} aria-pressed={filter === option.value} className={filter === option.value ? "active" : ""} onClick={() => setFilter(option.value)}>{option.label}</button>)}
             </div>}
             {filteredNotifications.map((item) => (
-              <button className={`notification-item${item.readAt ? " read" : ""}`} type="button" key={item.id} disabled={saving || busyId !== undefined || sessionExpired} onClick={() => void openNotification(item)}>
+              <button className={`notification-item${item.readAt ? " read" : ""}`} type="button" key={item.id} disabled={saving || historyPending || busyId !== undefined || sessionExpired} onClick={() => void openNotification(item)}>
                 <span className="notification-dot" aria-hidden="true"></span>
                 <span><b>{item.noticeTitle}</b><small>{item.message}</small><em><strong>{notificationCategoryLabel(item.type)}</strong>{notificationDateLabel(item)}</em></span>
                 <span aria-hidden="true">›</span>
               </button>
             ))}
-            {!inboxLoaded ? <p className="notification-state">알림 목록을 확인하지 못했습니다. 새로고침으로 다시 불러와주세요.</p> : inbox.notifications.length === 0 ? <div className="notification-empty"><b>아직 도착한 알림이 없어요</b><p>관심청약 일정과 저장한 조건의 신규 공고를 알려드릴게요.</p></div> : filteredNotifications.length === 0 && <div className="notification-empty"><b>{query.trim() ? "검색 결과가 없어요" : filter === "UNREAD" ? "읽지 않은 알림이 없어요" : "해당 분류의 알림이 없어요"}</b><p>검색어나 분류를 바꾸면 불러온 다른 알림을 확인할 수 있어요.</p></div>}
+            {serverHistory && (inbox.totalPages ?? 0) > 1 && <nav className="notification-pagination" aria-label="알림 페이지">
+              <button type="button" disabled={historyPending || saving || sessionExpired || invalidPeriod || appliedCriteria.current !== criteriaKey || inbox.page === 0} onClick={() => void loadHistory((inbox.page ?? 0) - 1, inbox.snapshotId)}>이전 페이지</button>
+              <span>{(inbox.page ?? 0) + 1} / {inbox.totalPages} 페이지</span>
+              <button type="button" disabled={historyPending || saving || sessionExpired || invalidPeriod || appliedCriteria.current !== criteriaKey || (inbox.page ?? 0) + 1 >= (inbox.totalPages ?? 0)} onClick={() => void loadHistory((inbox.page ?? 0) + 1, inbox.snapshotId)}>다음 페이지</button>
+            </nav>}
+            {!inboxLoaded ? <p className="notification-state">알림 목록을 확인하지 못했습니다. 새로고침으로 다시 불러와주세요.</p> : inbox.notifications.length === 0 && !query.trim() && filter === "ALL" && readStatus === "ALL" && !from && !to ? <div className="notification-empty"><b>아직 도착한 알림이 없어요</b><p>관심청약 일정과 저장한 조건의 신규 공고를 알려드릴게요.</p></div> : filteredNotifications.length === 0 && <div className="notification-empty"><b>{query.trim() ? "검색 결과가 없어요" : filter === "UNREAD" ? "읽지 않은 알림이 없어요" : "해당 분류의 알림이 없어요"}</b><p>검색어나 분류, 기간을 바꿔 다시 확인해주세요.</p></div>}
           </div>
         ) : (
           <form className="notification-settings" onSubmit={(event) => void savePreference(event)}>

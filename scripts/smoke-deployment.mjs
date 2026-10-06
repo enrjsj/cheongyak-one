@@ -15,6 +15,8 @@ export async function smokeDeployment(frontendUrl, apiUrl, request = fetch, { ti
     { name: "frontend", url: frontend + "/", status: 200, valid: (body, type) => type.includes("text/html") && /id=["']root["']/.test(body) },
     { name: "health", url: api + "/actuator/health", status: 200, valid: body => JSON.parse(body).status === "UP" },
     { name: "freshness", url: api + "/api/v1/notices/freshness", status: 200, valid: body => Number.isFinite(Date.parse(JSON.parse(body).generatedAt)) },
+    { name: "proxy-freshness", url: frontend + "/api/v1/notices/freshness", status: 200, valid: body => Number.isFinite(Date.parse(JSON.parse(body).generatedAt)) },
+    { name: "proxy-member-auth", url: frontend + "/api/v1/members/me", status: 401, valid: (_body, _type, headers) => headers.get("cache-control")?.includes("no-store") },
     { name: "admin-auth", url: api + "/api/v1/admin/ai-consultations/usage", status: 401, valid: () => true },
     { name: "member-auth", url: api + "/api/v1/members/me/ai-consultations/availability", status: 401, valid: () => true },
   ];
@@ -41,7 +43,7 @@ export async function smokeDeployment(frontendUrl, apiUrl, request = fetch, { ti
         }
         const body = await response.text();
         let valid = false;
-        try { valid = check.valid(body, response.headers.get("content-type") ?? ""); } catch { /* Invalid JSON is a payload failure, not a connection failure. */ }
+        try { valid = check.valid(body, response.headers.get("content-type") ?? "", response.headers); } catch { /* Invalid JSON is a payload failure, not a connection failure. */ }
         return valid ? { ok: true } : { ok: false, reason: "invalid-body" };
       })()]);
       return { name: check.name, ...result, status, durationMs: Math.round(performance.now() - started) };

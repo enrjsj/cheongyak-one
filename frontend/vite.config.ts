@@ -4,6 +4,8 @@ import react from "@vitejs/plugin-react";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "");
   return {
+    // Vercel serves /api through its rewrite. Ignore legacy cross-site build settings there.
+    define: env.VERCEL === "1" ? { "import.meta.env.VITE_API_BASE_URL": JSON.stringify("") } : {},
     plugins: [react(), {
       name: "release-metadata",
       generateBundle() {

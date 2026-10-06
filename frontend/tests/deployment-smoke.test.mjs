@@ -8,12 +8,12 @@ test("deployment smoke uses only credential-free reads and verifies auth boundar
     assert.equal(init.credentials, "omit");
     assert.equal(init.redirect, "error");
     assert.ok(init.signal);
-    if (url.includes("/admin/") || url.includes("/members/")) return new Response("{}", { status: 401 });
+    if (url.includes("/admin/") || url.includes("/members/")) return new Response("{}", { status: 401, headers: { "cache-control": "no-store" } });
     if (url.endsWith("/health")) return Response.json({ status: "UP" });
     if (url.endsWith("/freshness")) return Response.json({ generatedAt: "2026-10-04T00:00:00Z" });
     return new Response('<div id="root"></div>', { headers: { "content-type": "text/html" } });
   });
-  assert.equal(results.length, 5);
+  assert.equal(results.length, 7);
   assert.ok(results.every(result => result.ok));
   assert.ok(results.every(result => Number.isInteger(result.durationMs) && result.durationMs >= 0 && !result.reason));
 });
@@ -48,7 +48,7 @@ test("smoke bounds stalled headers and aborts all requests without retries", asy
   const results = await smokeDeployment("https://web.example", "https://api.example", async (_, init) => {
     signals.push(init.signal); return new Promise(() => {});
   }, { timeoutMs: 20 });
-  assert.equal(signals.length, 5);
+  assert.equal(signals.length, 7);
   assert.ok(signals.every(signal => signal.aborted));
   assert.ok(results.every(result => result.reason === "timeout" && !result.ok));
 });
@@ -78,7 +78,7 @@ test("smoke validates timeout before issuing requests", async () => {
 });
 
 async function successfulRequest(url) {
-  if (url.includes("/admin/") || url.includes("/members/")) return new Response("{}", { status: 401 });
+  if (url.includes("/admin/") || url.includes("/members/")) return new Response("{}", { status: 401, headers: { "cache-control": "no-store" } });
   if (url.endsWith("/health")) return Response.json({ status: "UP" });
   if (url.endsWith("/freshness")) return Response.json({ generatedAt: "2026-10-05T00:00:00Z" });
   return new Response('<div id="root"></div>', { headers: { "content-type": "text/html" } });
@@ -92,8 +92,8 @@ test("JSON CLI returns one versioned report with UTC times and successful exit",
   assert.equal(code, 0); assert.deepEqual(errors, []); assert.equal(output.length, 1);
   const report = JSON.parse(output[0]);
   assert.equal(report.schemaVersion, 1); assert.equal(report.ok, true); assert.equal(report.timeoutMs, 1000);
-  assert.deepEqual(report.summary, { passed: 5, failed: 0 });
-  assert.equal(report.results.length, 5);
+  assert.deepEqual(report.summary, { passed: 7, failed: 0 });
+  assert.equal(report.results.length, 7);
   assert.match(report.startedAt, /Z$/); assert.ok(Date.parse(report.completedAt) >= Date.parse(report.startedAt));
 });
 
@@ -104,7 +104,7 @@ test("JSON CLI preserves successful checks when another check times out", async 
   });
   assert.equal(code, 1);
   const report = JSON.parse(output[0]);
-  assert.equal(report.ok, false); assert.deepEqual(report.summary, { passed: 4, failed: 1 });
+  assert.equal(report.ok, false); assert.deepEqual(report.summary, { passed: 6, failed: 1 });
   assert.equal(report.results.find(result => result.name === "health").reason, "timeout");
 });
 
@@ -123,7 +123,7 @@ test("CLI rejects invalid and duplicate options before any request without echoi
 test("plain CLI keeps per-check output and summary; help never requests the network", async () => {
   const output = [];
   assert.equal(await runSmokeCli(["https://web.example", "https://api.example"], { request: successfulRequest, log: line => output.push(line) }), 0);
-  assert.equal(output.length, 7); assert.match(output[1], /frontend: PASS \(200\)/); assert.equal(output.at(-1), "Summary: 5 passed, 0 failed");
+  assert.equal(output.length, 9); assert.match(output[1], /frontend: PASS \(200\)/); assert.equal(output.at(-1), "Summary: 7 passed, 0 failed");
   let called = false;
   assert.equal(await runSmokeCli(["--help"], { request: async () => { called = true; }, log: () => {} }), 0);
   assert.equal(called, false);

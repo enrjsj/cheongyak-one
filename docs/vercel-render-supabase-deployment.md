@@ -46,13 +46,18 @@ Vercel 프로젝트의 Root Directory를 `frontend`로 지정한다. Build Comma
 Vercel 환경변수:
 
 ```text
-VITE_API_BASE_URL=https://<Render API URL>
 VITE_DEMO_MODE=false
 ```
 
 `VITE_` 변수는 브라우저에 노출되므로 API URL처럼 공개해도 되는 값만 넣는다. DB 비밀번호·공공 API 키·SMTP 비밀번호는 절대 넣지 않는다.
 
-Vercel과 Render는 서로 다른 출처이므로 Render의 `CORS_ALLOWED_ORIGINS`와 쿠키 보안 설정을 함께 등록해야 회원 로그인·저장 기능이 동작한다. 일부 브라우저의 서드파티 쿠키 차단 정책에서는 서로 다른 기본 도메인의 세션 로그인이 제한될 수 있다. 사용자가 늘면 `app.example.com`/`api.example.com`처럼 같은 상위 도메인으로 옮기거나, Vercel rewrite/BFF 방식으로 API를 같은 출처로 제공한다.
+Vercel에서는 `frontend/vercel.json`의 `/api/:path*` rewrite가 Render API로 연결된다. 브라우저의 API 요청과 세션 쿠키는 프런트와 같은 도메인을 사용한다. `VERCEL=1` 빌드는 기존 `VITE_API_BASE_URL` 설정을 무시하므로 과거 환경변수가 남아 있어도 같은 출처를 사용한다. Render 서비스 주소를 바꾸면 rewrite 목적지도 함께 변경한다. 회원 API 응답은 캐시하지 않는다.
+
+Render의 `CORS_ALLOWED_ORIGINS`에는 운영 프런트 주소를 계속 유지한다. Preview에서 로그인까지 검증하려면 해당 Preview 출처도 명시적으로 등록해야 한다. HTTPS 운영 쿠키의 Secure·HttpOnly 및 CSRF 검증은 유지한다. 기존 Render 도메인의 로그인 쿠키는 Vercel 도메인으로 옮길 수 없으므로 전환 후 한 번 다시 로그인해야 한다.
+
+CI의 `auth-browsers` 작업은 외부 통신 없이 임시 H2 데이터와 실제 Java API로 Chromium 및 iPhone WebKit의 로그인, 관심청약 저장, 새로고침·새 탭 세션 유지, CSRF 차단, 로그아웃을 검증한다. 로컬 HTTP 프록시 테스트이므로 운영 HTTPS rewrite 자체는 배포 검증의 프런트 `/api/v1/release`, 공개 API, 비로그인 회원 API 검사로 별도 확인한다. 테스트 회원과 공고는 프로세스 종료 시 삭제된다.
+
+알림함은 전체 보관 이력을 서버에서 검색한다. `query`, `filter`(ALL/UNREAD/SCHEDULE/NEW/UPDATED), `readStatus`(ALL/UNREAD/READ), `sort`(NEWEST/UNREAD_FIRST), `from`/`to`(한국 시간 수신일), `page`(0부터), `size`(1~50)를 지원한다. 응답의 `snapshotId`를 다음 페이지에 전달하면 조회 후 추가된 알림 때문에 페이지가 밀리지 않는다. 검색 조건 변경·새로고침·모두 읽음 후에는 새 조회 범위를 사용한다. 다른 기기의 읽음 처리·삭제로 인한 변화는 새로고침으로 반영한다. `unreadCount`와 모두 읽음은 검색 조건과 관계없이 회원 전체 이력 기준이다. 기존 읽은 알림 보관 정책은 그대로 적용된다.
 
 ## 4. 배치와 Render 무료 플랜
 

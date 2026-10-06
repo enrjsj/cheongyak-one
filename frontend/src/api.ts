@@ -304,6 +304,23 @@ export interface MemberNotification {
 export interface NotificationInbox {
   notifications: MemberNotification[];
   unreadCount: number;
+  // Optional while the frontend and backend roll out independently.
+  page?: number;
+  size?: number;
+  totalElements?: number;
+  totalPages?: number;
+  snapshotId?: number;
+}
+
+export interface NotificationInboxQuery {
+  query?: string;
+  filter?: string;
+  sort?: string;
+  readStatus?: "ALL" | "UNREAD" | "READ";
+  from?: string;
+  to?: string;
+  page?: number;
+  snapshotId?: number;
 }
 
 export interface NotificationPreference {
@@ -820,8 +837,13 @@ export function revokeOtherMemberSessions(): Promise<MemberSession[]> {
   return requestJson<MemberSession[]>("/api/v1/members/me/sessions/others", { method: "DELETE" });
 }
 
-export function fetchNotificationInbox(): Promise<NotificationInbox> {
-  return requestJson<NotificationInbox>("/api/v1/members/me/notifications");
+export function fetchNotificationInbox(options?: NotificationInboxQuery): Promise<NotificationInbox> {
+  const params = new URLSearchParams();
+  Object.entries(options ?? {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  });
+  const suffix = params.size ? `?${params}` : "";
+  return requestJson<NotificationInbox>(`/api/v1/members/me/notifications${suffix}`);
 }
 
 export function markNotificationRead(notificationId: number): Promise<MemberNotification> {
