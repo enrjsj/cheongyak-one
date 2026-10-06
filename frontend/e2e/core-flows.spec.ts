@@ -493,6 +493,30 @@ async function openPushAdmin(page: Page) {
   await page.getByRole("tab", { name: "푸시 발송" }).click();
 }
 
+test("관리자 소스별 실패·빈 응답을 구분하고 선택 소스만 재수집한다", async ({ page }) => {
+  await mockApi(page, { admin: true });
+  const posts: string[] = [];
+  await page.route("**/api/v1/admin/sync-executions**", route => {
+    if (route.request().method() === "POST") {
+      posts.push(new URL(route.request().url()).searchParams.get("source") ?? "ALL");
+      return route.fulfill({ status: 202 });
+    }
+    return route.fulfill({ json: { runningCount: 0, failuresLast24Hours: 1, executions: [], sources: [
+      { sourceSystem: "REB_APT", configured: true, status: "DELAYED", lastAttemptStatus: "PARTIALLY_SUCCEEDED", fetchedCount: 10, savedCount: 9, failedNoticeCount: 1, failedUnitTypeCount: 2, emptyUnitTypeCount: 3, retryRecommended: true },
+      { sourceSystem: "MYHOME_PUBLIC_RENTAL", configured: false, status: "UNAVAILABLE", lastAttemptStatus: "SKIPPED", fetchedCount: 0, savedCount: 0, failedNoticeCount: 0, failedUnitTypeCount: 0, emptyUnitTypeCount: 0 },
+    ] } });
+  });
+  await page.goto("/"); await signup(page);
+  await page.getByRole("button", { name: "운영 관리", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: "운영 관리", exact: true });
+  await expect(panel.getByText(/저장 실패 1 · 주택형 실패 2 · 주택형 빈 응답 3/)).toBeVisible();
+  await expect(panel.getByRole("button", { name: "공공임대만 재수집" })).toBeDisabled();
+  page.once("dialog", dialog => dialog.accept());
+  await panel.getByRole("button", { name: "아파트만 재수집" }).click();
+  await expect(panel.getByRole("status")).toContainText("공고 동기화를 시작했습니다");
+  expect(posts).toEqual(["REB_APT"]);
+});
+
 test("관리자 푸시 묶음 처리의 진행 상태와 부분 오류를 표시하고 다음 결과로 교체한다", async ({ page }) => {
   await mockApi(page, { admin: true });
   let pending: Route | undefined;

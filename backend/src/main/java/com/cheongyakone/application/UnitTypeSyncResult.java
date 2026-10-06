@@ -6,9 +6,10 @@ public record UnitTypeSyncResult(
         int synchronizedNoticeCount,
         int savedUnitTypeCount,
         int failedNoticeCount,
-        boolean disabled
+        boolean disabled,
+        int emptyNoticeCount
 ) {
     public static UnitTypeSyncResult notConfigured() {
-        return new UnitTypeSyncResult(0, 0, 0, 0, true);
+        return new UnitTypeSyncResult(0, 0, 0, 0, true, 0);
     }
 }

@@ -39,17 +39,20 @@ public class RebOfficetelUnitTypeSyncService {
         int synchronizedNoticeCount = 0;
         int savedUnitTypeCount = 0;
         int failed = 0;
+        int empty = 0;
         for (String sourceNoticeId : sourceNoticeIds.stream().distinct().toList()) {
             attempted++;
             try {
-                savedUnitTypeCount += synchronizeOne(sourceNoticeId, syncTime);
+                int saved = synchronizeOne(sourceNoticeId, syncTime);
+                savedUnitTypeCount += saved;
+                if (saved == 0) empty++;
                 synchronizedNoticeCount++;
             } catch (RuntimeException exception) {
                 failed++;
                 log.warn("Officetel unit type sync skipped for {}: {}", sourceNoticeId, exception.getMessage());
             }
         }
-        UnitTypeSyncResult result = new UnitTypeSyncResult(attempted, synchronizedNoticeCount, savedUnitTypeCount, failed, false);
+        UnitTypeSyncResult result = new UnitTypeSyncResult(attempted, synchronizedNoticeCount, savedUnitTypeCount, failed, false, empty);
         log.info("Officetel unit type synchronization completed: attempted={}, synchronized={}, saved={}, failed={}",
                 result.attemptedNoticeCount(), result.synchronizedNoticeCount(), result.savedUnitTypeCount(), result.failedNoticeCount());
         return result;

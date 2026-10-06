@@ -51,6 +51,17 @@ PostgreSQL 연결 전에는 PostgreSQL 호환 모드의 H2 기반 local 프로�
 - 각 공고 소스는 기본 3회까지 재시도하며, 한 소스가 최종 실패해도 다른 소스의 수집과 저장은 계속합니다.
 - 일부 소스만 실패한 실행은 관리자 운영 화면에 `부분 성공`으로 기록됩니다.
 - 실행 이력은 SYNC_EXECUTION에 기록합니다.
+- 소스별 실행 결과는 SOURCE_SYNC_EXECUTION에 기록하며 조회·저장·저장 실패·주택형 실패·주택형 빈 응답을 구분합니다. 빈 응답은 자료가 없다는 의미이며 삭제나 실패로 간주하지 않습니다.
+- 공개 `GET /api/v1/notices/freshness`와 운영 관리 화면은 아파트·오피스텔·공공임대의 마지막 성공 시각을 각각 표시합니다. 설정된 모든 소스가 30시간 이내에 성공해야 전체를 최신으로 표시하며, 최근 부분 실패는 다른 소스의 성공으로 가려지지 않습니다. 미설정 소스는 별도로 표시하고, 소스별 기록을 도입하기 전의 전체 이력으로 성공 시각을 추정하지 않습니다.
+- 관리자는 `POST /api/v1/admin/sync-executions?source=REB_APT`처럼 한 소스를 선택해 공고·주택형을 재수집할 수 있습니다. 기존 관리자·CSRF 검사와 중복 실행 제한을 동일하게 적용합니다.
+
+### 배포 후 자동 검증
+
+- CI는 Chromium 전체 흐름과 iPhone WebKit의 검색·상세·관심 저장·오프라인 복구 흐름을 실행하고 보고서와 실패 추적 자료를 7일 보관합니다.
+- `main`의 CI 성공 후 `Verify production deployment`가 Vercel과 Render의 공개 버전 정보를 최대 12분 기다립니다. 두 서비스가 해당 커밋으로 바뀐 뒤 페이지·헬스·최신성·인증 경계를 검사하며, 이전 버전의 정상 응답은 통과시키지 않습니다.
+- 운영 프런트엔드의 `/release.json`은 Vercel 빌드 커밋을, API의 `/api/v1/release`는 Render 실행 커밋을 제공합니다. 확인할 수 없는 환경은 `unknown`이며 운영 검증을 통과하지 않습니다.
+- 검사 시도별 결과는 GitHub Actions의 `production-verification-*` JSON 아티팩트로 14일 보관합니다. 배포 지연·응답 오류도 결과에 남기며 워크플로를 실패 처리합니다. 토큰·회원 쿠키·데이터 변경 없이 공개 응답만 확인합니다.
+- 수동 재검사는 `Verify production deployment`의 `Run workflow`를 `main`에서 실행합니다. 로컬에서는 `node scripts/verify-deployment.mjs <frontend-origin> <api-origin> <40자리 커밋 SHA>`로 같은 검사를 실행할 수 있습니다.
 
 GitHub Actions의 `CI / real-data` 작업은 Repository Secret인 `REB_API_KEY`를 환경변수로 주입합니다. PostgreSQL 구성 전에는 H2에 실제 공고를 저장하고 공개 데이터만 `reb-real-data-sample` 아티팩트로 출력합니다.
 

@@ -5,7 +5,9 @@ import {
   requestAdminNoticeSynchronization,
   requestAdminUnitTypeBackfill,
   SyncExecutionStatus,
+  SourceSystem,
 } from "./api";
+import { SourceFreshnessPanel, SOURCE_LABELS } from "./SourceFreshnessPanel";
 import AdminMembersPanel from "./AdminMembersPanel";
 import AdminAuditPanel from "./AdminAuditPanel";
 import AdminAiUsagePanel from "./AdminAiUsagePanel";
@@ -75,13 +77,13 @@ export default function AdminSyncDialog({ open, onClose, currentMemberId }: Admi
 
   if (!open) return null;
 
-  const requestSynchronization = async () => {
-    if (!window.confirm("지금 공고 데이터를 다시 수집할까요? 실행 중에는 같은 요청을 다시 할 수 없습니다.")) return;
+  const requestSynchronization = async (source?: SourceSystem) => {
+    if (!window.confirm(`${source ? SOURCE_LABELS[source] + " 공고만" : "전체 공고를"} 다시 수집할까요? 실행 중에는 같은 요청을 다시 할 수 없습니다.`)) return;
     setRequestingSync(true);
     setError("");
     setSyncNotice("");
     try {
-      await requestAdminNoticeSynchronization();
+      await requestAdminNoticeSynchronization(source);
       setSyncNotice("공고 동기화를 시작했습니다. 아래 실행 이력에서 진행 상태를 확인하세요.");
       window.setTimeout(() => setVersion((value) => value + 1), 500);
     } catch (requestError) {
@@ -136,6 +138,7 @@ export default function AdminSyncDialog({ open, onClose, currentMemberId }: Admi
             </div>
             <div className="admin-sync-headline"><b>최근 실행 50건</b><span><button type="button" className="admin-sync-trigger" onClick={() => void requestSynchronization()} disabled={requestingSync}>{requestingSync ? "요청 중…" : "지금 동기화"}</button><button type="button" className="admin-sync-trigger" onClick={() => void requestUnitTypeBackfill()} disabled={requestingSync}>{requestingSync ? "요청 중…" : "타입·분양가 재수집"}</button><button type="button" onClick={() => setVersion((value) => value + 1)} disabled={loading}>{loading ? "갱신 중…" : "새로고침"}</button></span></div>
             {syncNotice && <p className="admin-member-message success" role="status">{syncNotice}</p>}
+            <SourceFreshnessPanel sources={dashboard.sources} onRetry={source => void requestSynchronization(source)} busy={requestingSync || dashboard.runningCount > 0} />
             <div className="admin-sync-list">
               {dashboard.executions.map((execution) => (
                 <article key={execution.id}>

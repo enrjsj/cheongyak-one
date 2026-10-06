@@ -30,8 +30,9 @@ public class AdminSyncDashboardController {
     }
 
     @PostMapping
-    public ResponseEntity<Void> requestSynchronization(HttpServletRequest request) {
-        dashboardService.requestSynchronization(cookieSupport.read(request));
+    public ResponseEntity<Void> requestSynchronization(HttpServletRequest request,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) com.cheongyakone.domain.notice.SourceSystem source) {
+        dashboardService.requestSynchronization(cookieSupport.read(request), source);
         return ResponseEntity.accepted().build();
     }
 

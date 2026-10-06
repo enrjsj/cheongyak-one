@@ -21,17 +21,20 @@ public class AdminSyncDashboardService {
     private final SyncExecutionRepository executionRepository;
     private final NoticeSyncCoordinator noticeSyncCoordinator;
     private final Clock clock;
+    private final com.cheongyakone.application.NoticeFreshnessService freshnessService;
 
     public AdminSyncDashboardService(
             MemberService memberService,
             SyncExecutionRepository executionRepository,
             NoticeSyncCoordinator noticeSyncCoordinator,
-            Clock clock
+            Clock clock,
+            com.cheongyakone.application.NoticeFreshnessService freshnessService
     ) {
         this.memberService = memberService;
         this.executionRepository = executionRepository;
         this.noticeSyncCoordinator = noticeSyncCoordinator;
         this.clock = clock;
+        this.freshnessService = freshnessService;
     }
 
     @Transactional(readOnly = true)
@@ -55,13 +58,21 @@ public class AdminSyncDashboardService {
                         clock.instant().minus(Duration.ofHours(24))
                 ),
                 lastSuccessfulAt,
-                executions
+                executions,
+                freshnessService.freshness().sources()
         );
     }
 
     public void requestSynchronization(String rawToken) {
+        requestSynchronization(rawToken, null);
+    }
+
+    public void requestSynchronization(String rawToken, com.cheongyakone.domain.notice.SourceSystem source) {
         memberService.requireAdmin(rawToken);
-        if (!noticeSyncCoordinator.requestAsync()) {
+        if (source != null && freshnessService.freshness().sources().stream().noneMatch(item -> item.sourceSystem() == source && item.configured())) {
+            throw new MemberApiException(HttpStatus.BAD_REQUEST, "NOTICE_SOURCE_DISABLED", "설정되지 않은 공고 소스입니다.");
+        }
+        if (!(source == null ? noticeSyncCoordinator.requestAsync() : noticeSyncCoordinator.requestAsync(source))) {
             throw new MemberApiException(
                     HttpStatus.CONFLICT,
                     "NOTICE_SYNC_ALREADY_RUNNING",

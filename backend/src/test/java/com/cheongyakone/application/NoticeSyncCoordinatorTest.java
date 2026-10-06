@@ -37,5 +37,10 @@ class NoticeSyncCoordinatorTest {
         verify(syncService).synchronize();
         assertThat(coordinator.requestAsync()).isTrue();
         assertThat(queuedTasks).hasSize(2);
+        assertThat(coordinator.requestAsync(com.cheongyakone.domain.notice.SourceSystem.REB_APT)).isFalse();
+        queuedTasks.get(1).run();
+        assertThat(coordinator.requestAsync(com.cheongyakone.domain.notice.SourceSystem.REB_APT)).isTrue();
+        queuedTasks.get(2).run();
+        verify(syncService).synchronize(com.cheongyakone.domain.notice.SourceSystem.REB_APT);
     }
 }

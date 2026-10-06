@@ -24,7 +24,33 @@ abstract class PersistenceSafetyContract {
     @Autowired EntityManager entities;
     @Autowired MemberNotificationRepository notifications;
     @Autowired MemberPushReceiptStore receipts;
+    @Autowired com.cheongyakone.domain.sync.SourceSyncExecutionRepository sourceExecutions;
     private final Clock clock = Clock.fixed(Instant.parse("2026-10-04T00:00:00Z"), ZoneOffset.UTC);
+
+    @Test
+    @org.springframework.transaction.annotation.Transactional
+    void sourceHistoryKeepsLastSuccessThroughPartialFailureAndTargetedRecovery() {
+        var now = Instant.parse("2030-01-01T00:00:00Z");
+        var first = com.cheongyakone.domain.sync.SyncExecution.start(now);
+        entities.persist(first); entities.flush();
+        var success = com.cheongyakone.domain.sync.SourceSyncExecution.start(first.getId(), SourceSystem.REB_APT, now);
+        success.complete(now.plusSeconds(1), 4, 4, 0, 0, 0, false); entities.persist(success);
+        var second = com.cheongyakone.domain.sync.SyncExecution.start(now.plusSeconds(10)); entities.persist(second); entities.flush();
+        var partial = com.cheongyakone.domain.sync.SourceSyncExecution.start(second.getId(), SourceSystem.REB_APT, now.plusSeconds(10));
+        partial.complete(now.plusSeconds(11), 4, 3, 1, 1, 1, false); entities.persist(partial);
+        entities.flush(); entities.clear();
+        var latest = sourceExecutions.findFirstBySourceSystemOrderByStartedAtDescIdDesc(SourceSystem.REB_APT).orElseThrow();
+        assertThat(latest.getFailedNoticeCount()).isEqualTo(1);
+        assertThat(latest.getFailedUnitTypeCount()).isEqualTo(1);
+        assertThat(latest.getEmptyUnitTypeCount()).isEqualTo(1);
+        assertThat(sourceExecutions.findFirstBySourceSystemAndStatusOrderByFinishedAtDescIdDesc(SourceSystem.REB_APT,
+                com.cheongyakone.domain.sync.SourceSyncStatus.SUCCEEDED).orElseThrow().getFinishedAt()).isEqualTo(now.plusSeconds(1));
+        var third = com.cheongyakone.domain.sync.SyncExecution.start(now.plusSeconds(20)); entities.persist(third); entities.flush();
+        var recovered = com.cheongyakone.domain.sync.SourceSyncExecution.start(third.getId(), SourceSystem.REB_APT, now.plusSeconds(20));
+        recovered.complete(now.plusSeconds(21), 4, 4, 0, 0, 0, false); entities.persist(recovered); entities.flush();
+        assertThat(sourceExecutions.findFirstBySourceSystemAndStatusOrderByFinishedAtDescIdDesc(SourceSystem.REB_APT,
+                com.cheongyakone.domain.sync.SourceSyncStatus.SUCCEEDED).orElseThrow().getFinishedAt()).isEqualTo(now.plusSeconds(21));
+    }
 
     private AiConsultationLimiter limiter() {
         return new AiConsultationLimiter(clock, jdbc, transactions);
