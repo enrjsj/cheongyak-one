@@ -1,5 +1,5 @@
 // URL과 브라우저 저장소에만 존재하는 공고 탐색 상태를 정규화하는 순수 함수 모음이다.
-import type { NoticeSummary } from "./api";
+import type { NoticeSummary, NoticeDetail } from "./api";
 
 export type NoticeSortKey = "LATEST" | "DEADLINE" | "APPLY_START" | "WINNER_ANNOUNCEMENT" | "PRICE_ASC" | "SUPPLY_DESC";
 export type NoticeFilterStatus = "all" | "today" | "open" | "upcoming";
@@ -230,7 +230,7 @@ export function sortNotices<T extends SortableNotice>(notices: T[], sortKey: Not
 function escapeCalendarText(value: string): string {
   return value
     .replace(/\\/g, "\\\\")
-    .replace(/\r?\n/g, "\\n")
+    .replace(/\r\n|\r|\n/g, "\\n")
     .replace(/,/g, "\\,")
     .replace(/;/g, "\\;");
 }
@@ -240,8 +240,8 @@ function compactDate(isoDate: string): string {
 }
 
 function nextDate(isoDate: string): string {
-  const [year, month, day] = isoDate.split("-").map(Number);
-  const value = new Date(Date.UTC(year, month - 1, day + 1));
+  const value = new Date(`${isoDate}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + 1);
   return value.toISOString().slice(0, 10);
 }
 
@@ -319,4 +319,71 @@ export function buildNoticeCalendar(notices: NoticeSummary[], generatedAt = new 
 
   lines.push("END:VCALENDAR");
   return lines.flatMap(foldCalendarLine).join("\r\n") + "\r\n";
+}
+
+
+export type NoticeScheduleKind = "SPECIAL" | "APPLY" | "WINNER" | "CONTRACT";
+export interface NoticeScheduleItem {
+  kind: NoticeScheduleKind;
+  label: string;
+  start?: string;
+  end?: string;
+  issue?: string;
+}
+
+function validScheduleDate(value: string | undefined): value is string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value < "0001-01-01" || value >= "9999-12-31") return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+/** Keep every stage visible; never infer a missing endpoint or repair invalid dates. */
+export function noticeSchedule(notice: NoticeDetail): NoticeScheduleItem[] {
+  const fields: [NoticeScheduleKind, string, string | undefined, string | undefined][] = [
+    ["SPECIAL", "특별공급 접수", notice.specialSupplyStartDate, notice.specialSupplyEndDate],
+    ["APPLY", "청약 접수", notice.applyStartDate, notice.applyEndDate],
+    ["WINNER", "당첨자 발표", notice.winnerAnnounceDate, notice.winnerAnnounceDate],
+    ["CONTRACT", "계약 기간", notice.contractStartDate, notice.contractEndDate],
+  ];
+  return fields.map(([kind, label, rawStart, rawEnd]) => {
+    const start = validScheduleDate(rawStart) ? rawStart : undefined;
+    const end = validScheduleDate(rawEnd) ? rawEnd : undefined;
+    const issue = (rawStart && !start) || (rawEnd && !end) ? "날짜 확인 필요"
+      : !start && !end ? "일정 미확인"
+      : !start ? "시작일 미확인" : !end ? "종료일 미확인"
+      : start > end ? "기간 확인 필요" : undefined;
+    return { kind, label, start, end, issue };
+  });
+}
+
+export function noticeScheduleStatus(item: NoticeScheduleItem, today: string): string {
+  if (item.issue || !item.start || !item.end || !validScheduleDate(today)) return "확인 필요";
+  if (item.end < today) return "종료";
+  if (item.start > today) {
+    const days = Math.round((Date.parse(item.start + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86400000);
+    return `시작 D-${days}`;
+  }
+  if (item.start === item.end) return "오늘";
+  return item.end === today ? "오늘 종료" : "진행 중";
+}
+
+/** Export only fully confirmed selected stages as inclusive all-day periods. */
+export function buildDetailCalendar(notice: NoticeDetail, selected: NoticeScheduleKind[], generatedAt = new Date()): string {
+  const events = noticeSchedule(notice).filter(item => selected.includes(item.kind) && !item.issue);
+  if (!events.length) throw new Error("저장할 확인된 일정을 선택해주세요.");
+  const safeText = (value: string) => value.replace(/[\p{Cc}\p{Cf}]/gu, " ").slice(0, 1000);
+  let officialUrl = "";
+  try { const url = new URL(notice.officialUrl ?? ""); if (["https:", "http:"].includes(url.protocol)) officialUrl = url.href; } catch { /* Unknown source URL is omitted. */ }
+  const description = ["한국 날짜 기준 종일 일정입니다. 실제 접수·계약 시간과 대상은 공식 공고를 확인하세요.",
+    "이 파일은 자동 갱신되지 않습니다. 변경 시 기존 일정을 확인하고 다시 가져오세요.",
+    `공고 수집 시각: ${safeText(notice.syncedAt)}`, safeText(notice.address ?? ""), officialUrl].filter(Boolean).join("\n");
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Cheongyak One//Detail Schedule//KO", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:청약한눈 공고 일정"];
+  for (const event of events) lines.push(
+    "BEGIN:VEVENT", `UID:notice-${notice.id}-detail-${event.kind.toLowerCase()}@cheongyak-one`,
+    `DTSTAMP:${utcTimestamp(generatedAt)}`, `DTSTART;VALUE=DATE:${compactDate(event.start!)}`,
+    `DTEND;VALUE=DATE:${compactDate(nextDate(event.end!))}`,
+    `SUMMARY:${escapeCalendarText(`[${event.label}] ${safeText(notice.title)}`)}`,
+    `DESCRIPTION:${escapeCalendarText(description)}`, "TRANSP:TRANSPARENT", "END:VEVENT",
+  );
+  return [...lines, "END:VCALENDAR"].flatMap(foldCalendarLine).join("\r\n") + "\r\n";
 }
