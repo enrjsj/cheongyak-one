@@ -10,7 +10,6 @@ import com.cheongyakone.domain.notice.NoticeStatus;
 import com.cheongyakone.domain.notice.SubscriptionNotice;
 import com.cheongyakone.domain.notice.SubscriptionNoticeRepository;
 import com.cheongyakone.domain.notice.SubscriptionNoticeUnitTypeRepository;
-import com.cheongyakone.domain.notice.SubscriptionNoticeUnitType;
 import com.cheongyakone.domain.notice.SupplyType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -111,20 +110,8 @@ public class NoticeQueryService {
     }
 
     private Specification<SubscriptionNotice> searchSpecification(HousingCategory category, SupplyType supplyType, String keyword, String region, BigDecimal minPrice, BigDecimal maxPrice, BigDecimal minArea, BigDecimal maxArea) {
-        // Spring Data JPA 4부터 null Specification 조합이 허용되지 않아 실제 조건만 순서대로 추가한다.
-        Specification<SubscriptionNotice> specification = Specification.unrestricted();
-        if (category != null) {
-            specification = specification.and((root, query, cb) -> cb.equal(root.get("housingCategory"), category));
-        }
-        if (supplyType == SupplyType.SALE) {
-            // 현재 수집 범위에서 아파트·오피스텔은 분양 청약 공고다.
-            specification = specification.and((root, query, cb) -> root.get("housingCategory").in(
-                    HousingCategory.APARTMENT,
-                    HousingCategory.OFFICETEL
-            ));
-        } else if (supplyType == SupplyType.PUBLIC_RENTAL) {
-            specification = specification.and((root, query, cb) -> cb.equal(root.get("housingCategory"), HousingCategory.PUBLIC_RENTAL));
-        }
+        Specification<SubscriptionNotice> specification = new NoticeMatchCriteria(
+                category, supplyType, region, minPrice, maxPrice, minArea, maxArea).specification();
         if (StringUtils.hasText(keyword)) {
             String normalizedKeyword = keyword.trim().toLowerCase();
             if (normalizedKeyword.length() > 100) {
@@ -136,38 +123,6 @@ public class NoticeQueryService {
                     cb.like(cb.lower(root.get("address")), pattern),
                     cb.like(cb.lower(root.get("housingDetailType")), pattern)
             ));
-        }
-        if (StringUtils.hasText(region)) {
-            String requestedRegion = region.trim().toLowerCase();
-            String normalizedRegion = requestedRegion.length() > 20
-                    ? requestedRegion.substring(0, 20)
-                    : requestedRegion;
-            specification = specification.and((root, query, cb) -> cb.or(
-                    cb.equal(cb.lower(root.get("regionCode")), normalizedRegion),
-                    cb.like(cb.lower(root.get("address")), normalizedRegion + "%")
-            ));
-        }
-        if (minPrice != null && minPrice.signum() >= 0) {
-            specification = specification.and((root, query, cb) ->
-                    // 공고의 주택형 가격대와 사용자의 예산 구간이 한 번이라도 겹치면 노출한다.
-                    // 예: 3~5.5억 공고는 최소 예산 5억 검색 결과에 포함되어야 한다.
-                    cb.greaterThanOrEqualTo(root.<BigDecimal>get("maxPrice"), minPrice));
-        }
-        if (maxPrice != null && maxPrice.signum() >= 0) {
-            specification = specification.and((root, query, cb) ->
-                    cb.lessThanOrEqualTo(root.<BigDecimal>get("minPrice"), maxPrice));
-        }
-        if ((minArea != null && minArea.signum() >= 0) || (maxArea != null && maxArea.signum() >= 0)) {
-            specification = specification.and((root, query, cb) -> {
-                var matchingUnitType = query.subquery(Long.class);
-                var matchingRoot = matchingUnitType.from(SubscriptionNoticeUnitType.class);
-                var matchingPredicates = new java.util.ArrayList<jakarta.persistence.criteria.Predicate>();
-                matchingPredicates.add(cb.equal(matchingRoot.get("notice").get("id"), root.get("id")));
-                if (minArea != null && minArea.signum() >= 0) matchingPredicates.add(cb.greaterThanOrEqualTo(matchingRoot.<BigDecimal>get("supplyArea"), minArea));
-                if (maxArea != null && maxArea.signum() >= 0) matchingPredicates.add(cb.lessThanOrEqualTo(matchingRoot.<BigDecimal>get("supplyArea"), maxArea));
-                matchingUnitType.select(matchingRoot.get("id")).where(matchingPredicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
-                return cb.exists(matchingUnitType);
-            });
         }
         return specification;
     }

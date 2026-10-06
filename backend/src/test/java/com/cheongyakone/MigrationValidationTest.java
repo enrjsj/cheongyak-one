@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @ActiveProfiles("migration-test")
-class MigrationValidationTest extends PersistenceSafetyContract {
+class MigrationValidationTest extends NoticeMatchingContract {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
