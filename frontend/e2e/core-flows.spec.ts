@@ -720,6 +720,35 @@ for (const status of [401, 403]) {
   });
 }
 
+test("주택형 상세는 예산과 면적을 함께 만족하는 행만 표시로 구분한다", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page);
+  await page.route("**/api/v1/notices/1", route => route.fulfill({ json: {
+    ...notices[0], unitTypes: [
+      { modelId: "small", housingTypeName: "59A", supplyArea: 59, maxPrice: 300000000 },
+      { modelId: "large", housingTypeName: "84A", supplyArea: 84, maxPrice: 700000000 },
+      { modelId: "fit", housingTypeName: "85A", supplyArea: 85, maxPrice: 400000000 },
+      { modelId: "unknown", housingTypeName: "84B", supplyArea: 84, maxPrice: null },
+    ],
+  } }));
+  await page.goto("/?notice=1&maxPriceManwon=40000&minArea=80");
+  const table = page.locator(".notice-unit-types table");
+  await expect(table.locator("tbody tr")).toHaveCount(4);
+  await expect(table.locator("tr.unit-match")).toHaveCount(1);
+  await expect(table.locator("tr.unit-match")).toContainText("85A");
+  await expect(page.getByText("검색 조건 일치", { exact: true })).toHaveCount(1);
+  await expect(page.getByText(/현재 검색의 예산·면적 조건에 맞는 주택형 1개/)).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+
+  await page.goto("/?notice=1&minPriceManwon=80000&minArea=80");
+  await expect(table.locator("tbody tr")).toHaveCount(4);
+  await expect(table.locator("tr.unit-match")).toHaveCount(0);
+  await expect(page.getByText(/현재 검색의 예산·면적 조건에 맞는 주택형 0개/)).toBeVisible();
+  await page.goto("/?notice=1");
+  await expect(table.locator("tbody tr")).toHaveCount(4);
+  await expect(page.locator(".unit-match-summary")).toHaveCount(0);
+});
+
 test("AI 상담은 로그인과 동의 후 실행하고 답변을 안전한 텍스트로 표시한다", async ({ page }) => {
   await mockApi(page);
   let consultations = 0;

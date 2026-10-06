@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @ActiveProfiles("postgres-test")
 @EnabledIfEnvironmentVariable(named = "POSTGRES_TEST_URL", matches = ".+")
-class PostgresMigrationIntegrationTest extends PersistenceSafetyContract {
+class PostgresMigrationIntegrationTest extends NoticeMatchingContract {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;

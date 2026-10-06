@@ -1,3 +1,4 @@
+import { hasUnitRange, unitMatchesRange } from "./unitTypeMatching";
 // 서비스의 주요 사용자 흐름(검색·관심청약·비교·회원·사전점검)을 조합하는 화면 컨테이너다.
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AiConsultationPanel } from "./AiConsultationPanel";
@@ -1903,6 +1904,12 @@ export default function Home() {
     () => unitTypeSummary(selectedDetail?.unitTypes ?? []),
     [selectedDetail?.unitTypes],
   );
+  const detailUnitRange = {
+    minPrice: priceInWon(minPriceManwon), maxPrice: priceInWon(maxPriceManwon),
+    minArea: priceInManwon(minArea), maxArea: priceInManwon(maxArea),
+  };
+  const showUnitMatches = hasUnitRange(detailUnitRange);
+  const matchingUnitCount = selectedDetail?.unitTypes?.filter(unit => unitMatchesRange(unit, detailUnitRange)).length ?? 0;
   const filterDialogRef = useDialogAccessibility<HTMLElement>(filterOpen, () => setFilterOpen(false));
   const closeProfileEditor = () => { ++profileEditorEpoch.current; setEditingSavedSearchProfile(undefined); setProfileEditorError(""); };
   const savedSearchProfileEditorRef = useDialogAccessibility<HTMLElement>(Boolean(editingSavedSearchProfile), closeProfileEditor);
@@ -2353,8 +2360,8 @@ export default function Home() {
             <div className="filter-group"><h3>지역</h3><div className="choice-grid">{["전체", ...availableRegions].map((item) => <button className={region === item ? "active" : ""} type="button" key={item} onClick={() => { setRegion(item); resetVisible(); }}>{item}</button>)}</div></div>
             <div className="filter-group"><h3>주택 유형</h3><div className="choice-grid">{["전체", ...availableCategories].map((item) => <button className={category === item ? "active" : ""} type="button" key={item} onClick={() => { setCategory(item); resetVisible(); }}>{item}</button>)}</div></div>
             <div className="filter-group"><h3>공급 방식</h3><div className="choice-grid">{([undefined, "SALE", "PUBLIC_RENTAL"] as const).map((item) => <button className={supplyType === item ? "active" : ""} type="button" key={item ?? "ALL"} onClick={() => { setSupplyType(item); resetVisible(); }}>{item ? SUPPLY_TYPE_LABELS[item] : "전체"}</button>)}</div><p className="price-help">분양은 아파트·오피스텔 청약 공고이며, 일반 부동산 매매 매물은 포함하지 않습니다.</p></div>
-            <div className="filter-group"><h3>분양가 예산 <small>(만원 · 주택형 가격대 기준)</small></h3><RangeFilter presets={[{ label: "3억 이하", min: "", max: "30000" }, { label: "5억 이하", min: "", max: "50000" }, { label: "10억 이하", min: "", max: "100000" }]} key={`price-${rangeResetVersion}`} label="예산" unit="만원" limit={1000000} min={minPriceManwon} max={maxPriceManwon} placeholders={["예: 30000", "예: 60000"]} onInvalid={setPriceInvalid} onChange={(min, max) => { setMinPriceManwon(min); setMaxPriceManwon(max); resetVisible(); }} /><p className="price-help">입력한 예산과 주택형 분양가 범위가 겹치는 공고를 보여줍니다. 가격 정보가 없는 공고는 제외됩니다.</p></div>
-            <div className="filter-group"><h3>공급면적 <small>(㎡ · 주택형 기준)</small></h3><RangeFilter presets={[{ label: "60㎡ 이하", min: "", max: "60" }, { label: "85㎡ 이하", min: "", max: "85" }, { label: "100㎡ 이상", min: "100", max: "" }]} key={`area-${rangeResetVersion}`} label="면적" unit="㎡" limit={1000} min={minArea} max={maxArea} placeholders={["예: 59", "예: 84"]} onInvalid={setAreaInvalid} onChange={(min, max) => { setMinArea(min); setMaxArea(max); resetVisible(); }} /><p className="price-help">입력한 면적 범위에 해당하는 주택형이 하나라도 있는 공고만 보여줍니다. 면적 데이터가 없는 공고는 제외됩니다.</p></div>
+            <div className="filter-group"><h3>분양가 예산 <small>(만원 · 주택형 가격대 기준)</small></h3><RangeFilter presets={[{ label: "3억 이하", min: "", max: "30000" }, { label: "5억 이하", min: "", max: "50000" }, { label: "10억 이하", min: "", max: "100000" }]} key={`price-${rangeResetVersion}`} label="예산" unit="만원" limit={1000000} min={minPriceManwon} max={maxPriceManwon} placeholders={["예: 30000", "예: 60000"]} onInvalid={setPriceInvalid} onChange={(min, max) => { setMinPriceManwon(min); setMaxPriceManwon(max); resetVisible(); }} /><p className="price-help">주택형별 최고 분양가가 예산 안에 있는 공고를 보여줍니다. 주택형 정보가 없으면 공고 가격 범위로 확인하며, 가격 미확인 공고는 제외됩니다.</p></div>
+            <div className="filter-group"><h3>공급면적 <small>(㎡ · 주택형 기준)</small></h3><RangeFilter presets={[{ label: "60㎡ 이하", min: "", max: "60" }, { label: "85㎡ 이하", min: "", max: "85" }, { label: "100㎡ 이상", min: "100", max: "" }]} key={`area-${rangeResetVersion}`} label="면적" unit="㎡" limit={1000} min={minArea} max={maxArea} placeholders={["예: 59", "예: 84"]} onInvalid={setAreaInvalid} onChange={(min, max) => { setMinArea(min); setMaxArea(max); resetVisible(); }} /><p className="price-help">예산도 지정하면 같은 주택형이 예산과 면적을 모두 만족해야 합니다. 면적 데이터가 없는 공고는 제외됩니다.</p></div>
             <div className="search-preference-box">
               <div><b>내 맞춤 검색조건</b><span>지역·유형·예산·상태·정렬을 계정에 저장합니다.</span></div>
               {member ? (
@@ -2456,8 +2463,9 @@ export default function Home() {
                   <div><dt>공급면적</dt><dd>{selectedUnitTypeSummary.areaRange ? `${formatArea(selectedUnitTypeSummary.areaRange.min)} ~ ${formatArea(selectedUnitTypeSummary.areaRange.max)}` : "공고문 확인"}</dd></div>
                   <div><dt>최고 분양가 범위</dt><dd>{selectedUnitTypeSummary.priceRange ? `${formatWon(selectedUnitTypeSummary.priceRange.min)} ~ ${formatWon(selectedUnitTypeSummary.priceRange.max)}` : "공고문 확인"}</dd></div>
                 </dl>
+                {showUnitMatches && <p className="unit-match-summary" role="status">현재 검색의 예산·면적 조건에 맞는 주택형 {matchingUnitCount}개 · 모든 주택형을 함께 표시합니다.</p>}
                 <div className="notice-unit-types-table-wrap"><table><thead><tr><th scope="col">주택형</th><th scope="col">공급면적</th><th scope="col">일반</th><th scope="col">특별</th><th scope="col">합계</th><th scope="col">최고 분양가</th></tr></thead><tbody>
-                  {selectedDetail.unitTypes?.map((unitType) => <tr key={unitType.modelId}><th scope="row">{formatHousingType(unitType.housingTypeName)}</th><td>{formatArea(unitType.supplyArea)}{formatPyeong(unitType.supplyArea) && <small>{formatPyeong(unitType.supplyArea)}</small>}</td><td>{unitType.generalSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{unitType.specialSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{unitType.totalSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td className="notice-unit-types-price">{formatWon(unitType.maxPrice) ?? "공고문 확인"}</td></tr>)}
+                  {selectedDetail.unitTypes?.map((unitType) => <tr key={unitType.modelId} className={showUnitMatches && unitMatchesRange(unitType, detailUnitRange) ? "unit-match" : undefined}><th scope="row">{formatHousingType(unitType.housingTypeName)}{showUnitMatches && unitMatchesRange(unitType, detailUnitRange) && <span className="unit-match-badge">검색 조건 일치</span>}</th><td>{formatArea(unitType.supplyArea)}{formatPyeong(unitType.supplyArea) && <small>{formatPyeong(unitType.supplyArea)}</small>}</td><td>{unitType.generalSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{unitType.specialSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{unitType.totalSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td className="notice-unit-types-price">{formatWon(unitType.maxPrice) ?? "공고문 확인"}</td></tr>)}
                 </tbody></table></div>
               </section>
             )}

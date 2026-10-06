@@ -84,6 +84,9 @@ class MemberApiIntegrationTest {
     private SubscriptionNoticeRepository noticeRepository;
 
     @Autowired
+    private com.cheongyakone.domain.notice.SubscriptionNoticeUnitTypeRepository matchingUnitTypes;
+
+    @Autowired
     private MemberRepository memberRepository;
 
     @Autowired
@@ -880,6 +883,55 @@ class MemberApiIntegrationTest {
                 .andExpect(jsonPath("$.notifications[0].message").value(
                         "관심 공고의 일정 또는 주요 정보가 변경됐습니다."
                 ));
+    }
+
+    @Test
+    void searchRecommendationsAndNewNoticeAlertsShareUnitRanges() throws Exception {
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
+        var fit = noticeWithProfile("unified-fit", "통합 일치", HousingCategory.APARTMENT, NoticeStatus.OPEN,
+                "통합매칭", today, today.plusDays(10));
+        var mixed = noticeWithProfile("unified-mixed", "서로 다른 주택형", HousingCategory.APARTMENT, NoticeStatus.OPEN,
+                "통합매칭", today, today.plusDays(10));
+        var missing = noticeWithProfile("unified-missing", "주택형 없음", HousingCategory.APARTMENT, NoticeStatus.OPEN,
+                "통합매칭", today, today.plusDays(10));
+        var rental = noticeWithProfile("unified-rental", "공급방식 다름", HousingCategory.PUBLIC_RENTAL, NoticeStatus.OPEN,
+                "통합매칭", today, today.plusDays(10));
+        for (var notice : List.of(fit, mixed, missing, rental)) notice.updatePriceRange(
+                java.math.BigDecimal.valueOf(300000000), java.math.BigDecimal.valueOf(700000000));
+        noticeRepository.saveAllAndFlush(List.of(fit, mixed, missing, rental));
+        matchingUnitTypes.saveAllAndFlush(List.of(
+                matchingUnit(fit, "84", 550000000), matchingUnit(fit, "85", 600000000),
+                matchingUnit(mixed, "59", 550000000), matchingUnit(mixed, "84", 700000000),
+                matchingUnit(rental, "84", 550000000)));
+        signup("unified-matching@example.com", "통합매칭회원");
+        var session = authenticatedSession(login("unified-matching@example.com", PASSWORD).andReturn());
+        String conditions = """
+                {"region":"통합매칭","supplyType":"SALE","status":"OPEN","sort":"LATEST",
+                 "minPriceManwon":50000,"maxPriceManwon":60000,"minArea":84,"maxArea":85}
+                """;
+        mockMvc.perform(authenticated(put("/api/v1/members/me/search-preference"), session)
+                        .contentType(MediaType.APPLICATION_JSON).content(conditions)).andExpect(status().isOk());
+        mockMvc.perform(authenticated(post("/api/v1/members/me/saved-search-profiles"), session)
+                        .contentType(MediaType.APPLICATION_JSON).content(conditions.replace("{", "{\"name\":\"통합 조건\",")))
+                .andExpect(status().isCreated());
+        mockMvc.perform(get("/api/v1/notices").param("region", "통합매칭").param("supplyType", "SALE")
+                        .param("minPrice", "500000000").param("maxPrice", "600000000")
+                        .param("minArea", "84").param("maxArea", "85"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(fit.getId()));
+        mockMvc.perform(get("/api/v1/members/me/recommendations").cookie(session.cookie()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.recommendations.length()").value(1))
+                .andExpect(jsonPath("$.recommendations[0].notice.id").value(fit.getId()));
+        notificationGenerator.generateMatchingFor(today);
+        notificationGenerator.generateMatchingFor(today);
+        mockMvc.perform(get("/api/v1/members/me/notifications").cookie(session.cookie()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.notifications.length()").value(1))
+                .andExpect(jsonPath("$.notifications[0].noticeId").value(fit.getId()));
+    }
+
+    private com.cheongyakone.domain.notice.SubscriptionNoticeUnitType matchingUnit(SubscriptionNotice notice, String area, long price) {
+        return new com.cheongyakone.domain.notice.SubscriptionNoticeUnitType(notice, area, area,
+                new java.math.BigDecimal(area), 1, 0, 1, java.math.BigDecimal.valueOf(price), Instant.now());
     }
 
     @Test
