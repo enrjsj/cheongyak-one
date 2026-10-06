@@ -22,6 +22,23 @@ test("same-origin login survives reload and another tab; CSRF and logout protect
   const session = cookies.find(cookie => cookie.name === "CHEONGYAK_SESSION");
   expect(session).toMatchObject({ domain: "127.0.0.1", httpOnly: true, path: "/", sameSite: "Lax" });
   expect(await page.evaluate(() => document.cookie.includes("CHEONGYAK_SESSION="))).toBe(false);
+  const csrf = cookies.find(cookie => cookie.name === "CHEONGYAK_CSRF")!.value;
+  const headers = { "X-CSRF-Token": csrf };
+  // Use the real API to persist independent optional data. No legacy search
+  // preference exists: its 204 must not stop the remaining bootstrap requests.
+  expect((await page.request.get("/api/v1/members/me/search-preference")).status()).toBe(204);
+  const savedProfile = await page.request.post("/api/v1/members/me/saved-search-profiles", {
+    headers, data: { name: "복원 확인 조건", region: "서울", status: "ALL", sort: "LATEST" },
+  });
+  expect(savedProfile.status()).toBe(201);
+  const profileId = (await savedProfile.json()).id;
+  expect((await page.request.put(`/api/v1/members/me/saved-search-profiles/${profileId}/default`, { headers })).status()).toBe(200);
+  expect((await page.request.put("/api/v1/members/me/eligibility-profile", {
+    headers, data: { homeless: "YES", subscriptionAccount: "YES", newlywed: "UNKNOWN", firstHome: "NO" },
+  })).status()).toBe(200);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "저장된 점검 조회·수정" })).toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.get("region")).toBe("서울");
   const card = page.locator("article").filter({ hasText: "로그인 유지 검증 주택" });
   await card.getByLabel(/관심청약 저장/).click();
   await expect(card.getByLabel(/관심청약 해제/)).toBeVisible();
@@ -41,6 +58,7 @@ test("same-origin login survives reload and another tab; CSRF and logout protect
   expect(logout).toBe(204);
   await page.reload();
   await expect(page.locator(".header-actions").getByRole("button", { name: "로그인", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "저장된 점검 조회·수정" })).toHaveCount(0);
   expect((await context.cookies()).some(cookie => cookie.name === "CHEONGYAK_SESSION")).toBe(false);
   expect((await page.request.get("/api/v1/members/me")).status()).toBe(401);
   expect([...origins]).toEqual(["http://127.0.0.1:4180"]);
