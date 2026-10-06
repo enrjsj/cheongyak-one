@@ -43,6 +43,10 @@ class NoticeSyncServiceTest {
     @BeforeEach
     void prepareExecution() {
         when(recorder.start(clock.instant())).thenReturn(execution);
+        when(recorder.startSource(any(), any(), any())).thenAnswer(call ->
+                com.cheongyakone.domain.sync.SourceSyncExecution.start(1L, call.getArgument(1), clock.instant()));
+        when(apartmentUnitTypeSyncService.synchronize(any(), any())).thenReturn(new UnitTypeSyncResult(1, 1, 1, 0, false, 0));
+        when(officetelUnitTypeSyncService.synchronize(any(), any())).thenReturn(new UnitTypeSyncResult(1, 1, 1, 0, false, 0));
     }
 
     @Test
@@ -97,7 +101,7 @@ class NoticeSyncServiceTest {
         service(List.of(client), 1).synchronize();
 
         verify(officetelUnitTypeSyncService).synchronize(List.of("office-1"), clock.instant());
-        verify(apartmentUnitTypeSyncService).synchronize(List.of(), clock.instant());
+        verify(apartmentUnitTypeSyncService, never()).synchronize(any(), any());
     }
 
     @Test
@@ -127,6 +131,43 @@ class NoticeSyncServiceTest {
 
         verify(disabled, never()).fetch(any(), any());
         verify(recorder).fail(any(), any(), eq(0), eq(0), any(IllegalStateException.class));
+    }
+
+    @Test
+    void recordsFailedSavesUnitFailuresAndEmptyResponsesWithoutStoppingOtherSources() {
+        var apt = source(SourceSystem.REB_APT, true);
+        var rental = source(SourceSystem.MYHOME_PUBLIC_RENTAL, true);
+        var broken = snapshot(SourceSystem.REB_APT, "broken");
+        var good = snapshot(SourceSystem.REB_APT, "good");
+        when(apt.fetch(any(), any())).thenReturn(List.of(broken, good));
+        when(rental.fetch(any(), any())).thenReturn(List.of(snapshot(SourceSystem.MYHOME_PUBLIC_RENTAL, "rental")));
+        org.mockito.Mockito.doThrow(new IllegalStateException("save failure")).when(upsertService).upsert(eq(broken), any());
+        when(apartmentUnitTypeSyncService.synchronize(any(), any())).thenReturn(new UnitTypeSyncResult(1, 0, 0, 1, false, 0));
+        var result = service(List.of(apt, rental), 1).synchronize();
+        assertThat(result.fetchedCount()).isEqualTo(3);
+        assertThat(result.savedCount()).isEqualTo(2);
+        var rows = ArgumentCaptor.forClass(com.cheongyakone.domain.sync.SourceSyncExecution.class);
+        verify(recorder, times(2)).saveSource(rows.capture());
+        assertThat(rows.getAllValues().getFirst().getFailedNoticeCount()).isEqualTo(1);
+        assertThat(rows.getAllValues().getFirst().getFailedUnitTypeCount()).isEqualTo(1);
+        assertThat(rows.getAllValues().getFirst().getStatus()).isEqualTo(com.cheongyakone.domain.sync.SourceSyncStatus.PARTIALLY_SUCCEEDED);
+        assertThat(rows.getAllValues().get(1).getStatus()).isEqualTo(com.cheongyakone.domain.sync.SourceSyncStatus.SUCCEEDED);
+        verify(apartmentUnitTypeSyncService).synchronize(List.of("good"), clock.instant());
+    }
+
+    @Test
+    void targetedRetryDoesNotFetchOrRecordOtherSourcesAndEmptyPayloadIsNotAFailure() {
+        var apt = source(SourceSystem.REB_APT, true);
+        var office = source(SourceSystem.REB_OFFICETEL, true);
+        when(apt.fetch(any(), any())).thenReturn(List.of(snapshot(SourceSystem.REB_APT, "empty-units")));
+        when(apartmentUnitTypeSyncService.synchronize(any(), any())).thenReturn(new UnitTypeSyncResult(1, 1, 0, 0, false, 1));
+        service(List.of(apt, office), 1).synchronize(SourceSystem.REB_APT);
+        verify(office, never()).fetch(any(), any());
+        verify(recorder, never()).startSource(any(), eq(SourceSystem.REB_OFFICETEL), any());
+        var rows = ArgumentCaptor.forClass(com.cheongyakone.domain.sync.SourceSyncExecution.class);
+        verify(recorder).saveSource(rows.capture());
+        assertThat(rows.getValue().getEmptyUnitTypeCount()).isEqualTo(1);
+        assertThat(rows.getValue().getStatus()).isEqualTo(com.cheongyakone.domain.sync.SourceSyncStatus.SUCCEEDED);
     }
 
     private NoticeSyncService service(List<NoticeSourceClient> clients, int maxAttempts) {

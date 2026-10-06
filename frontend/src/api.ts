@@ -119,6 +119,23 @@ export interface NoticeFreshness {
   generatedAt: string;
   lastCompletedAt?: string | null;
   status: "FRESH" | "DELAYED" | "UNAVAILABLE";
+  sources?: SourceFreshness[];
+}
+
+export interface SourceFreshness {
+  sourceSystem: SourceSystem;
+  configured: boolean;
+  status: NoticeFreshness["status"];
+  lastSuccessfulAt?: string | null;
+  lastAttemptAt?: string | null;
+  lastAttemptStatus?: SyncExecutionStatus | "SKIPPED" | null;
+  fetchedCount: number;
+  savedCount: number;
+  failedNoticeCount: number;
+  failedUnitTypeCount: number;
+  emptyUnitTypeCount: number;
+  unitTypesDisabled: boolean;
+  retryRecommended: boolean;
 }
 
 export interface NoticeSearchRequest {
@@ -197,6 +214,7 @@ export interface AdminSyncDashboard {
   failuresLast24Hours: number;
   lastSuccessfulAt?: string | null;
   executions: AdminSyncExecution[];
+  sources?: SourceFreshness[];
 }
 
 export type AdminMemberStatus = "ACTIVE" | "SUSPENDED" | "WITHDRAWN";
@@ -873,8 +891,8 @@ export function fetchAdminSyncDashboard(): Promise<AdminSyncDashboard> {
   return requestJson<AdminSyncDashboard>("/api/v1/admin/sync-executions");
 }
 
-export function requestAdminNoticeSynchronization(): Promise<void> {
-  return requestJson<void>("/api/v1/admin/sync-executions", { method: "POST" });
+export function requestAdminNoticeSynchronization(source?: SourceSystem): Promise<void> {
+  return requestJson<void>("/api/v1/admin/sync-executions" + (source ? `?source=${source}` : ""), { method: "POST" });
 }
 
 export function requestAdminUnitTypeBackfill(): Promise<void> {

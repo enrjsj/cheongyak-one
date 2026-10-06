@@ -1,4 +1,5 @@
 import { hasUnitRange, unitMatchesRange } from "./unitTypeMatching";
+import { SourceFreshnessPanel } from "./SourceFreshnessPanel";
 // 서비스의 주요 사용자 흐름(검색·관심청약·비교·회원·사전점검)을 조합하는 화면 컨테이너다.
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AiConsultationPanel } from "./AiConsultationPanel";
@@ -1331,7 +1332,7 @@ export default function Home() {
   const dataFreshnessMessage = cachedListShownAt
     ? "마지막으로 확인한 목록을 먼저 표시 중입니다"
     : noticeFreshness?.status === "DELAYED"
-    ? `동기화 지연 · 마지막 갱신 ${syncedLabel}`
+    ? `일부 유형 갱신 지연 · 유형별 수집 현황을 확인하세요`
     : noticeFreshness?.status === "UNAVAILABLE"
       ? "동기화 기록을 확인 중입니다"
       : `최근 동기화 ${syncedLabel}`;
@@ -2021,6 +2022,7 @@ export default function Home() {
             <div className="next-event no-event"><span>새로운 접수 일정을 확인 중입니다.</span></div>
           )}
           <p className={`data-note ${noticeFreshness?.status === "DELAYED" ? "delayed" : ""}`}>공개 공고 데이터 · {dataFreshnessMessage}</p>
+          <SourceFreshnessPanel sources={noticeFreshness?.sources} />
         </aside>
       </section>
 
@@ -2607,4 +2609,3 @@ export default function Home() {
     </main>
   );
 }
-

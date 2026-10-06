@@ -1,0 +1,56 @@
+name: Verify production deployment
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-production-deployment
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Wait for both production revisions and verify public responses
+        env:
+          EXPECTED_REVISION: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: >-
+          node scripts/verify-deployment.mjs
+          https://cheongyak-one-five.vercel.app
+          https://cheongyak-one-api.onrender.com
+          "$EXPECTED_REVISION" > deployment-verification.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: production-verification-${{ github.run_number }}
+          path: deployment-verification.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish summary
+        if: always()
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const report = JSON.parse(fs.readFileSync('deployment-verification.json', 'utf8'));
+          const lines = ['## Production verification', `Revision: ${report.revision}`, `Result: ${report.ok ? 'PASS' : 'FAIL'}`, `Attempts: ${report.attempts?.length ?? 0}`];
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n\n') + '\n');
+          JS

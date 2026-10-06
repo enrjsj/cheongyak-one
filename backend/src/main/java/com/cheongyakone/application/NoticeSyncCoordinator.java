@@ -39,13 +39,18 @@ public class NoticeSyncCoordinator {
     }
 
     public boolean requestAsync() {
+        return requestAsync(null);
+    }
+
+    public boolean requestAsync(SourceSystem source) {
         if (!running.compareAndSet(false, true)) {
             return false;
         }
         try {
             noticeSyncExecutor.execute(() -> {
                 try {
-                    noticeSyncService.synchronize();
+                    if (source == null) noticeSyncService.synchronize();
+                    else noticeSyncService.synchronize(source);
                 } catch (RuntimeException exception) {
                     // 실행 결과와 오류 사유는 기존 SYNC_EXECUTION 이력에 기록한다.
                     log.error("Manually requested notice synchronization failed", exception);

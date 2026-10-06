@@ -4,7 +4,13 @@ import react from "@vitejs/plugin-react";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "");
   return {
-    plugins: [react()],
+    plugins: [react(), {
+      name: "release-metadata",
+      generateBundle() {
+        const candidate = env.VERCEL_GIT_COMMIT_SHA || env.GITHUB_SHA || "unknown";
+        this.emitFile({ type: "asset", fileName: "release.json", source: JSON.stringify({ revision: /^[0-9a-f]{40}$/.test(candidate) ? candidate : "unknown" }) });
+      },
+    }],
     server: {
       port: 5173,
       proxy: {

@@ -1,5 +1,26 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 
+test("유형별 최신성: 일부 수집 실패를 최신으로 표시하지 않고 미설정 소스를 구분한다", async ({ page }) => {
+  await mockPublicApi(page);
+  await page.route("**/api/v1/notices/freshness", route => route.fulfill({ json: {
+    generatedAt: "2026-10-06T00:00:00Z", lastCompletedAt: "2026-10-01T00:00:00Z", status: "DELAYED",
+    sources: [
+      { sourceSystem: "REB_APT", configured: true, status: "FRESH", lastSuccessfulAt: "2026-10-06T00:00:00Z" },
+      { sourceSystem: "REB_OFFICETEL", configured: true, status: "DELAYED", lastSuccessfulAt: "2026-10-01T00:00:00Z" },
+      { sourceSystem: "MYHOME_PUBLIC_RENTAL", configured: false, status: "UNAVAILABLE", lastSuccessfulAt: null },
+    ],
+  } }));
+  await page.goto("/");
+  await expect(page.getByText(/일부 유형 갱신 지연/)).toBeVisible();
+  await page.getByText("유형별 수집 현황", { exact: true }).click();
+  const panel = page.locator(".source-freshness");
+  await expect(panel.getByText("최신", { exact: true })).toHaveCount(1);
+  await expect(panel.getByText("갱신 지연", { exact: true })).toHaveCount(1);
+  await expect(panel.getByText("수집 미설정", { exact: true })).toBeVisible();
+  await expect(panel.getByRole("button")).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test("필터 결과 이동: 확인은 검색 결과로, 닫기는 원래 버튼으로 초점을 돌린다", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockPublicApi(page); await page.goto("/");

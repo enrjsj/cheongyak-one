@@ -1,51 +1,55 @@
 package com.cheongyakone.application;
 
-import com.cheongyakone.api.NoticeFreshnessResponse;
-import com.cheongyakone.api.NoticeFreshnessStatus;
-import com.cheongyakone.domain.sync.SyncExecutionRepository;
-import com.cheongyakone.domain.sync.SyncExecutionStatus;
+import com.cheongyakone.api.*;
+import com.cheongyakone.domain.notice.SourceSystem;
+import com.cheongyakone.domain.sync.*;
+import com.cheongyakone.infrastructure.external.NoticeSourceClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 
 @Service
 public class NoticeFreshnessService {
-
-    private static final Duration FRESHNESS_THRESHOLD = Duration.ofHours(30);
-
-    private static final List<SyncExecutionStatus> COMPLETED_STATUSES = List.of(
-            SyncExecutionStatus.SUCCEEDED,
-            SyncExecutionStatus.PARTIALLY_SUCCEEDED
-    );
-
-    private final SyncExecutionRepository executionRepository;
+    private static final Duration THRESHOLD = Duration.ofHours(30);
+    private final SourceSyncExecutionRepository repository;
+    private final List<NoticeSourceClient> clients;
     private final Clock clock;
 
-    public NoticeFreshnessService(SyncExecutionRepository executionRepository, Clock clock) {
-        this.executionRepository = executionRepository;
-        this.clock = clock;
+    public NoticeFreshnessService(SourceSyncExecutionRepository repository, List<NoticeSourceClient> clients, Clock clock) {
+        this.repository = repository; this.clients = clients; this.clock = clock;
     }
 
-    /**
-     * 일부 소스만 실패한 배치도 저장된 공고 데이터는 갱신됐으므로 완료 시각으로 표시한다.
-     * 실패 메시지나 관리자용 실행 이력은 공개하지 않는다.
-     */
     @Transactional(readOnly = true)
     public NoticeFreshnessResponse freshness() {
-        var lastCompletedAt = executionRepository
-                .findFirstByStatusInOrderByFinishedAtDesc(COMPLETED_STATUSES)
-                .map(execution -> execution.getFinishedAt())
-                .orElse(null);
-        Instant generatedAt = clock.instant();
-        NoticeFreshnessStatus status = lastCompletedAt == null
+        var now = clock.instant();
+        var sources = Arrays.stream(SourceSystem.values()).map(source -> {
+            boolean configured = clients.stream().anyMatch(client -> client.sourceSystem() == source && client.enabled());
+            var latest = repository.findFirstBySourceSystemOrderByStartedAtDescIdDesc(source).orElse(null);
+            var success = repository.findFirstBySourceSystemAndStatusOrderByFinishedAtDescIdDesc(source, SourceSyncStatus.SUCCEEDED)
+                    .map(SourceSyncExecution::getFinishedAt).orElse(null);
+            var status = success == null ? NoticeFreshnessStatus.UNAVAILABLE
+                    : success.plus(THRESHOLD).isBefore(now) ? NoticeFreshnessStatus.DELAYED : NoticeFreshnessStatus.FRESH;
+            boolean incomplete = latest != null && (latest.getStatus() == SourceSyncStatus.FAILED
+                    || latest.getStatus() == SourceSyncStatus.PARTIALLY_SUCCEEDED);
+            if (configured && incomplete && success != null) status = NoticeFreshnessStatus.DELAYED;
+            return new SourceFreshnessResponse(source, configured, status, success,
+                    latest == null ? null : latest.getStartedAt(), latest == null ? null : latest.getStatus(),
+                    latest == null ? 0 : latest.getFetchedCount(), latest == null ? 0 : latest.getSavedCount(),
+                    latest == null ? 0 : latest.getFailedNoticeCount(), latest == null ? 0 : latest.getFailedUnitTypeCount(),
+                    latest == null ? 0 : latest.getEmptyUnitTypeCount(), latest != null && latest.isUnitTypesDisabled(),
+                    configured && (latest == null || latest.getStatus() != SourceSyncStatus.RUNNING)
+                            && (status != NoticeFreshnessStatus.FRESH || latest != null && latest.getEmptyUnitTypeCount() > 0));
+        }).toList();
+        var enabled = sources.stream().filter(SourceFreshnessResponse::configured).toList();
+        boolean allKnown = !enabled.isEmpty() && enabled.stream().allMatch(source -> source.lastSuccessfulAt() != null);
+        var lastCompletedAt = allKnown ? enabled.stream().map(SourceFreshnessResponse::lastSuccessfulAt).min(java.time.Instant::compareTo).orElse(null) : null;
+        var status = enabled.isEmpty() || enabled.stream().allMatch(source -> source.lastSuccessfulAt() == null)
                 ? NoticeFreshnessStatus.UNAVAILABLE
-                : lastCompletedAt.plus(FRESHNESS_THRESHOLD).isBefore(generatedAt)
-                ? NoticeFreshnessStatus.DELAYED
-                : NoticeFreshnessStatus.FRESH;
-        return new NoticeFreshnessResponse(generatedAt, lastCompletedAt, status);
+                : enabled.stream().allMatch(source -> source.status() == NoticeFreshnessStatus.FRESH)
+                ? NoticeFreshnessStatus.FRESH : NoticeFreshnessStatus.DELAYED;
+        return new NoticeFreshnessResponse(now, lastCompletedAt, status, sources);
     }
 }

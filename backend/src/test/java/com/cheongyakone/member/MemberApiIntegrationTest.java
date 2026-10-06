@@ -55,6 +55,23 @@ class MemberApiIntegrationTest {
     private static final String PASSWORD = "Strong-password-1!";
 
     @Test
+    void sourceFreshnessIsPublicButTargetedCollectionRequiresAnAdmin() throws Exception {
+        mockMvc.perform(get("/api/v1/notices/freshness"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sources.length()").value(3))
+                .andExpect(jsonPath("$.sources[0].sourceSystem").value("REB_APT"))
+                .andExpect(jsonPath("$.sources[0].errorMessage").doesNotExist());
+        mockMvc.perform(get("/api/v1/release"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.revision").isString());
+        mockMvc.perform(post("/api/v1/admin/sync-executions").param("source", "REB_APT"))
+                .andExpect(status().isUnauthorized());
+        signup("source-regular@example.com", "일반회원");
+        var session = authenticatedSession(login("source-regular@example.com", PASSWORD).andReturn());
+        mockMvc.perform(authenticated(post("/api/v1/admin/sync-executions"), session).param("source", "REB_APT"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void aiConsultationRequiresSessionCsrfValidationAndConfiguration() throws Exception {
         String path = "/api/v1/members/me/ai-consultations";
         mockMvc.perform(get(path + "/availability")).andExpect(status().isUnauthorized());

@@ -56,71 +56,70 @@ public class NoticeSyncService {
         this.clock = clock;
     }
 
-    public NoticeSyncResult synchronize() {
-        Instant startedAt = clock.instant();
-        SyncExecution execution = executionRecorder.start(startedAt);
+    public NoticeSyncResult synchronize() { return synchronize(null); }
+
+    /** A targeted retry leaves the other sources' history and success times untouched. */
+    public NoticeSyncResult synchronize(com.cheongyakone.domain.notice.SourceSystem target) {
+        SyncExecution execution = executionRecorder.start(clock.instant());
         int fetchedCount = 0;
         int savedCount = 0;
         int successfulSourceCount = 0;
         List<String> sourceFailures = new ArrayList<>();
-        List<String> apartmentSourceNoticeIds = new ArrayList<>();
-        List<String> officetelSourceNoticeIds = new ArrayList<>();
-
         try {
             LocalDate today = LocalDate.now(clock);
-            LocalDate from = today.minusDays(LOOKBACK_DAYS);
-            LocalDate to = today.plusDays(LOOKAHEAD_DAYS);
-
-            for (NoticeSourceClient sourceClient : sourceClients) {
-                if (!sourceClient.enabled()) {
-                    log.info("Notice source {} is not configured and was skipped", sourceClient.sourceSystem());
-                    continue;
-                }
-
-                List<NoticeSnapshot> snapshots;
+            for (NoticeSourceClient client : sourceClients) {
+                if (target != null && client.sourceSystem() != target) continue;
+                var source = executionRecorder.startSource(execution, client.sourceSystem(), clock.instant());
+                int fetched = 0;
+                int saved = 0;
                 try {
-                    snapshots = fetchWithRetry(sourceClient, from, to);
-                    successfulSourceCount++;
-                } catch (RuntimeException sourceFailure) {
-                    if (Thread.currentThread().isInterrupted()) {
-                        throw sourceFailure;
+                    if (!client.enabled()) {
+                        source.skip(clock.instant());
+                        continue;
                     }
-                    String failure = sourceClient.sourceSystem() + ": " + exceptionMessage(sourceFailure);
-                    sourceFailures.add(failure);
-                    // 예외 URL에 API 키가 포함될 수 있으므로 스택 트레이스 대신 마스킹된 사유만 기록한다.
-                    log.error("Notice source {} failed after {} attempts; continuing with other sources: {}",
-                            sourceClient.sourceSystem(), retryProperties.maxAttempts(), exceptionMessage(sourceFailure));
-                    continue;
-                }
-                fetchedCount += snapshots.size();
-
-                for (NoticeSnapshot snapshot : snapshots) {
-                    noticeUpsertService.upsert(snapshot, clock.instant());
-                    savedCount++;
-                    if (snapshot.sourceSystem() == com.cheongyakone.domain.notice.SourceSystem.REB_APT) apartmentSourceNoticeIds.add(snapshot.sourceNoticeId());
-                    if (snapshot.sourceSystem() == com.cheongyakone.domain.notice.SourceSystem.REB_OFFICETEL) officetelSourceNoticeIds.add(snapshot.sourceNoticeId());
+                    var snapshots = fetchWithRetry(client, today.minusDays(LOOKBACK_DAYS), today.plusDays(LOOKAHEAD_DAYS));
+                    fetched = snapshots.size();
+                    fetchedCount += fetched;
+                    List<String> savedIds = new ArrayList<>();
+                    for (NoticeSnapshot snapshot : snapshots) {
+                        try {
+                            noticeUpsertService.upsert(snapshot, clock.instant());
+                            saved++; savedCount++;
+                            savedIds.add(snapshot.sourceNoticeId());
+                        } catch (RuntimeException failure) {
+                            if (Thread.currentThread().isInterrupted()) throw failure;
+                            log.warn("Notice save failed for source {}", client.sourceSystem());
+                        }
+                    }
+                    UnitTypeSyncResult units = switch (client.sourceSystem()) {
+                        case REB_APT -> apartmentUnitTypeSyncService.synchronize(savedIds, clock.instant());
+                        case REB_OFFICETEL -> officetelUnitTypeSyncService.synchronize(savedIds, clock.instant());
+                        case MYHOME_PUBLIC_RENTAL -> new UnitTypeSyncResult(0, 0, 0, 0, false, 0);
+                    };
+                    source.complete(clock.instant(), fetched, saved, fetched - saved,
+                            units.failedNoticeCount(), units.emptyNoticeCount(), units.disabled());
+                    successfulSourceCount++;
+                    if (source.getStatus() != com.cheongyakone.domain.sync.SourceSyncStatus.SUCCEEDED) {
+                        sourceFailures.add(client.sourceSystem() + ": incomplete notice or unit type synchronization");
+                    }
+                } catch (RuntimeException failure) {
+                    source.fail(clock.instant(), fetched, saved);
+                    if (Thread.currentThread().isInterrupted()) throw failure;
+                    String message = client.sourceSystem() + ": " + exceptionMessage(failure);
+                    sourceFailures.add(message);
+                    log.error("Notice source failed; continuing with other sources: {}", message);
+                } finally {
+                    executionRecorder.saveSource(source);
                 }
             }
-
-            apartmentUnitTypeSyncService.synchronize(apartmentSourceNoticeIds, clock.instant());
-            officetelUnitTypeSyncService.synchronize(officetelSourceNoticeIds, clock.instant());
-
             if (successfulSourceCount == 0) {
-                String message = sourceFailures.isEmpty()
-                        ? "No notice source is configured"
-                        : String.join(" | ", sourceFailures);
-                throw new IllegalStateException(message);
+                throw new IllegalStateException(sourceFailures.isEmpty()
+                        ? "No notice source is configured" : String.join(" | ", sourceFailures));
             }
             if (sourceFailures.isEmpty()) {
                 executionRecorder.succeed(execution, clock.instant(), fetchedCount, savedCount);
             } else {
-                executionRecorder.partiallySucceed(
-                        execution,
-                        clock.instant(),
-                        fetchedCount,
-                        savedCount,
-                        String.join(" | ", sourceFailures)
-                );
+                executionRecorder.partiallySucceed(execution, clock.instant(), fetchedCount, savedCount, String.join(" | ", sourceFailures));
             }
             return new NoticeSyncResult(fetchedCount, savedCount);
         } catch (RuntimeException exception) {

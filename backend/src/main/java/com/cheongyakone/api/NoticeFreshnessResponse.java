@@ -6,6 +6,7 @@ import java.time.Instant;
 public record NoticeFreshnessResponse(
         Instant generatedAt,
         Instant lastCompletedAt,
-        NoticeFreshnessStatus status
+        NoticeFreshnessStatus status,
+        java.util.List<SourceFreshnessResponse> sources
 ) {
 }
