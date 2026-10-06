@@ -15,7 +15,15 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
-public interface MemberNotificationRepository extends JpaRepository<MemberNotification, Long> {
+public interface MemberNotificationRepository extends JpaRepository<MemberNotification, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<MemberNotification> {
+
+    @Override
+    @EntityGraph(attributePaths = "notice")
+    org.springframework.data.domain.Page<MemberNotification> findAll(
+            org.springframework.data.jpa.domain.Specification<MemberNotification> specification, Pageable pageable);
+
+    @Query("select coalesce(max(n.id), 0) from MemberNotification n where n.member.id = :memberId")
+    long latestInboxId(@Param("memberId") Long memberId);
 
     boolean existsByMemberIdAndNotice_IdAndTypeAndEventDate(
             Long memberId,

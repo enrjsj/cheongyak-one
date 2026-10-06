@@ -2246,3 +2246,87 @@ test("저장 조건을 수정하고 신규 공고 알림을 개별로 끈다", a
   await page.getByRole("button", { name: "신규 알림 켜짐", exact: true }).click();
   await expect(page.getByRole("button", { name: "신규 알림 꺼짐", exact: true })).toBeVisible();
 });
+
+test("전체 알림 이력 검색은 서버 필터와 조회 범위를 유지하며 페이지를 이동한다", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page);
+  const queries: URLSearchParams[] = [];
+  let fail = false;
+  await page.route(/\/api\/v1\/members\/me\/notifications(?:\?.*)?$/, route => {
+    const params = new URL(route.request().url()).searchParams;
+    queries.push(params);
+    const current = Number(params.get("page") ?? 0);
+    if (fail && current === 1) return route.fulfill({ status: 503, json: { detail: "temporary" } });
+    const searched = Boolean(params.get("query"));
+    return route.fulfill({ json: { notifications: [{ ...inboxRows[0], id: current + 100, noticeTitle: searched ? "오래된 공고" : `이력 페이지 ${current + 1}` }], unreadCount: 80,
+      page: current, size: 50, totalElements: searched ? 1 : 120, totalPages: searched ? 1 : 3, snapshotId: 999 } });
+  });
+  await openMemberInbox(page);
+  const dialog = page.getByRole("dialog", { name: "맞춤 청약 알림" });
+  fail = true;
+  await dialog.getByRole("button", { name: "다음 페이지" }).click();
+  await expect(dialog.getByText(/알림을 조회하지 못했습니다/)).toBeVisible();
+  await expect(dialog.locator(".notification-item")).toContainText("이력 페이지 1");
+  fail = false;
+  await dialog.getByRole("button", { name: "다음 페이지" }).click();
+  await expect(dialog.locator(".notification-item")).toContainText("이력 페이지 2");
+  expect(queries.at(-1)?.get("snapshotId")).toBe("999");
+  await dialog.getByLabel("알림 검색").fill("오래된 공고");
+  await expect(dialog.getByText("검색 결과 1건 · 1건 표시")).toBeVisible();
+  expect(queries.at(-1)?.get("page")).toBe("0");
+  expect(queries.at(-1)?.has("snapshotId")).toBe(false);
+  await dialog.getByLabel("받은 날짜부터").fill("2026-01-01");
+  await dialog.getByLabel("받은 날짜까지").fill("2026-02-01");
+  await dialog.getByLabel("읽음 상태", { exact: true }).selectOption("READ");
+  await expect.poll(() => queries.at(-1)?.get("readStatus")).toBe("READ");
+  expect(queries.at(-1)?.get("from")).toBe("2026-01-01");
+  expect(queries.at(-1)?.get("to")).toBe("2026-02-01");
+  expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await dialog.getByLabel("받은 날짜부터").fill("2026-03-01");
+  await expect(dialog.getByRole("alert")).toContainText("시작일은 종료일보다");
+  await expect(dialog.getByRole("button", { name: "새로고침" })).toBeDisabled();
+});
+
+test("알림 검색을 되돌리면 늦은 서버 응답을 무시한다", async ({ page }) => {
+  await mockApi(page);
+  let release: (() => void) | undefined;
+  await page.route(/\/api\/v1\/members\/me\/notifications(?:\?.*)?$/, async route => {
+    const query = new URL(route.request().url()).searchParams.get("query") ?? "";
+    if (query === "느린 검색") await new Promise<void>(resolve => { release = resolve; });
+    await route.fulfill({ json: { notifications: [{ ...inboxRows[0], noticeTitle: query || "기본 목록" }], unreadCount: 1, page: 0, size: 50, totalElements: 1, totalPages: 1, snapshotId: 99 } });
+  });
+  await openMemberInbox(page);
+  await page.getByLabel("알림 검색").fill("느린 검색");
+  await expect.poll(() => Boolean(release)).toBe(true);
+  await page.getByLabel("알림 검색").fill("");
+  release?.();
+  await expect(page.locator(".notification-item")).toContainText("기본 목록");
+  await expect(page.getByText("전체 알림 이력을 조회하고 있습니다…")).toHaveCount(0);
+  await page.getByLabel("알림 검색").fill("빠른 검색");
+  await expect(page.locator(".notification-item")).toContainText("빠른 검색");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "알림 1개", exact: true }).click();
+  await expect(page.locator(".notification-item")).toContainText("기본 목록");
+});
+
+test("전체 이력 모두 읽음 후 재조회 실패는 빈 알림으로 표시하지 않고 복구한다", async ({ page }) => {
+  await mockApi(page);
+  let read = false;
+  let fail = false;
+  await page.route(/\/api\/v1\/members\/me\/notifications(?:\?.*)?$/, route => {
+    if (fail) return route.fulfill({ status: 503, json: { detail: "temporary" } });
+    return route.fulfill({ json: { notifications: [{ ...inboxRows[0], readAt: read ? "2026-10-06T00:00:00Z" : null }], unreadCount: read ? 0 : 1, page: 0, size: 50, totalElements: 1, totalPages: 1, snapshotId: 99 } });
+  });
+  await page.route("**/api/v1/members/me/notifications/read-all", route => {
+    read = true; fail = true;
+    return route.fulfill({ status: 204 });
+  });
+  await openMemberInbox(page);
+  await page.getByRole("button", { name: "모두 읽음", exact: true }).click();
+  await expect(page.getByText(/읽음 처리는 완료됐지만 목록을 갱신하지 못했습니다/)).toBeVisible();
+  await expect(page.getByText("아직 도착한 알림이 없어요")).toHaveCount(0);
+  await expect(page.getByText("알림 목록을 확인하지 못했습니다. 새로고침으로 다시 불러와주세요.")).toBeVisible();
+  fail = false;
+  await page.getByRole("button", { name: "새로고침", exact: true }).click();
+  await expect(page.locator(".notification-item.read")).toHaveCount(1);
+});

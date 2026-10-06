@@ -118,6 +118,65 @@ class MemberApiIntegrationTest {
     @Autowired
     private RecordingMemberMailSender mailSender;
 
+    @Autowired
+    private com.cheongyakone.domain.member.MemberNotificationRepository historyRepository;
+
+    @Test
+    void searchesAllNotificationHistoryWithOwnerDateReadAndStablePageBoundaries() throws Exception {
+        signup("history@example.com", "이력회원");
+        signup("history-other@example.com", "다른이력회원");
+        var member = memberRepository.findByEmail("history@example.com").orElseThrow();
+        var other = memberRepository.findByEmail("history-other@example.com").orElseThrow();
+        var session = authenticatedSession(login("history@example.com", PASSWORD).andReturn());
+        var notice = noticeRepository.save(noticeWithDates("history", "서울 100%_주택", null, null, null));
+        var created = Instant.parse("2026-01-01T15:00:00Z"); // January 2 in Korea
+        for (int i = 0; i < 65; i++) {
+            var item = new com.cheongyakone.domain.member.MemberNotification(member, notice,
+                    com.cheongyakone.domain.member.NotificationType.APPLY_DEADLINE_3D,
+                    LocalDate.of(2026, 1, 1).plusDays(i), created.plusSeconds(i), false, false);
+            if (i % 2 == 0) item.markRead(created.plusSeconds(100));
+            historyRepository.save(item);
+        }
+        historyRepository.save(new com.cheongyakone.domain.member.MemberNotification(other, notice,
+                com.cheongyakone.domain.member.NotificationType.APPLY_START, LocalDate.of(2026, 1, 1), created, false, false));
+        String path = "/api/v1/members/me/notifications";
+        var first = mockMvc.perform(get(path).cookie(session.cookie()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.notifications.length()").value(50))
+                .andExpect(jsonPath("$.totalElements").value(65)).andExpect(jsonPath("$.unreadCount").value(32))
+                .andExpect(jsonPath("$.totalPages").value(2)).andReturn();
+        Number snapshot = JsonPath.read(first.getResponse().getContentAsString(), "$.snapshotId");
+        List<Number> firstIds = JsonPath.read(first.getResponse().getContentAsString(), "$.notifications[*].id");
+        historyRepository.save(new com.cheongyakone.domain.member.MemberNotification(member, notice,
+                com.cheongyakone.domain.member.NotificationType.NEW_MATCHING_NOTICE, LocalDate.of(2026, 1, 1), created.plusSeconds(1000), false, false));
+        var second = mockMvc.perform(get(path).cookie(session.cookie()).param("page", "1").param("snapshotId", snapshot.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.notifications.length()").value(15))
+                .andExpect(jsonPath("$.totalElements").value(65)).andReturn();
+        List<Number> secondIds = JsonPath.read(second.getResponse().getContentAsString(), "$.notifications[*].id");
+        assertThat(secondIds).doesNotContainAnyElementsOf(firstIds);
+        mockMvc.perform(get(path).cookie(session.cookie()).param("query", "서울 3일")
+                        .param("from", "2026-01-02").param("to", "2026-01-02").param("readStatus", "UNREAD"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(32));
+        mockMvc.perform(get(path).cookie(session.cookie()).param("query", "100%_주택").param("readStatus", "READ"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(33));
+        mockMvc.perform(get(path).cookie(session.cookie()).param("query", "100%X"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+        mockMvc.perform(get(path).cookie(session.cookie()).param("to", "2026-01-01"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+        mockMvc.perform(get(path).cookie(session.cookie()).param("sort", "UNREAD_FIRST").param("size", "1"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.notifications[0].type").value("NEW_MATCHING_NOTICE"));
+        mockMvc.perform(get(path).cookie(session.cookie()).param("filter", "NEW"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1));
+        for (var parameter : List.of(Map.entry("page", "-1"), Map.entry("size", "51"), Map.entry("filter", "INVALID"), Map.entry("snapshotId", "-1"))) {
+            mockMvc.perform(get(path).cookie(session.cookie()).param(parameter.getKey(), parameter.getValue())).andExpect(status().isBadRequest());
+        }
+        mockMvc.perform(get(path).cookie(session.cookie()).param("from", "2026-02-01").param("to", "2026-01-01"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get(path)).andExpect(status().isUnauthorized());
+        mockMvc.perform(authenticated(post(path + "/read-all"), session)).andExpect(status().isNoContent());
+        mockMvc.perform(get(path).cookie(session.cookie()).param("filter", "UNREAD"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0)).andExpect(jsonPath("$.unreadCount").value(0));
+    }
+
     @Test
     void signsUpLogsInUpdatesProfileAndLogsOut() throws Exception {
         signup("member1@example.com", "첫회원");

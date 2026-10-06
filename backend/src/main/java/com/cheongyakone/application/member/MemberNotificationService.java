@@ -49,13 +49,18 @@ public class MemberNotificationService {
 
     @Transactional(readOnly = true)
     public NotificationInboxResponse inbox(String rawToken) {
+        return inbox(rawToken, NotificationInboxQuery.defaults());
+    }
+
+    @Transactional(readOnly = true)
+    public NotificationInboxResponse inbox(String rawToken, NotificationInboxQuery query) {
         Member member = memberService.requireMember(rawToken);
-        return new NotificationInboxResponse(
-                notificationRepository.findTop50ByMemberIdOrderByCreatedAtDescIdDesc(member.getId()).stream()
-                        .map(MemberNotificationResponse::from)
-                        .toList(),
-                notificationRepository.countByMemberIdAndReadAtIsNull(member.getId())
-        );
+        long snapshot = query.snapshotId() == null ? notificationRepository.latestInboxId(member.getId()) : query.snapshotId();
+        var page = notificationRepository.findAll(query.specification(member.getId(), snapshot),
+                org.springframework.data.domain.PageRequest.of(query.page(), query.size()));
+        return new NotificationInboxResponse(page.getContent().stream().map(MemberNotificationResponse::from).toList(),
+                notificationRepository.countByMemberIdAndReadAtIsNull(member.getId()),
+                page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages(), snapshot);
     }
 
     @Transactional
