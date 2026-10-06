@@ -18,3 +18,13 @@
 .cash-plan-stages dl div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; font-size: 14px; }
 .cash-plan-stages dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 @media (max-width: 600px) { .cash-plan { padding: 14px; } .cash-plan-fields { grid-template-columns: minmax(0, 1fr); } }
+.cash-comparison { min-width: 0; margin-top: 24px; border-top: 1px solid #c4d9d1; }
+.cash-comparison h4 { font-size: 18px; }
+.cash-comparison-scroll { overflow-x: auto; max-width: 100%; border: 1px solid #d9e7e4; border-radius: 10px; }
+.cash-comparison table { border-collapse: collapse; width: max-content; min-width: 100%; background: white; font-size: 13px; }
+.cash-comparison caption { text-align: left; padding: 12px; white-space: normal; }
+.cash-comparison th, .cash-comparison td { width: 190px; max-width: 210px; padding: 12px; text-align: left; vertical-align: top; border-bottom: 1px solid #d9e7e4; overflow-wrap: anywhere; }
+.cash-comparison tbody th { width: 145px; max-width: 145px; background: #f1f7f5; }
+.cash-comparison thead th { background: #e9f3ef; }
+.cash-comparison th button { display: block; min-height: 44px; margin-top: 8px; padding: 8px 12px; background: white; border: 1px solid #aebfba; border-radius: 8px; color: #324f46; cursor: pointer; }
+.cash-comparison-scroll:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }

@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { NoticeDetail } from "./api";
-import { calculateCashPlan, emptyCashPlan, sourcePrice } from "./cashPlan";
-import type { CashPlanInput, CashPlanResult } from "./cashPlan";
+import { addCashScenario, captureCashPlan, cashPlanReport, emptyCashPlan, sourcePrice } from "./cashPlan";
+import type { CashPlanInput, CashPlanSnapshot, CashPlanScenario } from "./cashPlan";
 import { formatHousingType } from "./noticePresentation";
+import CashPlanComparison from "./CashPlanComparison";
 import "./cashPlan.css";
 
 const money = (value: number) => `${value.toLocaleString("ko-KR")}원`;
@@ -20,17 +21,46 @@ const fields: Array<{ key: keyof CashPlanInput; label: string; hint: string }> =
 export default function CashPlanCalculator({ notice }: { notice: NoticeDetail }) {
   const [unit, setUnit] = useState("");
   const [input, setInput] = useState<CashPlanInput>(emptyCashPlan);
-  const [result, setResult] = useState<CashPlanResult>();
+  const [calculation, setCalculation] = useState<CashPlanSnapshot>();
+  const result = calculation?.result;
+  const [scenarios, setScenarios] = useState<CashPlanScenario[]>([]);
+  const nextScenarioId = useRef(1);
+  const [actionMessage, setActionMessage] = useState("");
+  const [actionError, setActionError] = useState("");
   const [error, setError] = useState("");
   const units = notice.unitTypes ?? [];
   const selected = unit === "" ? undefined : units[Number(unit)];
   const published = sourcePrice(selected?.maxPrice);
-  const clearResult = () => { setResult(undefined); setError(""); };
+  const clearResult = () => { setCalculation(undefined); setError(""); setActionMessage(""); setActionError(""); };
   function submit(event: FormEvent) {
     event.preventDefault(); clearResult();
     if (!selected) { setError("계산할 주택형을 선택해주세요."); return; }
-    try { setResult(calculateCashPlan(input)); }
+    try { setCalculation(captureCashPlan({ noticeId: notice.id, title: notice.title, unitId: selected.modelId,
+      unitName: formatHousingType(selected.housingTypeName), publishedPrice: selected.maxPrice, syncedAt: notice.syncedAt,
+      officialUrl: notice.officialUrl, contractStartDate: notice.contractStartDate, contractEndDate: notice.contractEndDate,
+    }, input, new Date().toISOString())); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "입력값을 확인해주세요."); }
+  }
+  function addScenario() {
+    if (!calculation) return;
+    setActionMessage(""); setActionError("");
+    try {
+      const updated = addCashScenario(scenarios, calculation, nextScenarioId.current);
+      setScenarios(updated); nextScenarioId.current += 1;
+      setActionMessage(`계획 ${updated.at(-1)!.id}을 비교에 담았습니다. 현재 ${updated.length}개입니다.`);
+    } catch (cause) { setActionError(cause instanceof Error ? cause.message : "비교에 담지 못했습니다."); }
+  }
+  function download(plans: CashPlanScenario[]) {
+    setActionMessage(""); setActionError("");
+    try {
+      const url = URL.createObjectURL(new Blob(["\uFEFF" + cashPlanReport(plans)], { type: "text/plain;charset=utf-8" }));
+      const anchor = document.createElement("a");
+      try {
+        anchor.href = url; anchor.download = `cheongyak-cash-plan-${notice.id}.txt`;
+        document.body.append(anchor); anchor.click();
+        setActionMessage("텍스트 파일 저장을 요청했습니다. 파일에는 입력한 자금 정보가 포함됩니다.");
+      } finally { anchor.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 10000); }
+    } catch { setActionError("파일을 만들지 못했습니다. 잠시 후 다시 시도해주세요. 계산과 비교 내용은 유지됩니다."); }
   }
   if (notice.housingCategory === "PUBLIC_RENTAL" || /임대/.test(notice.rentType ?? "")) return <section className="cash-plan" aria-label="필요 현금 계산기"><h3>필요 현금 계산기</h3><p>임대 공고는 보증금·월 임대료·전환 조건을 확인해야 하므로 이 분양 대금 계산기를 적용하지 않습니다.</p></section>;
   return <section className="cash-plan" aria-labelledby="cash-plan-title">
@@ -61,9 +91,14 @@ export default function CashPlanCalculator({ notice }: { notice: NoticeDetail })
         </article>)}</div>
         <p>중도금 대출 {money(result.interimLoan)}을 잔금 때 상환하고, 잔금 시 총 대출 {money(result.finalLoan)}을 사용합니다. 추가 비용 {money(result.extras)}은 잔금 단계에 합산했습니다. 준비한 현금은 {money(result.availableCash)}입니다.</p>
         <p>중도금 회차별 납부일, 추가 비용의 실제 지출 시점, 대출 실행·상환 조건은 반영하지 않았습니다. 추가 비용이 먼저 발생하면 더 일찍 현금이 필요합니다. 원 미만 계약금·중도금은 버리고 차액은 잔금에 포함합니다.</p>
+        <div className="cash-plan-actions"><button className="secondary-button" type="button" onClick={addScenario}>비교에 담기</button><button className="secondary-button" type="button" onClick={() => { if (calculation) download([{ id: 1, snapshot: calculation }]); }}>현재 계산 파일 저장</button></div>
         <p>공고 계약 기간: {notice.contractStartDate ?? "시작일 미확인"} ~ {notice.contractEndDate ?? "종료일 미확인"}. 중도금·잔금 납부일은 공식 공고와 계약서에서 확인하세요.</p>
       </div>}
-      <small>입력과 결과는 현재 상세 화면에서만 유지됩니다. 계정·브라우저 저장소에 저장하거나 서버·AI로 전송하지 않습니다.</small>
+      {actionMessage && <p role="status">{actionMessage}</p>}
+      {actionError && <p role="alert">{actionError}</p>}
+      <CashPlanComparison scenarios={scenarios} onRemove={id => { setScenarios(items => items.filter(item => item.id !== id)); setActionError(""); setActionMessage(`계획 ${id}을 비교에서 삭제했습니다.`); }}
+        onClear={() => { setScenarios([]); nextScenarioId.current = 1; setActionError(""); setActionMessage("비교 내역을 비웠습니다."); }} onDownload={() => download(scenarios)} />
+      <small>입력·결과·비교 내역은 현재 상세 화면에서만 유지됩니다. 계정·브라우저 저장소에 자동 저장하거나 서버·AI로 전송하지 않습니다. 파일 저장을 선택하면 입력한 자금 정보를 기기에 내려받습니다.</small>
     </>}
   </section>;
 }
