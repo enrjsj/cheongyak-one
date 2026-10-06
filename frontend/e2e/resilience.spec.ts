@@ -512,6 +512,11 @@ test('현금 계획 모바일: 계산·입력 수정·닫기 후 포커스 복�
   await panel.getByRole('button', { name: '현금 계획 계산', exact: true }).click();
   const result = panel.getByRole('region', { name: '현금 계획 결과' });
   await expect(result.getByRole('heading', { level: 4 })).toContainText('600,000,000원');
+  await result.getByRole('button', { name: '비교에 담기', exact: true }).click();
+  await expect(panel.getByRole('heading', { name: '현금 계획 비교 · 1/3개', exact: true })).toBeVisible();
+  const downloaded = page.waitForEvent('download');
+  await panel.getByRole('button', { name: '비교 내역 파일 저장', exact: true }).click();
+  expect((await downloaded).suggestedFilename()).toBe('cheongyak-cash-plan-1.txt');
   expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   await panel.getByLabel('중도금 비율 (%)', { exact: true }).fill('101');
   await expect(result).toHaveCount(0);

@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, Page, Route, test } from "@playwright/test";
 
 const notices = [
@@ -2430,4 +2431,88 @@ test('현금 계획: 미확인 공급금액은 직접 입력하고 임대·주�
   await expect(page.getByRole('button', { name: '현금 계획 계산', exact: true })).toHaveCount(0);
   await page.unroute('**/api/v1/notices/1'); await page.goto('/?notice=1');
   await expect(page.getByText(/주택형 자료가 없어 계산할 수 없습니다/)).toBeVisible();
+});
+
+async function prepareCashScenarios(page: Page) {
+  await mockApi(page);
+  await page.route('**/api/v1/notices/1', route => route.fulfill({ json: { ...notices[0], unitTypes: [
+    { modelId: '01', housingTypeName: '084A', maxPrice: 600000000 }, { modelId: '02', housingTypeName: '059B', maxPrice: 400000000 },
+  ] } }));
+  await page.goto('/?notice=1');
+  const panel = page.getByRole('region', { name: '주택형별 필요 현금 계산기', exact: true });
+  await panel.getByLabel('계산할 주택형', { exact: true }).selectOption('0');
+  for (const [label, value] of [['계약금 비율 (%)', '10'], ['중도금 비율 (%)', '60'], ['중도금 대출 예상액 (원)', '360000000'], ['잔금 시 총 대출 예상액 (원)', '420000000'], ['추가 비용 예상액 (원)', '30000000'], ['현재 준비한 현금 (원)', '80000000']]) await panel.getByLabel(label, { exact: true }).fill(value);
+  await panel.getByRole('button', { name: '현금 계획 계산', exact: true }).click();
+  return panel;
+}
+for (const width of [320, 1280]) {
+  test(`현금 시나리오 ${width}px: 조건 고정·중복·한도·삭제·파일·재열기`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    const panel = await prepareCashScenarios(page);
+    const add = panel.getByRole('button', { name: '비교에 담기', exact: true });
+    await add.click(); await add.click();
+    await expect(panel.getByRole('alert')).toContainText('이미 비교');
+    await expect(panel.getByRole('heading', { name: '현금 계획 비교 · 1/3개', exact: true })).toBeVisible();
+    for (const loan of ['360000000', '300000000']) {
+      await panel.getByLabel('잔금 시 총 대출 예상액 (원)', { exact: true }).fill(loan);
+      await expect(panel.getByRole('region', { name: '현금 계획 결과', exact: true })).toHaveCount(0);
+      await panel.getByRole('button', { name: '현금 계획 계산', exact: true }).click(); await add.click();
+    }
+    const comparison = panel.locator('.cash-comparison');
+    await expect(comparison.getByRole('heading')).toHaveText('현금 계획 비교 · 3/3개');
+    const total = comparison.getByRole('row', { name: /^총 자기자금 / });
+    for (const amount of ['210,000,000원', '270,000,000원', '330,000,000원']) await expect(total).toContainText(amount);
+    await panel.getByLabel('잔금 시 총 대출 예상액 (원)', { exact: true }).fill('240000000');
+    await panel.getByRole('button', { name: '현금 계획 계산', exact: true }).click(); await add.click();
+    await expect(panel.getByRole('alert')).toContainText('최대 3개');
+    await comparison.getByRole('button', { name: '계획 2 비교에서 삭제', exact: true }).click(); await add.click();
+    await expect(comparison.getByRole('columnheader', { name: /계획 4/ })).toBeVisible();
+    await comparison.getByRole('button', { name: '계획 1 비교에서 삭제', exact: true }).click();
+    await expect(comparison.getByRole('row', { name: /^첫 계획 대비 차이 / })).toContainText('+60,000,000원');
+    await panel.getByLabel('계산할 주택형', { exact: true }).selectOption('1');
+    await expect(panel.getByRole('region', { name: '현금 계획 결과', exact: true })).toHaveCount(0);
+    await expect(comparison.getByRole('row', { name: /^주택형 / })).toContainText('84A');
+    const downloading = page.waitForEvent('download');
+    await comparison.getByRole('button', { name: '비교 내역 파일 저장', exact: true }).click();
+    const file = await downloading;
+    expect(file.suggestedFilename()).toBe('cheongyak-cash-plan-1.txt');
+    const body = await readFile((await file.path())!, 'utf8');
+    for (const text of ['계획 3 · 84A', '계획 4 · 84A', '330,000,000원', '390,000,000원', '공고 최고 금액 사용', '회차별 납부일']) expect(body).toContain(text);
+    expect(body).not.toContain('59B');
+    expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    if (width === 320) {
+      const scroll = comparison.getByRole('region', { name: '현금 계획 비교표 가로 스크롤', exact: true });
+      expect(await scroll.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+      await comparison.getByRole('heading').scrollIntoViewIfNeeded();
+      await page.screenshot({ path: 'test-results/cash-scenarios-mobile.png' });
+    }
+    await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
+    await page.locator('article').filter({ hasText: notices[0].title }).getByRole('button', { name: /공고 핵심만 보기/ }).click();
+    await expect(panel.getByLabel('계산할 주택형', { exact: true })).toHaveValue('');
+    await expect(panel.locator('.cash-comparison')).toHaveCount(0);
+  });
+}
+
+test('현금 보고서: 파일 생성 실패 후 계산을 유지하며 현재 결과만 다시 저장한다', async ({ page }) => {
+  const panel = await prepareCashScenarios(page);
+  await panel.getByRole('button', { name: '비교에 담기', exact: true }).click();
+  await page.evaluate(() => {
+    const original = URL.createObjectURL; let fail = true;
+    URL.createObjectURL = function(blob: Blob) { if (fail) { fail = false; throw new Error('blocked'); } return original.call(URL, blob); };
+  });
+  const button = panel.getByRole('button', { name: '현재 계산 파일 저장', exact: true });
+  await button.click(); await expect(panel.getByRole('alert')).toContainText('파일을 만들지 못했습니다');
+  await expect(panel.getByRole('region', { name: '현금 계획 결과', exact: true })).toBeVisible();
+  await expect(panel.getByRole('heading', { name: '현금 계획 비교 · 1/3개', exact: true })).toBeVisible();
+  const downloading = page.waitForEvent('download'); await button.click();
+  const body = await readFile((await (await downloading).path())!, 'utf8');
+  expect(body).toContain('총 자기자금: 210,000,000원'); expect(body).toContain('계산 시각:');
+  expect(body).toContain('공식 공고: https://applyhome.example/1');
+  await expect(panel.getByRole('alert')).toHaveCount(0);
+  await panel.getByLabel('계약금 비율 (%)', { exact: true }).fill('101');
+  await expect(button).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: '비교 내역 파일 저장', exact: true })).toBeVisible();
+  await panel.getByRole('button', { name: '비교 전체 비우기', exact: true }).click();
+  await expect(panel.locator('.cash-comparison')).toHaveCount(0);
 });
