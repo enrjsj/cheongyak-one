@@ -9,3 +9,12 @@
 .ai-actions button:disabled { opacity: .55; cursor: not-allowed; }
 .ai-answer { border-top: 1px solid #dce4df; margin-top: 18px; padding-top: 12px; }
 .ai-answer p { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.ai-evidence { padding: 12px; border: 1px solid #dce3ea; border-radius: 8px; margin: 12px 0; }
+.ai-evidence summary { cursor: pointer; font-weight: 700; }
+.ai-evidence dl > div { margin: 10px 0; scroll-margin-top: 20px; }
+.ai-evidence dt { font-weight: 700; }
+.ai-evidence dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+.ai-evidence ul { padding-left: 20px; }
+.ai-usage-metrics { margin: 16px 0; overflow-wrap: anywhere; }
+.ai-usage-metrics article { border-bottom: 1px solid #dce3ea; padding: 12px 0; }

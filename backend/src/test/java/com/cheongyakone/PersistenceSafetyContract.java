@@ -97,6 +97,36 @@ abstract class PersistenceSafetyContract {
         } finally { clearAttempts(memberId); }
     }
 
+    @Test void dailyBudgetAndCostSnapshotsWorkOnTheMigratedDatabase() throws Exception {
+        long memberId = testMemberId();
+        var fixed = java.time.Clock.fixed(java.time.Instant.parse("2026-01-10T15:00:00Z"), java.time.ZoneOffset.UTC);
+        var prices = new com.cheongyakone.config.AiUsageProperties("test-model", new java.math.BigDecimal("1"),
+                new java.math.BigDecimal("0.1"), new java.math.BigDecimal("2"), new java.math.BigDecimal("0.0042"));
+        var first = new AiConsultationLimiter(fixed, jdbc, transactions, prices);
+        var second = new AiConsultationLimiter(fixed, jdbc, transactions, prices);
+        try (var pool = Executors.newFixedThreadPool(4)) {
+            var start = new CountDownLatch(1);
+            var jobs = new ArrayList<Future<String>>();
+            for (int i=0; i<4; i++) {
+                var instance = i % 2 == 0 ? first : second;
+                jobs.add(pool.submit(() -> {
+                    start.await();
+                    try { return instance.acquire(memberId, "test-model", 1000); }
+                    catch (MemberApiException limited) { return null; }
+                }));
+            }
+            start.countDown();
+            var admitted = new ArrayList<String>();
+            for (var job : jobs) { String id = job.get(20, TimeUnit.SECONDS); if (id != null) admitted.add(id); }
+            assertThat(admitted).hasSize(1);
+            assertThat(first.metrics().budget().committedUsd()).isEqualByComparingTo("0.0042");
+            second.finish(admitted.getFirst(), new com.cheongyakone.application.member.AiProviderResult("not persisted", "test-model-v1",
+                    new com.cheongyakone.application.member.AiProviderResult.Usage(1000, 200, 100)), null);
+            assertThat(first.metrics().models().getFirst().estimatedCostUsd()).isEqualByComparingTo("0.00102");
+            assertThat(first.metrics().budget().reservedUsd()).isZero();
+        } finally { clearAttempts(memberId); }
+    }
+
     @Test void receiptsRespectRowLockRollbackAndCascade() throws Exception {
         var tx = new TransactionTemplate(transactions);
         tx.setTimeout(10);

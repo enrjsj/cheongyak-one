@@ -30,7 +30,7 @@ class PostgresMigrationIntegrationTest extends NoticeMatchingContract {
         );
 
         assertThat(databaseProduct).isEqualTo("PostgreSQL");
-        assertThat(appliedMigrations).isGreaterThanOrEqualTo(37);
+        assertThat(appliedMigrations).isGreaterThanOrEqualTo(38);
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM pg_indexes WHERE indexname = 'ix_member_notification_history'", Integer.class)).isEqualTo(1);
     }
 }

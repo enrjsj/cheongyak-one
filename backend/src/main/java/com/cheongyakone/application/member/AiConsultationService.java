@@ -39,25 +39,31 @@ public class AiConsultationService {
         if (!properties.enabled()) throw new MemberApiException(HttpStatus.SERVICE_UNAVAILABLE,
                 "AI_NOT_CONFIGURED", "AI 상담 연결을 준비 중입니다.");
         var notice = notices.findById(noticeId);
-        // Only public notice facts and a fixed topic leave our server; no member profile or identifiers.
+        var evidence = AiNoticeEvidence.from(notice);
+        // Only bounded public facts and a fixed topic leave the server.
         var input = new LinkedHashMap<String, Object>();
         input.put("topic", topic.label);
-        input.put("title", notice.title());
-        input.put("category", notice.housingCategory());
-        input.put("region", notice.regionCode());
-        input.put("applyStartDate", notice.applyStartDate());
-        input.put("applyEndDate", notice.applyEndDate());
-        input.put("syncedAt", notice.syncedAt());
-        input.put("today", java.time.LocalDate.now(clock));
-        String attemptId = limiter.acquire(member.getId());
-        boolean success = false;
+        input.put("facts", evidence.facts());
+        input.put("missingInformation", evidence.missingInformation());
+        input.put("truncated", evidence.truncated());
+        input.put("todayKst", java.time.LocalDate.now(clock.withZone(java.time.ZoneId.of("Asia/Seoul"))));
+        String serialized = mapper.writeValueAsString(input);
+        if (serialized.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > OpenAiConsultationClient.MAX_INPUT_BYTES)
+            throw new MemberApiException(HttpStatus.SERVICE_UNAVAILABLE, "AI_CONTEXT_TOO_LARGE", "공고 정보가 너무 많습니다. 공식 공고를 확인해주세요.");
+        String attemptId = limiter.acquire(member.getId(), properties.model(), OpenAiConsultationClient.reservedInputTokens(serialized));
+        AiProviderResult response = null;
+        AiProviderResult.Failure failure = AiProviderResult.Failure.INTERNAL;
         try {
-            String answer = AiConsultationAnswerPolicy.check(client.consult(mapper.writeValueAsString(input)));
-            success = true;
-            return new Result(noticeId, topic, answer,
-                    notice.officialUrl(), notice.syncedAt(), clock.instant(),
-                    "AI 답변은 오류가 있을 수 있으며 청약 자격 판정·금융 조언이 아닙니다. 최종 판단은 공식 공고문과 담당 기관에서 확인하세요.");
-        } finally { limiter.finish(attemptId, success); }
+            response = client.consult(serialized);
+            failure = AiProviderResult.Failure.ANSWER_REJECTED;
+            String answer = AiConsultationAnswerPolicy.check(response.answer(), evidence.facts());
+            failure = null;
+            return new Result(noticeId, topic, answer, notice.officialUrl(), notice.syncedAt(), clock.instant(),
+                    "AI 답변은 오류가 있을 수 있으며 청약 자격 판정·금융 조언이 아닙니다. 최종 판단은 공식 공고문과 담당 기관에서 확인하세요.",
+                    evidence.facts(), evidence.missingInformation(), evidence.totalUnitTypes(), evidence.truncated());
+        } catch (AiProviderResult.ProviderException exception) {
+            response = exception.result(); failure = exception.failure(); throw exception;
+        } finally { limiter.finish(attemptId, response, failure); }
     }
 
     public enum Topic {
@@ -66,5 +72,7 @@ public class AiConsultationService {
         Topic(String label) { this.label = label; }
     }
     public record Result(Long noticeId, Topic topic, String answer, String officialUrl,
-                         Instant noticeSyncedAt, Instant generatedAt, String disclaimer) {}
+                         Instant noticeSyncedAt, Instant generatedAt, String disclaimer,
+                         java.util.List<AiNoticeEvidence.Fact> evidence, java.util.List<String> missingInformation,
+                         int totalUnitTypes, boolean truncated) {}
 }
