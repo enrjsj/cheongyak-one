@@ -1,8 +1,10 @@
-import { hasUnitRange, unitMatchesRange } from "./unitTypeMatching";
+import { Icon, type IconName } from "./Icon";
+import NoticeDetailDialog from "./NoticeDetailDialog";
+import { StatusKey, Application, CATEGORY_LABELS, koreaToday, dateValue, daysBetween, formatShortDate, formatChangedAt, weekday, toApplication } from "./noticePresentation";
+import { FavoriteProgressFilter, FavoriteChecklistKey, FavoriteSortKey, FAVORITE_PROGRESS_LABELS, FAVORITE_PROGRESS_PRIORITY, FAVORITE_APPLICATION_RESULT_LABELS, FAVORITE_APPLICATION_RESULT_PRIORITY, FAVORITE_CHECKLIST_ITEMS, completedChecklistCount, incompleteChecklistLabels, applicationResultFromFilter, resultDueLabel } from "./favoritePresentation";
 import { SourceFreshnessPanel } from "./SourceFreshnessPanel";
 // 서비스의 주요 사용자 흐름(검색·관심청약·비교·회원·사전점검)을 조합하는 화면 컨테이너다.
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AiConsultationPanel } from "./AiConsultationPanel";
 import {
   changeMemberPassword,
   ApiError,
@@ -43,9 +45,7 @@ import {
   mergeComparisonIds,
   NoticeDetail,
   NoticeChange,
-  NoticeUnitType,
   NoticeSummary,
-  NoticeStatus,
   NoticeSearchFacets,
   NoticeFreshness,
   saveSearchPreference,
@@ -105,98 +105,11 @@ import {
 } from "./noticeTools";
 import { cacheNoticePage, noticePageCacheKey, noticePageStorage, readCachedNoticePage } from "./noticePageCache";
 
-type StatusKey = "all" | "today" | "open" | "upcoming";
-type StateTone = "mint" | "coral" | "blue" | "purple" | "gray";
-type PresentationStatus = Exclude<StatusKey, "all"> | "announcement" | "closed";
-type IconName = "search" | "pin" | "home" | "calendar" | "bookmark" | "arrow" | "check" | "bell" | "grid" | "close" | "filter" | "user";
-type FavoriteProgressFilter = FavoriteProgress | "ALL" | "INCOMPLETE" | "URGENT" | "RESULT_DUE" | "RESULT_PENDING" | "RESULT_SELECTED" | "RESULT_WAITLISTED" | "RESULT_NOT_SELECTED";
-type FavoriteChecklistKey = "noticeDocumentChecked" | "eligibilityChecked" | "scheduleChecked" | "fundsChecked";
-type FavoriteSortKey = "PREPARATION" | "DEADLINE" | "RESULT";
-
 // 처음 화면에 너무 많은 카드를 만들지 않아 Render Free 기동 뒤의 체감 시간을 줄인다.
 const NOTICE_PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
 const STATUS_KEYS: StatusKey[] = ["all", "today", "open", "upcoming"];
 const noticePagePrefetches = new Map<string, ReturnType<typeof fetchNoticePage>>();
-
-const FAVORITE_PROGRESS_LABELS: Record<FavoriteProgress, string> = {
-  SAVED: "저장만 함",
-  CHECKING: "조건 확인 중",
-  READY: "신청 준비 완료",
-  APPLIED: "신청 완료",
-};
-
-const FAVORITE_PROGRESS_PRIORITY: Record<FavoriteProgress, number> = {
-  CHECKING: 0,
-  READY: 1,
-  SAVED: 2,
-  APPLIED: 3,
-};
-
-const FAVORITE_APPLICATION_RESULT_LABELS: Record<FavoriteApplicationResult, string> = {
-  PENDING: "발표 대기",
-  SELECTED: "당첨",
-  WAITLISTED: "예비 당첨",
-  NOT_SELECTED: "미당첨",
-};
-
-const FAVORITE_APPLICATION_RESULT_PRIORITY: Record<FavoriteApplicationResult, number> = {
-  PENDING: 0,
-  WAITLISTED: 1,
-  SELECTED: 2,
-  NOT_SELECTED: 3,
-};
-
-const FAVORITE_CHECKLIST_ITEMS: { key: FavoriteChecklistKey; label: string }[] = [
-  { key: "noticeDocumentChecked", label: "공고문 확인" },
-  { key: "eligibilityChecked", label: "자격 조건 확인" },
-  { key: "scheduleChecked", label: "접수 일정 확인" },
-  { key: "fundsChecked", label: "자금 계획 확인" },
-];
-
-function completedChecklistCount(tracker?: FavoriteTracker): number {
-  return FAVORITE_CHECKLIST_ITEMS.filter(({ key }) => tracker?.[key]).length;
-}
-
-function incompleteChecklistLabels(tracker?: FavoriteTracker): string {
-  return FAVORITE_CHECKLIST_ITEMS.filter(({ key }) => !tracker?.[key]).map(({ label }) => label).join(" · ");
-}
-
-function applicationResultFromFilter(filter: FavoriteProgressFilter): FavoriteApplicationResult | undefined {
-  if (!filter.startsWith("RESULT_")) return undefined;
-  return filter.slice("RESULT_".length) as FavoriteApplicationResult;
-}
-
-function resultDueLabel(winnerAnnounceDate?: string): string {
-  if (!winnerAnnounceDate) return "발표일 확인 필요";
-  const remaining = daysBetween(koreaToday(), winnerAnnounceDate);
-  if (remaining === undefined) return "발표일 확인 필요";
-  if (remaining === 0) return "오늘 발표";
-  return remaining < 0 ? `${Math.abs(remaining)}일 전 발표` : `D-${remaining} 발표`;
-}
-
-type Application = NoticeSummary & {
-  state: string;
-  stateTone: StateTone;
-  statusKey: PresentationStatus;
-  location: string;
-  region: string;
-  type: string;
-  category: string;
-  period: string;
-  dday: string;
-  priceLabel: string;
-  price: string;
-  scale: string;
-  fit: string;
-  deposit: string;
-};
-
-const CATEGORY_LABELS: Record<HousingCategory, string> = {
-  APARTMENT: "아파트",
-  PUBLIC_RENTAL: "공공임대",
-  OFFICETEL: "오피스텔",
-};
 
 const SUPPLY_TYPE_LABELS: Record<SupplyType, string> = {
   SALE: "분양",
@@ -217,209 +130,6 @@ const REGION_ORDER = [
 
 const RECENT_NOTICE_STORAGE_KEY = "cheongyak-one-recent-notices";
 const RECENT_SEARCH_STORAGE_KEY = "cheongyak-one-recent-searches";
-
-const Icon = ({ name }: { name: IconName }) => {
-  const paths = {
-    search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
-    pin: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></>,
-    home: <><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10M9 20v-6h6v6"/></>,
-    calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></>,
-    bookmark: <path d="M6 4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18l-6-4-6 4Z"/>,
-    arrow: <><path d="M5 12h14M13 6l6 6-6 6"/></>,
-    check: <path d="m5 12 4 4L19 6"/>,
-    bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
-    grid: <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>,
-    close: <><path d="M5 5l14 14M19 5 5 19"/></>,
-    filter: <><path d="M4 6h16M7 12h10M10 18h4"/></>,
-    user: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
-  };
-  return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
-};
-
-function koreaToday(): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${value.year}-${value.month}-${value.day}`;
-}
-
-function dateValue(iso?: string): number | undefined {
-  if (!iso) return undefined;
-  const [year, month, day] = iso.split("-").map(Number);
-  return Date.UTC(year, month - 1, day);
-}
-
-function daysBetween(from: string, to?: string): number | undefined {
-  const fromValue = dateValue(from);
-  const toValue = dateValue(to);
-  if (fromValue === undefined || toValue === undefined) return undefined;
-  return Math.round((toValue - fromValue) / 86_400_000);
-}
-
-function formatShortDate(iso?: string): string {
-  if (!iso) return "일정 미정";
-  const [, month, day] = iso.split("-").map(Number);
-  return `${month}. ${day}.`;
-}
-
-function formatPeriod(start?: string, end?: string, winner?: string): string {
-  if (start && end) return `${formatShortDate(start)} — ${formatShortDate(end)}`;
-  if (start) return `${formatShortDate(start)} 접수 시작`;
-  if (winner) return `당첨 발표 ${formatShortDate(winner)}`;
-  return "세부 일정은 공고문 확인";
-}
-
-function formatMoveInMonth(value?: string): string {
-  if (!value) return "입주 일정 미정";
-  const digits = value.replace(/\D/g, "");
-  if (digits.length < 6) return value;
-  return `${digits.slice(0, 4)}년 ${Number(digits.slice(4, 6))}월 예정`;
-}
-
-function optionalPeriod(start?: string, end?: string): string {
-  if (!start && !end) return "일정 미정";
-  if (start && end) return `${formatShortDate(start)} — ${formatShortDate(end)}`;
-  return start ? `${formatShortDate(start)}부터` : `${formatShortDate(end)}까지`;
-}
-
-function formatChangedAt(value: string): string {
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function hasExpandedDetails(detail: NoticeDetail): boolean {
-  return Boolean(
-    detail.postalCode
-    || detail.housingDetailType
-    || detail.rentType
-    || detail.businessEntityName
-    || detail.constructionCompanyName
-    || detail.contactPhone
-    || detail.homepageUrl
-    || detail.moveInPlannedMonth
-    || detail.specialSupplyStartDate
-    || detail.specialSupplyEndDate
-    || detail.contractStartDate
-    || detail.contractEndDate,
-  );
-}
-
-function weekday(iso?: string): string {
-  const value = dateValue(iso);
-  return value === undefined ? "" : ["일", "월", "화", "수", "목", "금", "토"][new Date(value).getUTCDay()];
-}
-
-function regionLabel(regionCode?: string, address?: string): string {
-  const text = `${regionCode ?? ""} ${address ?? ""}`;
-  const aliases: Array<[string, string[]]> = [
-    ["서울", ["서울"]], ["경기", ["경기"]], ["인천", ["인천"]], ["부산", ["부산"]],
-    ["대구", ["대구"]], ["광주", ["광주"]], ["대전", ["대전"]], ["울산", ["울산"]],
-    ["세종", ["세종"]], ["강원", ["강원"]], ["충북", ["충청북도", "충북"]],
-    ["충남", ["충청남도", "충남"]], ["전북", ["전북특별자치도", "전라북도", "전북"]],
-    ["전남", ["전라남도", "전남"]], ["경북", ["경상북도", "경북"]],
-    ["경남", ["경상남도", "경남"]], ["제주", ["제주"]],
-  ];
-  return aliases.find(([, names]) => names.some((name) => text.includes(name)))?.[0] ?? regionCode ?? "지역 미정";
-}
-
-function formatWon(value?: number): string | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (value >= 100_000_000) {
-    const eok = value / 100_000_000;
-    return `${Number.isInteger(eok) ? eok : eok.toFixed(1)}억`;
-  }
-  return `${Math.round(value / 10_000).toLocaleString("ko-KR")}만원`;
-}
-
-function formatArea(value?: number): string {
-  if (value === undefined || value === null) return "-";
-  return `${Number(value.toFixed(2)).toLocaleString("ko-KR")}㎡`;
-}
-
-function formatPyeong(value?: number): string | undefined {
-  if (value === undefined || value === null) return undefined;
-  return `${(value / 3.3058).toFixed(1)}평`;
-}
-
-function formatHousingType(value: string): string {
-  const match = /^0*(\d+(?:\.\d+)?)([A-Za-z].*)?$/.exec(value.trim());
-  if (!match) return value;
-  const size = Number(match[1]).toLocaleString("ko-KR", { maximumFractionDigits: 2 });
-  return `${size}${match[2] ?? ""}`;
-}
-
-/** 상세 표를 읽기 전에 공고 전체의 가격·공급 규모를 빠르게 파악할 수 있게 계산한다. */
-function unitTypeSummary(unitTypes: NoticeUnitType[]) {
-  const prices = unitTypes.map(({ maxPrice }) => maxPrice).filter((value): value is number => value !== undefined && value !== null);
-  const totalSupply = unitTypes.reduce((sum, { totalSupplyCount }) => sum + (totalSupplyCount ?? 0), 0);
-  const areas = unitTypes.map(({ supplyArea }) => supplyArea).filter((value): value is number => value !== undefined && value !== null);
-
-  return {
-    priceRange: prices.length === 0 ? undefined : { min: Math.min(...prices), max: Math.max(...prices) },
-    totalSupply: totalSupply || undefined,
-    areaRange: areas.length === 0 ? undefined : { min: Math.min(...areas), max: Math.max(...areas) },
-  };
-}
-
-function statusPresentation(status: NoticeStatus, applyEndDate?: string): {
-  state: string;
-  stateTone: StateTone;
-  statusKey: PresentationStatus;
-} {
-  if (applyEndDate === koreaToday()) return { state: "오늘 마감", stateTone: "coral", statusKey: "today" };
-  if (status === "OPEN") return { state: "접수중", stateTone: "mint", statusKey: "open" };
-  if (status === "UPCOMING") return { state: "오픈 예정", stateTone: "blue", statusKey: "upcoming" };
-  if (status === "ANNOUNCED") return { state: "당첨 발표", stateTone: "purple", statusKey: "announcement" };
-  return { state: "접수 마감", stateTone: "gray", statusKey: "closed" };
-}
-
-function toApplication(notice: NoticeSummary): Application {
-  const today = koreaToday();
-  const status = statusPresentation(notice.status, notice.applyEndDate);
-  const targetDate = notice.status === "UPCOMING" ? notice.applyStartDate
-    : notice.status === "ANNOUNCED" ? notice.winnerAnnounceDate
-      : notice.applyEndDate;
-  const remaining = daysBetween(today, targetDate);
-  const minPrice = formatWon(notice.minPrice);
-  const maxPrice = formatWon(notice.maxPrice);
-  const publicRental = notice.housingCategory === "PUBLIC_RENTAL";
-  const priceLabel = publicRental ? "임대보증금" : "분양가";
-  const price = minPrice && maxPrice
-    ? `${priceLabel} ${minPrice} — ${maxPrice}`
-    : minPrice ? `${publicRental ? "최소 임대보증금" : "분양가"} ${minPrice}부터`
-      : `${priceLabel}은 공고문 확인`;
-  const category = CATEGORY_LABELS[notice.housingCategory];
-  const sourceName = notice.sourceSystem === "MYHOME_PUBLIC_RENTAL" ? "마이홈포털" : "청약홈";
-
-  return {
-    ...notice,
-    ...status,
-    location: notice.address || "공급 위치는 공고문 확인",
-    region: regionLabel(notice.regionCode, notice.address),
-    type: `${category} · ${sourceName}`,
-    category,
-    period: formatPeriod(notice.applyStartDate, notice.applyEndDate, notice.winnerAnnounceDate),
-    dday: remaining === undefined ? "일정 확인" : remaining === 0 ? "D-DAY" : remaining > 0 ? `D-${remaining}` : "마감",
-    priceLabel,
-    price,
-    scale: notice.totalUnits ? `총 ${notice.totalUnits.toLocaleString("ko-KR")}세대 공급` : "공급 규모는 공고문 확인",
-    fit: notice.sourceSystem === "MYHOME_PUBLIC_RENTAL"
-      ? "국토교통부 마이홈포털 공식 공고"
-      : "한국부동산원 청약홈 공식 공고",
-    deposit: publicRental
-      ? "임대 조건과 신청 자격은 원문 공고에서 확인"
-      : "신청 자격과 예치금은 원문 공고에서 확인",
-  };
-}
 
 function eventFor(item: Application): { date: string; label: string; tone: string } | undefined {
   const today = koreaToday();
@@ -1901,20 +1611,13 @@ export default function Home() {
   };
 
   const detailApplication = selected ? (selectedDetail ? toApplication(selectedDetail) : selected) : null;
-  const selectedUnitTypeSummary = useMemo(
-    () => unitTypeSummary(selectedDetail?.unitTypes ?? []),
-    [selectedDetail?.unitTypes],
-  );
   const detailUnitRange = {
     minPrice: priceInWon(minPriceManwon), maxPrice: priceInWon(maxPriceManwon),
     minArea: priceInManwon(minArea), maxArea: priceInManwon(maxArea),
   };
-  const showUnitMatches = hasUnitRange(detailUnitRange);
-  const matchingUnitCount = selectedDetail?.unitTypes?.filter(unit => unitMatchesRange(unit, detailUnitRange)).length ?? 0;
   const filterDialogRef = useDialogAccessibility<HTMLElement>(filterOpen, () => setFilterOpen(false));
   const closeProfileEditor = () => { ++profileEditorEpoch.current; setEditingSavedSearchProfile(undefined); setProfileEditorError(""); };
   const savedSearchProfileEditorRef = useDialogAccessibility<HTMLElement>(Boolean(editingSavedSearchProfile), closeProfileEditor);
-  const detailDialogRef = useDialogAccessibility<HTMLElement>(Boolean(detailApplication), closeDetail);
   const comparisonDialogRef = useDialogAccessibility<HTMLElement>(comparisonOpen, () => setComparisonOpen(false));
   const qualificationDialogRef = useDialogAccessibility<HTMLElement>(qualOpen, closeQualification);
   const eligibilityResult = buildEligibilityCheckResult(answers);
@@ -2415,121 +2118,17 @@ export default function Home() {
         </div>
       )}
 
-      {detailApplication && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDetail(); }}>
-          <section ref={detailDialogRef} tabIndex={-1} className="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title" aria-busy={detailLoading}>
-            <div className="modal-head"><div><span>OFFICIAL NOTICE</span><h2 id="detail-title">{detailApplication.title}</h2></div><button type="button" onClick={closeDetail} aria-label="닫기"><Icon name="close" /></button></div>
-            {detailLoading && <div className="detail-loading" role="status">최신 상세 정보를 확인하고 있어요.</div>}
-            {detailError && <div className="notice-load-status" role="alert"><p>최신 상세 정보를 확인하지 못했습니다. 목록의 요약 정보를 표시합니다.</p><p>{detailError}</p><button type="button" disabled={!online || detailLoading} onClick={() => { if (selected && !detailLoading) void openDetail(selected); }}>상세 다시 불러오기</button></div>}
-            {selectedDetail?.contentChangedAt && selectedDetail.lastChangeSummary && (
-              <div className="notice-change-banner" role="status">
-                <span><Icon name="bell" /></span>
-                <div><b>최근 변경된 공고입니다</b><p>{selectedDetail.lastChangeSummary} · {formatChangedAt(selectedDetail.contentChangedAt)}</p></div>
-              </div>
-            )}
-            {selectedChanges.length > 0 && (
-              <section className="notice-change-history" aria-labelledby="notice-change-history-title">
-                <h3 id="notice-change-history-title">공고 변경 이력</h3>
-                <ol>{selectedChanges.map((change) => <li key={change.id}><time dateTime={change.changedAt}>{formatChangedAt(change.changedAt)}</time><span>{change.summary}</span></li>)}</ol>
-                <p>변경된 항목을 표시한 기록입니다. 정확한 변경 내용은 공식 공고문을 확인하세요.</p>
-              </section>
-            )}
-            <div className="detail-status"><span className={`state ${detailApplication.stateTone}`}>{detailApplication.state}</span><b>{detailApplication.dday}</b><small>{detailApplication.period}</small></div>
-            <div className="detail-grid">
-              <div><span>위치</span><strong>{detailApplication.location}</strong></div><div><span>주택 유형</span><strong>{detailApplication.type}</strong></div>
-              <div><span>공고일</span><strong>{formatShortDate(detailApplication.noticeDate)}</strong></div><div><span>공급 규모</span><strong>{detailApplication.scale}</strong></div>
-              <div><span>{detailApplication.priceLabel}</span><strong>{detailApplication.price}</strong></div><div><span>당첨 발표</span><strong>{formatShortDate(detailApplication.winnerAnnounceDate)}</strong></div>
-            </div>
-            {selectedDetail && hasExpandedDetails(selectedDetail) && (
-              <section className="notice-detail-extra" aria-labelledby="notice-detail-extra-title">
-                <h3 id="notice-detail-extra-title">공고 상세정보</h3>
-                <dl>
-                  <div><dt>공급 구분</dt><dd>{[selectedDetail.housingDetailType, selectedDetail.rentType].filter(Boolean).join(" · ") || "공고문 확인"}</dd></div>
-                  <div><dt>입주 예정</dt><dd>{formatMoveInMonth(selectedDetail.moveInPlannedMonth)}</dd></div>
-                  <div><dt>특별공급 접수</dt><dd>{optionalPeriod(selectedDetail.specialSupplyStartDate, selectedDetail.specialSupplyEndDate)}</dd></div>
-                  <div><dt>계약 기간</dt><dd>{optionalPeriod(selectedDetail.contractStartDate, selectedDetail.contractEndDate)}</dd></div>
-                  <div><dt>사업주체</dt><dd>{selectedDetail.businessEntityName || "공고문 확인"}</dd></div>
-                  <div><dt>시공사</dt><dd>{selectedDetail.constructionCompanyName || "공고문 확인"}</dd></div>
-                  <div><dt>문의처</dt><dd>{selectedDetail.contactPhone ? <a href={`tel:${selectedDetail.contactPhone.replace(/[^0-9+]/g, "")}`}>{selectedDetail.contactPhone}</a> : "공고문 확인"}</dd></div>
-                  <div><dt>우편번호</dt><dd>{selectedDetail.postalCode || "공고문 확인"}</dd></div>
-                </dl>
-                {selectedDetail.homepageUrl && <a className="notice-homepage-link" href={selectedDetail.homepageUrl} target="_blank" rel="noreferrer">분양 홈페이지 열기 <Icon name="arrow" /></a>}
-              </section>
-            )}
-            {selectedDetail && (selectedDetail.unitTypes?.length ?? 0) > 0 && (
-              <section className="notice-unit-types" aria-labelledby="notice-unit-types-title">
-                <div><h3 id="notice-unit-types-title">주택형별 공급·분양가</h3><p>최고 분양가 기준이며, 최종 금액은 공식 공고문을 확인하세요.</p></div>
-                <dl className="notice-unit-types-summary" aria-label="주택형 공급 요약">
-                  <div><dt>주택형</dt><dd>{selectedDetail.unitTypes?.length.toLocaleString("ko-KR")}개</dd></div>
-                  <div><dt>공급 세대</dt><dd>{selectedUnitTypeSummary.totalSupply?.toLocaleString("ko-KR") ?? "공고문 확인"}</dd></div>
-                  <div><dt>공급면적</dt><dd>{selectedUnitTypeSummary.areaRange ? `${formatArea(selectedUnitTypeSummary.areaRange.min)} ~ ${formatArea(selectedUnitTypeSummary.areaRange.max)}` : "공고문 확인"}</dd></div>
-                  <div><dt>최고 분양가 범위</dt><dd>{selectedUnitTypeSummary.priceRange ? `${formatWon(selectedUnitTypeSummary.priceRange.min)} ~ ${formatWon(selectedUnitTypeSummary.priceRange.max)}` : "공고문 확인"}</dd></div>
-                </dl>
-                {showUnitMatches && <p className="unit-match-summary" role="status">현재 검색의 예산·면적 조건에 맞는 주택형 {matchingUnitCount}개 · 모든 주택형을 함께 표시합니다.</p>}
-                <div className="notice-unit-types-table-wrap"><table><thead><tr><th scope="col">주택형</th><th scope="col">공급면적</th><th scope="col">일반</th><th scope="col">특별</th><th scope="col">합계</th><th scope="col">최고 분양가</th></tr></thead><tbody>
-                  {selectedDetail.unitTypes?.map((unitType) => <tr key={unitType.modelId} className={showUnitMatches && unitMatchesRange(unitType, detailUnitRange) ? "unit-match" : undefined}><th scope="row">{formatHousingType(unitType.housingTypeName)}{showUnitMatches && unitMatchesRange(unitType, detailUnitRange) && <span className="unit-match-badge">검색 조건 일치</span>}</th><td>{formatArea(unitType.supplyArea)}{formatPyeong(unitType.supplyArea) && <small>{formatPyeong(unitType.supplyArea)}</small>}</td><td>{unitType.generalSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{unitType.specialSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{unitType.totalSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td className="notice-unit-types-price">{formatWon(unitType.maxPrice) ?? "공고문 확인"}</td></tr>)}
-                </tbody></table></div>
-              </section>
-            )}
-            {selectedDetail && (selectedDetail.housingCategory === "APARTMENT" || selectedDetail.housingCategory === "OFFICETEL") && (selectedDetail.unitTypes?.length ?? 0) === 0 && (
-              <section className="notice-unit-types notice-unit-types-empty" aria-labelledby="notice-unit-types-title">
-                <h3 id="notice-unit-types-title">주택형별 공급·분양가</h3>
-                <p>이 공고는 주택형별 공급·분양가 데이터를 아직 확인하지 못했습니다. 정확한 내용은 공식 공고문을 확인하세요.</p>
-              </section>
-            )}
-            <div className="eligibility-box"><span className="check-round"><Icon name="check" /></span><div><span>데이터 출처</span><h3>{detailApplication.fit}</h3><p>{detailApplication.deposit} · 본 서비스 정보보다 공식 공고문을 우선합니다.</p></div></div>
-            {member && savedIds.has(detailApplication.id) && (
-              <section className="favorite-tracker detail-favorite-tracker" aria-label="관심청약 준비 상태">
-                <div className="detail-tracker-head"><span>관심청약 준비</span><strong>이 공고의 확인·신청 상태를 바로 기록하세요.</strong></div>
-                <div className="detail-tracker-fields">
-                  <label>준비 상태
-                    <select value={favoriteTrackers.get(detailApplication.id)?.progress ?? "SAVED"} disabled={favoriteTrackerPendingId === detailApplication.id} onChange={(event) => void saveFavoriteTracker(detailApplication.id, event.target.value as FavoriteProgress, favoriteTrackers.get(detailApplication.id)?.memo ?? "")}>
-                      {Object.entries(FAVORITE_PROGRESS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </select>
-                  </label>
-                  <label>내 메모
-                    <input key={`${detailApplication.id}-${favoriteTrackers.get(detailApplication.id)?.updatedAt ?? "new"}`} defaultValue={favoriteTrackers.get(detailApplication.id)?.memo ?? ""} maxLength={500} placeholder="예: 모집공고문 소득 기준 확인" onBlur={(event) => void saveFavoriteTracker(detailApplication.id, favoriteTrackers.get(detailApplication.id)?.progress ?? "SAVED", event.target.value)} />
-                  </label>
-                </div>
-                <div className="favorite-checklist" aria-label="신청 전 확인 항목">
-                  <div><span>신청 전 확인</span><strong>{FAVORITE_CHECKLIST_ITEMS.filter(({ key }) => favoriteTrackers.get(detailApplication.id)?.[key]).length}/4 완료</strong></div>
-                  <p>체크리스트는 준비를 돕기 위한 개인 기록이며, 실제 자격 판정은 공식 공고문을 확인하세요.</p>
-                  <div className="favorite-checklist-options">
-                    {FAVORITE_CHECKLIST_ITEMS.map(({ key, label }) => (
-                      <label key={key}>
-                        <input type="checkbox" checked={favoriteTrackers.get(detailApplication.id)?.[key] ?? false} disabled={favoriteTrackerPendingId === detailApplication.id} onChange={(event) => void saveFavoriteTracker(detailApplication.id, favoriteTrackers.get(detailApplication.id)?.progress ?? "SAVED", favoriteTrackers.get(detailApplication.id)?.memo ?? "", { [key]: event.target.checked })} />
-                        {label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </section>
-            )}
-            {member && savedIds.has(detailApplication.id) && (favoriteTrackers.get(detailApplication.id)?.progress ?? "SAVED") === "READY" && (
-              <div className="ready-application-actions detail-ready-actions">
-                <span><Icon name="check" /> 신청 준비 완료</span>
-                <div>
-                  {detailApplication.officialUrl ? <a href={detailApplication.officialUrl} target="_blank" rel="noreferrer">공식 공고 열기 <Icon name="arrow" /></a> : <button type="button" disabled>공식 링크 확인 중</button>}
-                  <button type="button" onClick={() => void saveFavoriteTracker(detailApplication.id, "APPLIED", favoriteTrackers.get(detailApplication.id)?.memo ?? "")} disabled={favoriteTrackerPendingId === detailApplication.id}>신청 완료로 표시</button>
-                </div>
-              </div>
-            )}
-            {member && savedIds.has(detailApplication.id) && (favoriteTrackers.get(detailApplication.id)?.progress ?? "SAVED") === "APPLIED" && (
-              <div className="application-result-tracker detail-application-result" aria-label="신청 결과 기록">
-                <div><span>신청 결과</span><strong>{FAVORITE_APPLICATION_RESULT_LABELS[favoriteTrackers.get(detailApplication.id)?.applicationResult ?? "PENDING"]}</strong></div>
-                <select value={favoriteTrackers.get(detailApplication.id)?.applicationResult ?? "PENDING"} disabled={favoriteTrackerPendingId === detailApplication.id} onChange={(event) => void saveFavoriteTracker(detailApplication.id, "APPLIED", favoriteTrackers.get(detailApplication.id)?.memo ?? "", {}, event.target.value as FavoriteApplicationResult)} aria-label="신청 결과">
-                  {Object.entries(FAVORITE_APPLICATION_RESULT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
-                <small>{(favoriteTrackers.get(detailApplication.id)?.applicationResult ?? "PENDING") === "PENDING" ? detailApplication.winnerAnnounceDate ? `당첨 발표일은 ${formatShortDate(detailApplication.winnerAnnounceDate)}입니다.` : "당첨 발표일은 공식 공고문에서 확인하세요." : `${favoriteTrackers.get(detailApplication.id)?.applicationResultRecordedAt ? `${formatChangedAt(favoriteTrackers.get(detailApplication.id)?.applicationResultRecordedAt ?? "")} 기록` : "공식 당첨자 발표를 기준으로 직접 기록한 결과입니다."}`}</small>
-                {(favoriteTrackers.get(detailApplication.id)?.applicationResult ?? "PENDING") !== "PENDING" && <input key={`${detailApplication.id}-${favoriteTrackers.get(detailApplication.id)?.applicationResultRecordedAt ?? "result"}`} defaultValue={favoriteTrackers.get(detailApplication.id)?.applicationResultMemo ?? ""} maxLength={500} placeholder="결과 메모 (예: 계약 일정 확인)" onBlur={(event) => void saveFavoriteTracker(detailApplication.id, "APPLIED", favoriteTrackers.get(detailApplication.id)?.memo ?? "", {}, favoriteTrackers.get(detailApplication.id)?.applicationResult ?? "PENDING", event.target.value)} />}
-              </div>
-            )}
-            <AiConsultationPanel key={detailApplication.id} noticeId={detailApplication.id} signedIn={Boolean(member)} />
-            <LinkCopyFeedback state={noticeCopy} />
-            <div className="detail-actions"><button type="button" className="secondary-button" onClick={() => void toggleSaved(detailApplication.id)} disabled={favoritePendingId === detailApplication.id}><Icon name="bookmark" /> {savedIds.has(detailApplication.id) ? "관심 해제" : "관심 저장"}</button><button type="button" className="secondary-button" disabled={noticeCopy.busy} onClick={() => void copyNoticeLink(detailApplication.id)}>링크 복사</button>{detailApplication.officialUrl ? <a className="primary-button" href={detailApplication.officialUrl} target="_blank" rel="noreferrer">공식 공고 보기 <Icon name="arrow" /></a> : <button type="button" className="primary-button" disabled>공식 링크 확인 중</button>}</div>
-          </section>
-        </div>
-      )}
+      <NoticeDetailDialog detailApplication={detailApplication} selectedDetail={selectedDetail} selectedChanges={selectedChanges}
+        detailLoading={detailLoading} detailError={detailError} online={online} detailUnitRange={detailUnitRange}
+        signedIn={Boolean(member)} saved={Boolean(detailApplication && savedIds.has(detailApplication.id))}
+        tracker={detailApplication ? favoriteTrackers.get(detailApplication.id) : undefined}
+        trackerBusy={favoriteTrackerPendingId === detailApplication?.id && favoriteTrackerPendingId !== undefined}
+        favoriteBusy={favoritePendingId === detailApplication?.id && favoritePendingId !== undefined}
+        noticeCopy={noticeCopy} closeDetail={closeDetail}
+        onRetry={() => { if (selected && !detailLoading) void openDetail(selected); }}
+        onToggleSaved={() => { if (detailApplication) void toggleSaved(detailApplication.id); }}
+        onCopy={() => { if (detailApplication) void copyNoticeLink(detailApplication.id); }}
+        onSaveTracker={(...args) => { if (detailApplication) void saveFavoriteTracker(detailApplication.id, ...args); }} />
 
       {comparisonOpen && comparisonNotices.length >= 2 && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setComparisonOpen(false); }}>

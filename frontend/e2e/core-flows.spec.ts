@@ -2379,3 +2379,55 @@ test("관리자 AI 지표는 미확인 비용과 예산 예약액을 구분하�
   await expect(panel.getByText("응답 시간 초과 1건", { exact: true })).toBeVisible();
   await expect(panel.getByText(/예약액도 미확인인 요청 1건/)).toBeVisible();
 });
+
+for (const width of [320, 1280]) {
+  test(`현금 계획 ${width}px: 공고 금액·대출 상환·부족액과 입력 초기화`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 }); await mockApi(page);
+    await page.route('**/api/v1/notices/1', route => route.fulfill({ json: { ...notices[0], rentType: '분양주택', unitTypes: [
+      { modelId: '01', housingTypeName: '084A', maxPrice: 600000000 }, { modelId: '02', housingTypeName: '059B', maxPrice: 400000000 },
+    ] } }));
+    await page.goto('/?notice=1');
+    const panel = page.getByRole('region', { name: '주택형별 필요 현금 계산기', exact: true });
+    await panel.getByLabel('계산할 주택형', { exact: true }).selectOption('0');
+    await expect(panel.getByLabel('계산 기준 공급금액 (원)', { exact: true })).toHaveValue('600000000');
+    await panel.getByRole('button', { name: '현금 계획 계산', exact: true }).click();
+    await expect(panel.getByRole('alert')).toContainText('계약금 비율');
+    for (const [label, value] of [['계약금 비율 (%)', '10'], ['중도금 비율 (%)', '60'], ['중도금 대출 예상액 (원)', '360000000'], ['잔금 시 총 대출 예상액 (원)', '420000000'], ['추가 비용 예상액 (원)', '30000000'], ['현재 준비한 현금 (원)', '80000000']]) await panel.getByLabel(label, { exact: true }).fill(value);
+    await panel.getByRole('button', { name: '현금 계획 계산', exact: true }).click();
+    const result = panel.getByRole('region', { name: '현금 계획 결과' });
+    await expect(result.getByRole('heading', { level: 4 })).toContainText('210,000,000원');
+    await expect(result.getByText('130,000,000원', { exact: true })).toBeVisible();
+    expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    if (width === 320) { await result.getByRole('heading', { level: 4 }).scrollIntoViewIfNeeded(); await page.screenshot({ path: 'test-results/cash-plan-mobile.png' }); }
+    await panel.getByLabel('계약금 비율 (%)', { exact: true }).fill('41');
+    await expect(result).toHaveCount(0);
+    await panel.getByRole('button', { name: '현금 계획 계산', exact: true }).click();
+    await expect(panel.getByRole('alert')).toContainText('100% 이하');
+    await panel.getByLabel('계산할 주택형', { exact: true }).selectOption('1');
+    await expect(panel.getByLabel('계산 기준 공급금액 (원)', { exact: true })).toHaveValue('400000000');
+    await expect(panel.getByLabel('잔금 시 총 대출 예상액 (원)', { exact: true })).toHaveValue('');
+    await expect(panel.getByRole('alert')).toHaveCount(0);
+    await panel.getByLabel('계산 기준 공급금액 (원)', { exact: true }).fill('390000000');
+    await expect(panel.getByText(/사용자 수정 금액으로 계산/)).toBeVisible();
+    await panel.getByRole('button', { name: '입력 초기화', exact: true }).click();
+    await expect(panel.getByLabel('계산 기준 공급금액 (원)', { exact: true })).toHaveValue('400000000');
+    await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
+    await page.locator('article').filter({ hasText: notices[0].title }).getByRole('button', { name: /공고 핵심만 보기/ }).click();
+    await expect(panel.getByLabel('계산할 주택형', { exact: true })).toHaveValue('');
+  });
+}
+
+test('현금 계획: 미확인 공급금액은 직접 입력하고 임대·주택형 누락에는 분양 계산을 적용하지 않는다', async ({ page }) => {
+  await mockApi(page);
+  await page.route('**/api/v1/notices/1', route => route.fulfill({ json: { ...notices[0], unitTypes: [{ modelId: '01', housingTypeName: '084A' }] } }));
+  await page.goto('/?notice=1');
+  const panel = page.getByRole('region', { name: '주택형별 필요 현금 계산기', exact: true });
+  await panel.getByLabel('계산할 주택형', { exact: true }).selectOption('0');
+  await expect(panel.getByLabel('계산 기준 공급금액 (원)', { exact: true })).toHaveValue('');
+  await expect(panel.getByText(/공고 공급금액 미확인/)).toBeVisible();
+  await page.goto('/?notice=2');
+  await expect(page.getByText(/임대 공고는 보증금/)).toBeVisible();
+  await expect(page.getByRole('button', { name: '현금 계획 계산', exact: true })).toHaveCount(0);
+  await page.unroute('**/api/v1/notices/1'); await page.goto('/?notice=1');
+  await expect(page.getByText(/주택형 자료가 없어 계산할 수 없습니다/)).toBeVisible();
+});
