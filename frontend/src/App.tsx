@@ -309,6 +309,8 @@ export default function Home() {
   const [answers, setAnswers] = useState<EligibilityAnswer[]>([]);
   const [toast, setToast] = useState("");
   const [member, setMember] = useState<MemberProfile>();
+  // A new login or completed session exit invalidates every previous account response.
+  const memberScope = useRef(0);
   const [memberDialog, setMemberDialog] = useState<MemberDialogMode>(null);
   const [passwordResetToken, setPasswordResetToken] = useState("");
   const [authLoading, setAuthLoading] = useState(true);
@@ -714,66 +716,74 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false;
+    const epoch = memberScope.current;
+    const stale = () => cancelled || epoch !== memberScope.current;
     const guestSavedIds = readGuestSavedIds();
     setSavedIds(guestSavedIds);
 
     fetchCurrentMember()
       .then(async (profile) => {
         if (!profile) return;
-        if (cancelled) return;
+        if (stale()) return;
         setMember(profile);
         try {
           const accountIds = guestSavedIds.size > 0
             ? await mergeFavoriteIds([...guestSavedIds])
             : await fetchFavoriteIds();
-          if (cancelled) return;
+          if (stale()) return;
           setSavedIds(new Set(accountIds));
-          setFavoriteTrackers(new Map((await fetchFavoriteTrackers()).map((tracker) => [tracker.noticeId, tracker])));
+          const trackers = await fetchFavoriteTrackers();
+          if (stale()) return;
+          setFavoriteTrackers(new Map(trackers.map((tracker) => [tracker.noticeId, tracker])));
           // 로그인 계정의 목록이 로그아웃 뒤 다른 사용자에게 보이지 않게 브라우저 복사본을 지운다.
           window.localStorage.removeItem("cheongyak-one-saved");
         } catch (error) {
-          if (!cancelled) setToast(error instanceof Error ? error.message : "관심청약을 동기화하지 못했습니다.");
+          if (!stale()) setToast(error instanceof Error ? error.message : "관심청약을 동기화하지 못했습니다.");
         }
+        if (stale()) return;
         try {
           const accountComparisonIds = comparisonIds.length > 0
             ? await mergeComparisonIds(comparisonIds)
             : await fetchComparisonIds();
-          if (cancelled) return;
+          if (stale()) return;
           setComparisonIds(accountComparisonIds);
           window.localStorage.removeItem("cheongyak-one-comparison");
         } catch (error) {
-          if (!cancelled) setToast(error instanceof Error ? error.message : "비교 목록을 동기화하지 못했습니다.");
+          if (!stale()) setToast(error instanceof Error ? error.message : "비교 목록을 동기화하지 못했습니다.");
         }
+        if (stale()) return;
         try {
           const preference = await fetchSearchPreference();
-          if (cancelled || !preference) return;
+          if (stale()) return;
           setSearchPreference(preference);
-          applySearchPreference(preference);
+          if (preference) applySearchPreference(preference);
         } catch (error) {
-          if (!cancelled) setToast(error instanceof Error ? error.message : "저장한 검색조건을 불러오지 못했습니다.");
+          if (!stale()) setToast(error instanceof Error ? error.message : "저장한 검색조건을 불러오지 못했습니다.");
         }
+        if (stale()) return;
         try {
           const profiles = await fetchSavedSearchProfiles();
-          if (!cancelled) {
+          if (!stale()) {
             // 로그인 직후에는 기본 프로필을 우선 적용해 이전 단일 검색조건보다 예측 가능한 시작 화면을 제공한다.
             const defaultProfile = profiles.find((item) => item.defaultProfile);
             if (defaultProfile) applySearchPreference(defaultProfile);
           }
         } catch (error) {
-          if (!cancelled) setToast(error instanceof Error ? error.message : "저장 검색조건 목록을 불러오지 못했습니다.");
+          if (!stale()) setToast(error instanceof Error ? error.message : "저장 검색조건 목록을 불러오지 못했습니다.");
         }
+        if (stale()) return;
         try {
           const profile = await fetchEligibilityProfile();
-          if (!cancelled) setEligibilityProfile(profile);
+          if (!stale()) setEligibilityProfile(profile);
         } catch (error) {
-          if (!cancelled) setToast(error instanceof Error ? error.message : "저장한 사전점검을 불러오지 못했습니다.");
+          if (!stale()) setToast(error instanceof Error ? error.message : "저장한 사전점검을 불러오지 못했습니다.");
         }
       })
       .catch((error: unknown) => {
-        if (!cancelled) setToast(error instanceof Error ? error.message : "회원 정보를 확인하지 못했습니다.");
+        if (!stale()) setToast(error instanceof Error ? error.message : "회원 정보를 확인하지 못했습니다.");
       })
       .finally(() => {
-        if (!cancelled) setAuthLoading(false);
+        if (!stale()) setAuthLoading(false);
       });
     return () => { cancelled = true; };
   }, []);
@@ -1093,6 +1103,7 @@ export default function Home() {
   };
 
   const toggleSaved = async (id: number) => {
+    const epoch = memberScope.current;
     if (favoritePendingId !== undefined) return;
     const next = new Set(savedIds);
     const isSaving = !next.has(id);
@@ -1107,7 +1118,9 @@ export default function Home() {
 
     setFavoritePendingId(id);
     try {
-      setSavedIds(new Set(await setFavorite(id, isSaving)));
+      const ids = await setFavorite(id, isSaving);
+      if (epoch !== memberScope.current) return;
+      setSavedIds(new Set(ids));
       if (!isSaving) setFavoriteTrackers((current) => {
         const nextTrackers = new Map(current);
         nextTrackers.delete(id);
@@ -1115,10 +1128,11 @@ export default function Home() {
       });
       setToast(isSaving ? "계정 관심청약에 저장했어요." : "관심청약에서 삭제했어요.");
     } catch (error) {
+      if (epoch !== memberScope.current) return;
       setSavedIds(new Set(savedIds));
       setToast(error instanceof Error ? error.message : "관심청약을 변경하지 못했습니다.");
     } finally {
-      setFavoritePendingId(undefined);
+      if (epoch === memberScope.current) setFavoritePendingId(undefined);
     }
   };
 
@@ -1133,6 +1147,7 @@ export default function Home() {
     if (!member || favoriteTrackerPendingId !== undefined) return;
     const current = favoriteTrackers.get(noticeId);
     setFavoriteTrackerPendingId(noticeId);
+    const epoch = memberScope.current;
     try {
       const tracker = await updateFavoriteTracker(noticeId, {
         progress,
@@ -1144,32 +1159,39 @@ export default function Home() {
         scheduleChecked: checklist.scheduleChecked ?? current?.scheduleChecked ?? false,
         fundsChecked: checklist.fundsChecked ?? current?.fundsChecked ?? false,
       });
+      if (epoch !== memberScope.current) return;
       setFavoriteTrackers((current) => new Map(current).set(noticeId, tracker));
       setToast(progress === "APPLIED" && applicationResult ? "신청 결과를 저장했습니다." : "관심청약 준비 상태를 저장했습니다.");
     } catch (error) {
+      if (epoch !== memberScope.current) return;
       setToast(error instanceof Error ? error.message : "준비 상태를 저장하지 못했습니다.");
     } finally {
-      setFavoriteTrackerPendingId(undefined);
+      if (epoch === memberScope.current) setFavoriteTrackerPendingId(undefined);
     }
   };
 
-  const synchronizeMemberLists = async (profile: MemberProfile) => {
+  const synchronizeMemberLists = async (profile: MemberProfile, epoch: number) => {
     setMember(profile);
     let synchronized = true;
     try {
       const guestIds = [...savedIds];
       const accountIds = guestIds.length > 0 ? await mergeFavoriteIds(guestIds) : await fetchFavoriteIds();
+      if (epoch !== memberScope.current) return false;
       setSavedIds(new Set(accountIds));
-      setFavoriteTrackers(new Map((await fetchFavoriteTrackers()).map((tracker) => [tracker.noticeId, tracker])));
+      const trackers = await fetchFavoriteTrackers();
+      if (epoch !== memberScope.current) return false;
+      setFavoriteTrackers(new Map(trackers.map((tracker) => [tracker.noticeId, tracker])));
       window.localStorage.removeItem("cheongyak-one-saved");
     } catch {
       synchronized = false;
     }
+    if (epoch !== memberScope.current) return false;
     try {
       const browserIds = comparisonIds;
       const accountIds = browserIds.length > 0
         ? await mergeComparisonIds(browserIds)
         : await fetchComparisonIds();
+      if (epoch !== memberScope.current) return false;
       setComparisonIds(accountIds);
       window.localStorage.removeItem("cheongyak-one-comparison");
     } catch {
@@ -1179,11 +1201,19 @@ export default function Home() {
   };
 
   const handleLogin = async (email: string, password: string) => {
-    const synchronized = await synchronizeMemberLists(await loginMember(email, password));
+    const epoch = ++memberScope.current;
+    const profile = await loginMember(email, password).finally(() => {
+      // Login supersedes bootstrap, including its responsibility to unlock the header.
+      if (epoch === memberScope.current) setAuthLoading(false);
+    });
+    if (epoch !== memberScope.current) return;
+    const synchronized = await synchronizeMemberLists(profile, epoch);
+    if (epoch !== memberScope.current) return;
     let preferenceApplied = false;
     let defaultProfileApplied = false;
     try {
       const preference = await fetchSearchPreference();
+      if (epoch !== memberScope.current) return;
       setSearchPreference(preference);
       if (preference) {
         applySearchPreference(preference);
@@ -1192,8 +1222,10 @@ export default function Home() {
     } catch {
       // 로그인은 유지하고 검색조건만 사용자가 다시 불러올 수 있게 한다.
     }
+    if (epoch !== memberScope.current) return;
     try {
       const profiles = await fetchSavedSearchProfiles();
+      if (epoch !== memberScope.current) return;
       // 로그인 동작에서도 기본 프로필을 즉시 반영해 새로고침 없이 동일한 시작 조건을 제공한다.
       const defaultProfile = profiles.find((item) => item.defaultProfile);
       if (defaultProfile) {
@@ -1203,11 +1235,15 @@ export default function Home() {
     } catch {
       // 로그인은 유지하고 저장 프로필은 필터에서 다시 불러올 수 있게 한다.
     }
+    if (epoch !== memberScope.current) return;
     try {
-      setEligibilityProfile(await fetchEligibilityProfile());
+      const eligibility = await fetchEligibilityProfile();
+      if (epoch !== memberScope.current) return;
+      setEligibilityProfile(eligibility);
     } catch {
       // 로그인은 유지하고 사전점검은 사용자가 다시 시작할 수 있게 한다.
     }
+    if (epoch !== memberScope.current) return;
     setMemberDialog(null);
     setToast(synchronized
       ? defaultProfileApplied
@@ -1244,56 +1280,64 @@ export default function Home() {
     setToast("비밀번호를 변경했습니다. 새 비밀번호로 로그인해주세요.");
   };
 
-  const handleLogout = async () => {
-    await logoutMember();
+  const clearMemberSession = (guestIds = new Set<number>()) => {
+    ++memberScope.current;
     setMember(undefined);
+    setAuthLoading(false);
     setFavoriteTrackers(new Map());
+    setFavoritePendingId(undefined);
+    setFavoriteTrackerPendingId(undefined);
+    setComparisonPendingId(undefined);
+    setComparisonResetPending(false);
+    setPreferenceBusy(false);
+    setEligibilityBusy(false);
     setNotificationsOpen(false);
     setAdminSyncOpen(false);
     setSearchPreference(undefined);
     setEligibilityProfile(undefined);
-    setSavedIds(readGuestSavedIds());
+    setQualOpen(false);
+    setAnswers([]);
+    setQualStep(0);
+    setSavedIds(guestIds);
     setSavedOnly(false);
     setComparisonIds([]);
+    setComparisonOpen(false);
     setMemberDialog(null);
+  };
+
+  const handleLogout = async () => {
+    const epoch = memberScope.current;
+    await logoutMember();
+    if (epoch !== memberScope.current) return;
+    clearMemberSession(readGuestSavedIds());
     setToast("로그아웃했습니다.");
   };
 
   const handleUpdateProfile = async (profileInput: MemberProfileInput) => {
-    setMember(await updateMemberProfile(profileInput));
+    const epoch = memberScope.current;
+    const profile = await updateMemberProfile(profileInput);
+    if (epoch === memberScope.current) setMember(profile);
   };
 
   const handleDeletePersonalProfile = async () => {
-    setMember(await deleteMemberPersonalProfile());
+    const epoch = memberScope.current;
+    const profile = await deleteMemberPersonalProfile();
+    if (epoch === memberScope.current) setMember(profile);
   };
 
   const handleChangePassword = async (currentPassword: string, newPassword: string) => {
+    const epoch = memberScope.current;
     await changeMemberPassword(currentPassword, newPassword);
-    setMember(undefined);
-    setFavoriteTrackers(new Map());
-    setNotificationsOpen(false);
-    setAdminSyncOpen(false);
-    setSearchPreference(undefined);
-    setEligibilityProfile(undefined);
-    setSavedIds(new Set());
-    setSavedOnly(false);
-    setComparisonIds([]);
-    setMemberDialog(null);
+    if (epoch !== memberScope.current) return;
+    clearMemberSession();
     setToast("비밀번호를 변경했습니다. 새 비밀번호로 다시 로그인해주세요.");
   };
 
   const handleWithdraw = async (password: string) => {
+    const epoch = memberScope.current;
     await withdrawMember(password);
-    setMember(undefined);
-    setFavoriteTrackers(new Map());
-    setNotificationsOpen(false);
-    setAdminSyncOpen(false);
-    setSearchPreference(undefined);
-    setEligibilityProfile(undefined);
-    setSavedIds(new Set());
-    setSavedOnly(false);
-    setComparisonIds([]);
-    setMemberDialog(null);
+    if (epoch !== memberScope.current) return;
+    clearMemberSession();
     setToast("회원 탈퇴가 완료됐습니다.");
   };
 
@@ -1305,6 +1349,7 @@ export default function Home() {
       return;
     }
     setPreferenceBusy(true);
+    const epoch = memberScope.current;
     try {
       const preference = await saveSearchPreference({
         region: region === "전체" ? undefined : region,
@@ -1317,25 +1362,30 @@ export default function Home() {
         minArea: priceInManwon(minArea),
         maxArea: priceInManwon(maxArea),
       });
+      if (epoch !== memberScope.current) return;
       setSearchPreference(preference);
       setToast("현재 검색조건을 계정에 저장했습니다.");
     } catch (error) {
+      if (epoch !== memberScope.current) return;
       setToast(error instanceof Error ? error.message : "검색조건을 저장하지 못했습니다.");
     } finally {
-      setPreferenceBusy(false);
+      if (epoch === memberScope.current) setPreferenceBusy(false);
     }
   };
 
   const handleDeleteSearchPreference = async () => {
     setPreferenceBusy(true);
+    const epoch = memberScope.current;
     try {
       await deleteSearchPreference();
+      if (epoch !== memberScope.current) return;
       setSearchPreference(undefined);
       setToast("저장된 맞춤 검색조건을 삭제했습니다.");
     } catch (error) {
+      if (epoch !== memberScope.current) return;
       setToast(error instanceof Error ? error.message : "검색조건을 삭제하지 못했습니다.");
     } finally {
-      setPreferenceBusy(false);
+      if (epoch === memberScope.current) setPreferenceBusy(false);
     }
   };
 
@@ -1386,14 +1436,18 @@ export default function Home() {
       return;
     }
     setComparisonPendingId(id);
+    const epoch = memberScope.current;
     try {
-      setComparisonIds(await setComparison(id, update.added));
+      const ids = await setComparison(id, update.added);
+      if (epoch !== memberScope.current) return;
+      setComparisonIds(ids);
       setToast(update.added ? "계정 비교 목록에 담았어요." : "비교 목록에서 뺐어요.");
     } catch (error) {
+      if (epoch !== memberScope.current) return;
       setComparisonIds(comparisonIds);
       setToast(error instanceof Error ? error.message : "비교 목록을 변경하지 못했습니다.");
     } finally {
-      setComparisonPendingId(undefined);
+      if (epoch === memberScope.current) setComparisonPendingId(undefined);
     }
   };
 
@@ -1403,14 +1457,18 @@ export default function Home() {
     setComparisonIds([]);
     if (!member) return;
     setComparisonResetPending(true);
+    const epoch = memberScope.current;
     try {
-      setComparisonIds(await clearComparisons());
+      const ids = await clearComparisons();
+      if (epoch !== memberScope.current) return;
+      setComparisonIds(ids);
       setToast("계정 비교 목록을 모두 비웠어요.");
     } catch (error) {
+      if (epoch !== memberScope.current) return;
       setComparisonIds(previousIds);
       setToast(error instanceof Error ? error.message : "비교 목록을 비우지 못했습니다.");
     } finally {
-      setComparisonResetPending(false);
+      if (epoch === memberScope.current) setComparisonResetPending(false);
     }
   };
 
@@ -1575,6 +1633,7 @@ export default function Home() {
   const handleSaveEligibilityProfile = async () => {
     if (answers.length !== eligibilityQuestions.length) return;
     setEligibilityBusy(true);
+    const epoch = memberScope.current;
     try {
       const saved = await saveEligibilityProfile({
         homeless: answers[0],
@@ -1582,26 +1641,31 @@ export default function Home() {
         newlywed: answers[2],
         firstHome: answers[3],
       });
+      if (epoch !== memberScope.current) return;
       setEligibilityProfile(saved);
       setToast(eligibilityProfile ? "사전점검 답변을 수정했습니다." : "사전점검 답변을 저장했습니다.");
     } catch (error) {
+      if (epoch !== memberScope.current) return;
       setToast(error instanceof Error ? error.message : "사전점검을 저장하지 못했습니다.");
     } finally {
-      setEligibilityBusy(false);
+      if (epoch === memberScope.current) setEligibilityBusy(false);
     }
   };
 
   const handleDeleteEligibilityProfile = async () => {
     setEligibilityBusy(true);
+    const epoch = memberScope.current;
     try {
       await deleteEligibilityProfile();
+      if (epoch !== memberScope.current) return;
       setEligibilityProfile(undefined);
       closeQualification();
       setToast("저장된 사전점검을 삭제했습니다.");
     } catch (error) {
+      if (epoch !== memberScope.current) return;
       setToast(error instanceof Error ? error.message : "사전점검을 삭제하지 못했습니다.");
     } finally {
-      setEligibilityBusy(false);
+      if (epoch === memberScope.current) setEligibilityBusy(false);
     }
   };
 

@@ -6,6 +6,93 @@ const notices = [
   { id: 2, sourceSystem: "MYHOME_PUBLIC_RENTAL", housingCategory: "PUBLIC_RENTAL", status: "UPCOMING", title: "E2E 경기 행복주택", regionCode: "경기", address: "경기도 고양시", noticeDate: "2026-09-02", applyStartDate: "2026-09-21", applyEndDate: "2026-09-25", winnerAnnounceDate: "2026-10-03", totalUnits: 80, officialUrl: "https://applyhome.example/2", syncedAt: "2026-09-01T00:00:00Z" },
 ];
 
+for (const lateStatus of [200, 401]) {
+  test(`계정 경계 최초 회원 조회보다 먼저 로그인하면 늦은 ${lateStatus} 응답과 확인 중 표시가 남지 않는다`, async ({ page }) => {
+    await mockApi(page);
+    let pending: Route | undefined;
+    await page.route('**/members/me', route => { pending = route; });
+    const profile = { id: 2, nickname: '새 로그인 회원', email: 'new@example.invalid', role: 'MEMBER', emailVerified: true };
+    await page.route('**/auth/login', route => route.fulfill({ json: profile }));
+    await page.goto('/');
+    await expect.poll(() => Boolean(pending)).toBe(true);
+    await page.getByRole('button', { name: '로그인하고 점검하기' }).click();
+    await page.getByLabel('이메일', { exact: true }).fill(profile.email);
+    await page.getByLabel('비밀번호', { exact: true }).fill('password-1234');
+    await page.getByRole('dialog').getByRole('button', { name: '로그인', exact: true }).click();
+    await expect(page.getByRole('button', { name: profile.nickname, exact: true })).toBeEnabled();
+    const received = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/members/me');
+    await pending!.fulfill({ status: lateStatus, json: lateStatus === 200 ? { ...profile, id: 1, nickname: '이전 조회 회원' } : { detail: '이전 조회 만료' } });
+    await received; await page.waitForTimeout(150);
+    await expect(page.getByRole('button', { name: profile.nickname, exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: '이전 조회 회원', exact: true })).toHaveCount(0);
+  });
+}
+
+test('계정 경계 최초 회원 확인 중 로그인 실패해도 로그인 버튼을 다시 사용할 수 있다', async ({ page }) => {
+  await mockApi(page);
+  let pending: Route | undefined;
+  await page.route('**/members/me', route => { pending = route; });
+  await page.route('**/auth/login', route => route.fulfill({ status: 401, json: { detail: '로그인 실패' } }));
+  await page.goto('/');
+  await expect.poll(() => Boolean(pending)).toBe(true);
+  await page.getByRole('button', { name: '로그인하고 점검하기' }).click();
+  await page.getByLabel('이메일', { exact: true }).fill('failed@example.invalid');
+  await page.getByLabel('비밀번호', { exact: true }).fill('password-1234');
+  await page.getByRole('dialog').getByRole('button', { name: '로그인', exact: true }).click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.header-actions').getByRole('button', { name: '로그인', exact: true })).toBeEnabled();
+  await pending!.fulfill({ status: 401, json: { detail: '이전 조회 만료' } });
+});
+
+for (const preferenceStatus of [200, 204, 503]) {
+  test(`회원 복원 단일 검색조건 ${preferenceStatus}에도 기본 프로필과 사전점검을 불러온다`, async ({ page }) => {
+    await mockApi(page);
+    await page.route('**/members/me', route => route.fulfill({ json: { id: 1, nickname: '복원 회원', email: 'restore@example.invalid', role: 'MEMBER', emailVerified: true } }));
+    await page.route('**/members/me/search-preference', route => route.fulfill(preferenceStatus === 204 ? { status: 204 } : { status: preferenceStatus, json: preferenceStatus === 200 ? null : { detail: '검색조건 일시 오류' } }));
+    await page.route('**/members/me/eligibility-profile', route => route.fulfill({ json: { homeless: 'YES', subscriptionAccount: 'YES', newlywed: 'UNKNOWN', firstHome: 'UNKNOWN', updatedAt: '2026-10-06T00:00:00Z' } }));
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: '복원 회원', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: '저장된 점검 조회·수정' })).toBeVisible();
+    await expect.poll(() => new URL(page.url()).searchParams.get('region')).toBe('서울');
+    await expect.poll(() => new URL(page.url()).searchParams.get('status')).toBe('open');
+  });
+}
+
+for (const kind of ['favorites', 'comparisons'] as const) {
+  for (const lateStatus of [200, 403]) {
+    for (const relogin of [false, true]) {
+      test(`계정 경계 ${kind} 늦은 ${lateStatus} 응답은 ${relogin ? '새 로그인' : '로그아웃'} 목록과 저장소를 바꾸지 않는다`, async ({ page }) => {
+        await mockApi(page);
+        let pending: Route | undefined;
+        await page.route(`**/members/me/${kind}/1`, route => { pending = route; });
+        await page.goto('/'); await signup(page);
+        await expect(page.getByRole('dialog', { name: /로그인|회원가입/ })).toHaveCount(0);
+        const card = page.locator('article').filter({ hasText: notices[0].title });
+        const action = kind === 'favorites' ? card.getByLabel(/관심청약 저장/) : card.getByRole('button', { name: '비교 담기', exact: true });
+        await action.click(); await expect.poll(() => Boolean(pending)).toBe(true);
+        await page.getByRole('button', { name: '테스트 회원', exact: true }).click();
+        await page.getByRole('button', { name: '로그아웃', exact: true }).click();
+        await expect(page.locator('.header-actions').getByRole('button', { name: '로그인', exact: true })).toBeVisible();
+        if (relogin) {
+          await signup(page);
+          await expect(page.getByRole('dialog', { name: /로그인|회원가입/ })).toHaveCount(0);
+        }
+        await expect(action).toBeEnabled();
+        const received = page.waitForResponse(response => response.url().endsWith(`/members/me/${kind}/1`));
+        await pending!.fulfill({ status: lateStatus, json: lateStatus === 200 ? { noticeIds: [1] } : { detail: '이전 계정의 늦은 오류' } });
+        await received;
+        // Allow the response body, React update, and persistence effect to settle.
+        await page.waitForTimeout(150);
+        await expect(action).toBeEnabled();
+        await expect(page.getByText('이전 계정의 늦은 오류', { exact: true })).toHaveCount(0);
+        if (kind === 'comparisons') await expect(page.getByRole('region', { name: '청약 공고 비교 목록' })).toHaveCount(0);
+        expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key) ?? '[]'), kind === 'favorites' ? 'cheongyak-one-saved' : 'cheongyak-one-comparison')).toEqual([]);
+      });
+    }
+  }
+}
+
 async function mockLinkClipboard(page: Page, mode: "success" | "fail" | "pending") {
   await page.addInitScript(mode => {
     (window as any).__linkCopies = [];
