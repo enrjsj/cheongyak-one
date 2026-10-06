@@ -1,5 +1,22 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 
+test('상세 일정 모바일: 계약 기간을 선택해 캘린더 파일을 저장하고 초점을 복원한다', async ({ page }) => {
+  await mockPublicApi(page);
+  await page.route('**/api/v1/notices/1', route => route.fulfill({ json: { ...notice, contractStartDate: '2026-10-20', contractEndDate: '2026-10-22' } }));
+  await page.goto('/');
+  const opener = page.locator('article').filter({ hasText: notice.title }).getByRole('button', { name: /공고 핵심만 보기/ });
+  await opener.click();
+  const panel = page.getByRole('region', { name: '핵심 일정 타임라인' });
+  await panel.getByRole('button', { name: '일정 선택 해제', exact: true }).click();
+  await panel.getByRole('checkbox', { name: '계약 기간 일정 선택', exact: true }).check();
+  const downloading = page.waitForEvent('download');
+  await panel.getByRole('button', { name: '선택 일정 저장 (.ics)', exact: true }).click();
+  expect((await downloading).suggestedFilename()).toBe('cheongyak-notice-1-schedule.ics');
+  expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
+  await expect(opener).toBeFocused();
+});
+
 test("유형별 최신성: 일부 수집 실패를 최신으로 표시하지 않고 미설정 소스를 구분한다", async ({ page }) => {
   await mockPublicApi(page);
   await page.route("**/api/v1/notices/freshness", route => route.fulfill({ json: {

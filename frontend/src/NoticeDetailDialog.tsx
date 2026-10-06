@@ -2,6 +2,7 @@ import type { FavoriteProgress, FavoriteApplicationResult, FavoriteTracker, Noti
 import { Icon } from "./Icon";
 import { AiConsultationPanel } from "./AiConsultationPanel";
 import CashPlanCalculator from "./CashPlanCalculator";
+import NoticeSchedulePanel from "./NoticeSchedulePanel";
 import LinkCopyFeedback from "./LinkCopyFeedback";
 import type { useLinkCopy } from "./useLinkCopy";
 import { useDialogAccessibility } from "./useDialogAccessibility";
@@ -65,6 +66,7 @@ export default function NoticeDetailDialog({ detailApplication, selectedDetail, 
               <div><span>공고일</span><strong>{formatShortDate(detailApplication.noticeDate)}</strong></div><div><span>공급 규모</span><strong>{detailApplication.scale}</strong></div>
               <div><span>{detailApplication.priceLabel}</span><strong>{detailApplication.price}</strong></div><div><span>당첨 발표</span><strong>{formatShortDate(detailApplication.winnerAnnounceDate)}</strong></div>
             </div>
+            {selectedDetail && !detailLoading && !detailError && <NoticeSchedulePanel key={`schedule-${selectedDetail.id}`} notice={selectedDetail} />}
             {selectedDetail && hasExpandedDetails(selectedDetail) && (
               <section className="notice-detail-extra" aria-labelledby="notice-detail-extra-title">
                 <h3 id="notice-detail-extra-title">공고 상세정보</h3>
