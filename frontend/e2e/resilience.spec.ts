@@ -499,3 +499,22 @@ test("목록 탐색: 모바일 관심 메뉴는 검색 결과로 키보드 초�
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+
+test('현금 계획 모바일: 계산·입력 수정·닫기 후 포커스 복원', async ({ page }) => {
+  await mockPublicApi(page);
+  await page.route('**/api/v1/notices/1', route => route.fulfill({ json: { ...notice, unitTypes: [{ modelId: 'A', housingTypeName: '084A', maxPrice: 600000000 }] } }));
+  await page.goto('/');
+  const opener = page.locator('article').filter({ hasText: notice.title }).getByRole('button', { name: /공고 핵심만 보기/ });
+  await opener.click();
+  const panel = page.getByRole('region', { name: '주택형별 필요 현금 계산기', exact: true });
+  await panel.getByLabel('계산할 주택형', { exact: true }).selectOption('0');
+  for (const [label, value] of [['계약금 비율 (%)', '10'], ['중도금 비율 (%)', '60'], ['중도금 대출 예상액 (원)', '0'], ['잔금 시 총 대출 예상액 (원)', '0'], ['추가 비용 예상액 (원)', '0'], ['현재 준비한 현금 (원)', '600000000']]) await panel.getByLabel(label, { exact: true }).fill(value);
+  await panel.getByRole('button', { name: '현금 계획 계산', exact: true }).click();
+  const result = panel.getByRole('region', { name: '현금 계획 결과' });
+  await expect(result.getByRole('heading', { level: 4 })).toContainText('600,000,000원');
+  expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await panel.getByLabel('중도금 비율 (%)', { exact: true }).fill('101');
+  await expect(result).toHaveCount(0);
+  await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
+  await expect(opener).toBeFocused();
+});
