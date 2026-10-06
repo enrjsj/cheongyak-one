@@ -16,6 +16,11 @@ public class AdminAiConsultationController {
     public AdminAiConsultationController(MemberService members, SessionCookieSupport cookies, AiConsultationLimiter usage) {
         this.members = members; this.cookies = cookies; this.usage = usage;
     }
+    @GetMapping("/metrics")
+    public AiConsultationLimiter.Metrics metrics(HttpServletRequest request) {
+        members.requireAdmin(cookies.read(request));
+        return usage.metrics();
+    }
     @GetMapping
     public List<AiConsultationLimiter.DayUsage> usage(HttpServletRequest request) {
         members.requireAdmin(cookies.read(request));

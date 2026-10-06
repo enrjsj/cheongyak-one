@@ -67,7 +67,10 @@ export function AiConsultationPanel({ noticeId, signedIn }: { noticeId: number; 
     const version = ++copyVersion.current;
     setCopyStatus("");
     try {
-      await navigator.clipboard.writeText(result.answer + "\n\n" + result.disclaimer + "\n공고 수집 기준: " + dateLabel);
+      const evidence = (result.evidence ?? []).map(fact => `[${fact.id}] ${fact.label}: ${fact.value}`).join("\n");
+      const missing = (result.missingInformation ?? []).join(" · ");
+      await navigator.clipboard.writeText(result.answer + "\n\n" + result.disclaimer + "\n공고 수집 기준: " + dateLabel
+        + (evidence ? "\n\n확인된 공고 근거\n" + evidence : "") + (missing ? "\n\n미확인 항목: " + missing : ""));
       if (copyVersion.current === version) setCopyStatus("답변을 복사했습니다.");
     } catch {
       if (copyVersion.current === version) setCopyStatus("복사하지 못했습니다. 답변 텍스트를 직접 선택해 복사해주세요.");
@@ -95,9 +98,9 @@ export function AiConsultationPanel({ noticeId, signedIn }: { noticeId: number; 
         </label>
         <label className="ai-consent"><input type="checkbox" checked={consent} disabled={busy}
           onChange={(event) => setConsent(event.target.checked)} />
-          공개 공고 정보와 선택한 주제를 OpenAI에 전송하는 데 동의합니다. 회원 개인정보는 전송하지 않습니다.
+          공개 공고 정보(주택형·공급금액·일정 포함)와 선택한 주제를 OpenAI에 전송하는 데 동의합니다. 회원 개인정보는 전송하지 않습니다.
         </label>
-        <small>상담 내용은 이 서비스에 저장하지 않습니다. 요청 시각·처리 결과 등 사용량 기록은 30일 보관합니다. OpenAI의 데이터 처리 정책이 적용됩니다.</small>
+        <small>상담 내용은 이 서비스에 저장하지 않습니다. 요청 시각·처리 결과·모델·토큰·예상비용 등 사용량 기록은 30일 보관합니다. OpenAI의 데이터 처리 정책이 적용됩니다.</small>
         <div className="ai-actions"><button type="button" className="secondary-button"
           disabled={!consent || busy || expired} onClick={() => void consult()}>{busy ? "답변 생성 중…" : error && !expired ? "답변 다시 요청" : "확인 항목 정리하기"}</button>
           {busy && <button type="button" onClick={cancel}>응답 대기 취소</button>}</div>
@@ -105,7 +108,17 @@ export function AiConsultationPanel({ noticeId, signedIn }: { noticeId: number; 
       {error && <p role="alert">{error}</p>}
       {available === undefined && error && !expired && <button type="button" onClick={() => setConnectionVersion(value => value + 1)}>연결 다시 확인</button>}
       {result && <div className="ai-answer" aria-live="polite">
-        <p>{result.answer}</p>
+        <p>{result.answer.split(/(\[F\d+\])/).map((part, index) => {
+          const fact = result.evidence?.find(item => `[${item.id}]` === part);
+          return fact ? <a key={index} href={`#ai-evidence-${noticeId}-${fact.id}`} aria-label={`${part} ${fact.label} 근거 보기`}>{part}</a> : part;
+        })}</p>
+        {Boolean(result.evidence?.length) && <details className="ai-evidence" open>
+          <summary>확인된 공고 근거</summary>
+          <p>수집한 공개 데이터입니다. 공식 공고문 원문을 읽거나 진위를 검증한 결과는 아닙니다. 공급금액은 총 필요 현금과 다릅니다.</p>
+          <dl>{result.evidence?.map(fact => <div key={fact.id} id={`ai-evidence-${noticeId}-${fact.id}`} tabIndex={-1}><dt>[{fact.id}] {fact.label}</dt><dd>{fact.value}</dd></div>)}</dl>
+          {result.truncated && <small>주택형 총 {result.totalUnitTypes}건 중 최대 20건을 상담에 반영했습니다. 전체 자료는 공고 상세에서 확인하세요.</small>}
+        </details>}
+        {Boolean(result.missingInformation?.length) && <details className="ai-evidence" open><summary>공식 공고에서 추가로 확인할 항목</summary><ul>{result.missingInformation?.map((item, index) => <li key={index}>{item}</li>)}</ul></details>}
         <small>{result.disclaimer}</small>
         <small>공고 수집 기준: {dateLabel}</small>
         <small>{stale || !validDate ? "공고 수집 시점이 오래되었거나 확인되지 않습니다. " : ""}신청 전 공식 공고의 정정 내용과 최신 일정을 확인하세요.</small>

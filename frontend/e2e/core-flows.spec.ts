@@ -2330,3 +2330,52 @@ test("전체 이력 모두 읽음 후 재조회 실패는 빈 알림으로 표�
   await page.getByRole("button", { name: "새로고침", exact: true }).click();
   await expect(page.locator(".notification-item.read")).toHaveCount(1);
 });
+
+test("AI 답변의 근거 번호로 주택형과 가격을 확인하고 미확인 항목을 구분한다", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page);
+  await page.route("**/api/v1/members/me/ai-consultations**", route => route.fulfill({ json: route.request().method() === "GET" ? { available: true } : {
+    noticeId: 1, topic: "CASH", answer: "[F1] 공급금액 외 납부 조건을 확인하세요.", noticeSyncedAt: "2026-10-06T00:00:00Z", disclaimer: "공식 공고를 확인하세요.",
+    evidence: [{ id: "F1", label: "주택형별 공급 정보", value: "84A · 공급면적 84.12㎡ · 최고 공급금액 700000000원" }],
+    missingInformation: ["계약금·중도금·잔금 비율과 납부일"], totalUnitTypes: 25, truncated: true,
+  } }));
+  await page.goto("/"); await signup(page);
+  await page.locator("article").filter({ hasText: "E2E 서울 공공분양" }).getByRole("button", { name: /공고 핵심만 보기/ }).click();
+  const panel = page.locator(".ai-consultation");
+  await panel.getByRole("checkbox").check();
+  await panel.getByRole("button", { name: "확인 항목 정리하기" }).click();
+  const reference = panel.getByRole("link", { name: "[F1] 주택형별 공급 정보 근거 보기", exact: true });
+  await expect(reference).toHaveAttribute("href", "#ai-evidence-1-F1");
+  await reference.click();
+  await expect(panel.getByText(/84A · 공급면적 84.12㎡/)).toBeVisible();
+  await expect(panel.getByText("계약금·중도금·잔금 비율과 납부일", { exact: true })).toBeVisible();
+  await expect(panel.getByText(/주택형 총 25건 중 최대 20건/)).toBeVisible();
+  expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/ai-evidence-mobile.png" });
+});
+
+test("관리자 AI 지표는 미확인 비용과 예산 예약액을 구분하고 상세 조회를 복구한다", async ({ page }) => {
+  await mockApi(page, { admin: true });
+  await page.route("**/api/v1/admin/sync-executions", route => route.fulfill({ json: { runningCount: 0, failuresLast24Hours: 0, executions: [] } }));
+  let failed = true;
+  await page.route("**/api/v1/admin/ai-consultations/usage", route => route.fulfill({ json: [{ date: "2026-10-06", requests: 2, succeeded: 1, failed: 1, active: 0 }] }));
+  await page.route("**/api/v1/admin/ai-consultations/usage/metrics", route => failed ? route.fulfill({ status: 503 }) : route.fulfill({ json: {
+    from: "2026-09-30", to: "2026-10-06", currency: "USD",
+    budget: { date: "2026-10-06", enforced: true, limitUsd: 1, committedUsd: 0.02, reservedUsd: 0.01, unreservedRequests: 1 },
+    models: [{ model: "test-model", requests: 1, usageKnownRequests: 1, inputTokens: 1000, cachedInputTokens: 200, outputTokens: 100, pricedRequests: 1, estimatedCostUsd: 0.00102, averageDurationMs: 2300 },
+      { model: "UNKNOWN", requests: 1, usageKnownRequests: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, pricedRequests: 0, estimatedCostUsd: null, averageDurationMs: null }],
+    failures: [{ type: "TIMEOUT", requests: 1 }],
+  } }));
+  await page.goto("/"); await signup(page);
+  await page.getByRole("button", { name: "운영 관리" }).click();
+  await page.getByRole("tab", { name: "AI 사용량" }).click();
+  const panel = page.getByRole("region", { name: "AI 상담 사용량" });
+  await expect(panel.getByText(/비용·품질 지표를 확인하지 못했습니다/)).toBeVisible();
+  await expect(panel.getByText("완료 요청 실패율: 50.0%")).toBeVisible();
+  failed = false;
+  await panel.getByRole("button", { name: "새로고침", exact: true }).click();
+  await expect(panel.getByText(/예상비용 \$0.00102000 USD/)).toBeVisible();
+  await expect(panel.getByText(/예상비용 미확인 \(0건 산정\)/)).toBeVisible();
+  await expect(panel.getByText("응답 시간 초과 1건", { exact: true })).toBeVisible();
+  await expect(panel.getByText(/예약액도 미확인인 요청 1건/)).toBeVisible();
+});

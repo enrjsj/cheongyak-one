@@ -65,6 +65,12 @@ app:
     enabled: ${AI_CONSULTATION_ENABLED:false}
     api-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_MODEL:}
+    usage:
+      priced-model: ${AI_PRICED_MODEL:}
+      input-usd-per-million: ${AI_INPUT_USD_PER_MILLION:}
+      cached-input-usd-per-million: ${AI_CACHED_INPUT_USD_PER_MILLION:}
+      output-usd-per-million: ${AI_OUTPUT_USD_PER_MILLION:}
+      daily-budget-usd: ${AI_DAILY_BUDGET_USD:0}
   auth:
     cookie-name: CHEONGYAK_SESSION
     csrf-cookie-name: CHEONGYAK_CSRF

@@ -31,7 +31,7 @@ class OpenAiConsultationClientTest {
                             {"type":"output_text","text":"첫 안내"},
                             {"type":"output_text","text":"다음 확인"}]}]}
                         """, MediaType.APPLICATION_JSON));
-        assertThat(client.consult("public facts")).isEqualTo("첫 안내\n다음 확인");
+        assertThat(client.consult("public facts").answer()).isEqualTo("첫 안내\n다음 확인");
         server.verify();
     }
     @Test void rejectsIncompleteOutput() {
@@ -61,5 +61,38 @@ class OpenAiConsultationClientTest {
         assertThat(new AiConsultationProperties(true, "secret", "model").toString()).doesNotContain("secret");
         assertThatThrownBy(() -> new AiConsultationProperties(true, "secret", ""))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test void capturesTokensIncludingCachedInputAndModelWithoutProviderIdentifiers() {
+        server.expect(anything()).andRespond(withSuccess("""
+            {"id":"private-provider-id","model":"test-model-v2","status":"completed",
+             "usage":{"input_tokens":1000,"input_tokens_details":{"cached_tokens":200},"output_tokens":100},
+             "output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"[F1] 확인하세요."}]}]}
+            """, MediaType.APPLICATION_JSON));
+        var result = client.consult("facts");
+        assertThat(result.model()).isEqualTo("test-model-v2");
+        assertThat(result.usage().inputTokens()).isEqualTo(1000);
+        assertThat(result.usage().cachedInputTokens()).isEqualTo(200);
+        assertThat(result.usage().outputTokens()).isEqualTo(100);
+        assertThat(result.toString()).doesNotContain("private-provider-id");
+    }
+    @Test void incompleteBillableResponseRetainsUsageForCostAccounting() {
+        server.expect(anything()).andRespond(withSuccess("""
+            {"model":"test-model","status":"incomplete","usage":{"input_tokens":100,"input_tokens_details":{"cached_tokens":0},"output_tokens":1600}}
+            """, MediaType.APPLICATION_JSON));
+        var failure = catchThrowableOfType(() -> client.consult("facts"), com.cheongyakone.application.member.AiProviderResult.ProviderException.class);
+        assertThat(failure.failure()).isEqualTo(com.cheongyakone.application.member.AiProviderResult.Failure.INCOMPLETE);
+        assertThat(failure.result().usage().outputTokens()).isEqualTo(1600);
+    }
+    @Test void malformedUsageIsUnknownRatherThanFree() {
+        server.expect(anything()).andRespond(withSuccess("""
+            {"status":"completed","usage":{"input_tokens":10,"input_tokens_details":{"cached_tokens":99},"output_tokens":1},
+             "output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"[F1] 확인하세요."}]}]}
+            """, MediaType.APPLICATION_JSON));
+        assertThat(client.consult("facts").usage()).isNull();
+    }
+    @Test void oversizedContextNeverReachesProvider() {
+        assertThatThrownBy(() -> client.consult("가".repeat(12000))).isInstanceOf(MemberApiException.class);
+        server.verify();
     }
 }

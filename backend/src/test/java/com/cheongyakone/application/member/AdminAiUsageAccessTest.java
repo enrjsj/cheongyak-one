@@ -19,6 +19,8 @@ class AdminAiUsageAccessTest {
         when(members.requireAdmin("session")).thenThrow(new MemberApiException(HttpStatus.FORBIDDEN, "ADMIN", "관리자 권한 필요"));
         assertThatThrownBy(() -> new AdminAiConsultationController(members, cookies, usage).usage(request))
                 .isInstanceOf(MemberApiException.class);
+        assertThatThrownBy(() -> new AdminAiConsultationController(members, cookies, usage).metrics(request))
+                .isInstanceOf(MemberApiException.class);
         verifyNoInteractions(usage);
     }
     @Test void adminCanReadAggregateUsage() {

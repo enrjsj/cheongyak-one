@@ -14,6 +14,15 @@ export interface AiUsageDay {
 export function fetchAdminAiUsage(signal?: AbortSignal): Promise<AiUsageDay[]> {
   return requestJson("/api/v1/admin/ai-consultations/usage", { signal });
 }
+export interface AiUsageMetrics {
+  from: string; to: string; currency: "USD";
+  models: Array<{ model: string; requests: number; usageKnownRequests: number; inputTokens: number; cachedInputTokens: number; outputTokens: number; pricedRequests: number; estimatedCostUsd: number | null; averageDurationMs: number | null }>;
+  failures: Array<{ type: string; requests: number }>;
+  budget: { date: string; limitUsd: number; committedUsd: number; reservedUsd: number; unreservedRequests: number; enforced: boolean };
+}
+export function fetchAdminAiMetrics(signal?: AbortSignal): Promise<AiUsageMetrics> {
+  return requestJson("/api/v1/admin/ai-consultations/usage/metrics", { signal });
+}
 export type NotificationChannelId = "EMAIL" | "APP_PUSH" | "KAKAO_ALIMTALK" | "SMS";
 export interface NotificationChannelAvailability {
   id: NotificationChannelId;
@@ -32,6 +41,10 @@ export interface AiConsultation {
   noticeSyncedAt: string;
   generatedAt: string;
   disclaimer: string;
+  evidence?: Array<{ id: string; label: string; value: string }>;
+  missingInformation?: string[];
+  totalUnitTypes?: number;
+  truncated?: boolean;
 }
 
 export function fetchAiAvailability(signal?: AbortSignal): Promise<{ available: boolean }> {

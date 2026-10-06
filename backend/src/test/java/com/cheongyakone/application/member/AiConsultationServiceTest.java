@@ -39,7 +39,7 @@ class AiConsultationServiceTest {
     @Test void sendsOnlyPublicFactsAndReleasesQuotaOnFailure() {
         var member = mock(Member.class);
         when(member.getId()).thenReturn(42L);
-        when(limiter.acquire(42L)).thenReturn("attempt");
+        when(limiter.acquire(eq(42L), eq("test-model"), anyInt())).thenReturn("attempt");
         when(members.requireMember("private-session")).thenReturn(member);
         var notice = JsonMapper.builder().build().readValue(
                 "{\"id\":1,\"title\":\"공개 공고\"}", NoticeDetailResponse.class);
@@ -51,32 +51,41 @@ class AiConsultationServiceTest {
         });
         assertThatThrownBy(() -> service(true).consult("private-session", 1L, AiConsultationService.Topic.CASH, true))
                 .isInstanceOf(IllegalStateException.class);
-        verify(limiter).acquire(42L);
-        verify(limiter).finish("attempt", false);
+        verify(limiter).acquire(eq(42L), eq("test-model"), anyInt());
+        verify(limiter).finish(eq("attempt"), any(), any(AiProviderResult.Failure.class));
         verify(member, never()).getEmail();
     }
     @Test void rejectedAnswerCountsAsFailureAndIsNotReturned() {
         var member = mock(Member.class);
         when(member.getId()).thenReturn(42L);
         when(members.requireMember("session")).thenReturn(member);
-        when(limiter.acquire(42L)).thenReturn("attempt");
+        when(limiter.acquire(eq(42L), eq("test-model"), anyInt())).thenReturn("attempt");
         when(notices.findById(1L)).thenReturn(JsonMapper.builder().build()
                 .readValue("{\"id\":1,\"title\":\"공개 공고\"}", NoticeDetailResponse.class));
-        when(client.consult(anyString())).thenReturn("신청 가능합니다.");
+        when(client.consult(anyString())).thenReturn(new AiProviderResult("신청 가능합니다.", "test-model", null));
         assertThatThrownBy(() -> service(true).consult("session", 1L, AiConsultationService.Topic.ELIGIBILITY, true))
                 .isInstanceOf(MemberApiException.class);
-        verify(limiter).finish("attempt", false);
+        verify(limiter).finish(eq("attempt"), any(), any(AiProviderResult.Failure.class));
     }
     @Test void checklistAnswerCompletesUsageSuccessfully() {
         var member = mock(Member.class);
         when(member.getId()).thenReturn(42L);
         when(members.requireMember("session")).thenReturn(member);
-        when(limiter.acquire(42L)).thenReturn("attempt");
+        when(limiter.acquire(eq(42L), eq("test-model"), anyInt())).thenReturn("attempt");
         when(notices.findById(1L)).thenReturn(JsonMapper.builder().build()
                 .readValue("{\"id\":1,\"title\":\"공개 공고\"}", NoticeDetailResponse.class));
-        when(client.consult(anyString())).thenReturn("공식 공고에서 거주지 요건을 확인하세요.");
+        when(client.consult(anyString())).thenReturn(new AiProviderResult("[F1] 공식 공고에서 거주지 요건을 확인하세요.", "test-model", new AiProviderResult.Usage(100, 0, 30)));
         assertThat(service(true).consult("session", 1L, AiConsultationService.Topic.ELIGIBILITY, true).answer())
                 .contains("거주지");
-        verify(limiter).finish("attempt", true);
+        verify(limiter).finish(eq("attempt"), any(AiProviderResult.class), isNull());
+    }
+    @Test void budgetRefusalNeverCallsProvider() {
+        var member = mock(Member.class);
+        when(member.getId()).thenReturn(42L);
+        when(members.requireMember("session")).thenReturn(member);
+        when(notices.findById(1L)).thenReturn(JsonMapper.builder().build().readValue("{\"id\":1,\"title\":\"공개 공고\"}", NoticeDetailResponse.class));
+        when(limiter.acquire(eq(42L), eq("test-model"), anyInt())).thenThrow(new MemberApiException(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS, "AI_BUDGET_EXCEEDED", "budget"));
+        assertThatThrownBy(() -> service(true).consult("session", 1L, AiConsultationService.Topic.CASH, true)).isInstanceOf(MemberApiException.class);
+        verifyNoInteractions(client);
     }
 }

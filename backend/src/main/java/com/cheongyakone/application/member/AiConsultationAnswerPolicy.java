@@ -11,6 +11,18 @@ public final class AiConsultationAnswerPolicy {
             "(?:[0-9][0-9,.]*|[일이삼사오육칠팔구십백천]+)\\s*(?:억\\s*원|만\\s*원|원|점|%|퍼센트)");
     private static final Pattern VERDICT = Pattern.compile(
             "(?:신청|청약|당첨|대출|자격)\\s*(?:이|은|는|을|가)?\\s*(?:가능합니다|불가능합니다|확정|보장|충족합니다)|당첨\\s*확률");
+    public static String check(String answer, java.util.List<AiNoticeEvidence.Fact> facts) {
+        String checked = Normalizer.normalize(check(answer), Normalizer.Form.NFKC).replaceAll("[\\p{Cf}]", "");
+        var ids = facts.stream().map(AiNoticeEvidence.Fact::id).collect(java.util.stream.Collectors.toSet());
+        var matches = Pattern.compile("\\[F[0-9]+\\]").matcher(checked);
+        boolean referenced = false;
+        while (matches.find()) {
+            String id = matches.group().substring(1, matches.group().length() - 1);
+            if (!ids.contains(id)) return check("");
+            referenced = true;
+        }
+        return referenced ? checked : check("");
+    }
     public static String check(String answer) {
         String normalized = answer == null ? "" : Normalizer.normalize(answer, Normalizer.Form.NFKC)
                 .replaceAll("[\\p{Cf}]", "");
