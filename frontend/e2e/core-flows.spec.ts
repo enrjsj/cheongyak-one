@@ -6,6 +6,45 @@ const notices = [
   { id: 2, sourceSystem: "MYHOME_PUBLIC_RENTAL", housingCategory: "PUBLIC_RENTAL", status: "UPCOMING", title: "E2E 경기 행복주택", regionCode: "경기", address: "경기도 고양시", noticeDate: "2026-09-02", applyStartDate: "2026-09-21", applyEndDate: "2026-09-25", winnerAnnounceDate: "2026-10-03", totalUnits: 80, officialUrl: "https://applyhome.example/2", syncedAt: "2026-09-01T00:00:00Z" },
 ];
 
+for (const lateStatus of [200, 401]) {
+  test(`계정 경계 최초 회원 조회보다 먼저 로그인하면 늦은 ${lateStatus} 응답과 확인 중 표시가 남지 않는다`, async ({ page }) => {
+    await mockApi(page);
+    let pending: Route | undefined;
+    await page.route('**/members/me', route => { pending = route; });
+    const profile = { id: 2, nickname: '새 로그인 회원', email: 'new@example.invalid', role: 'MEMBER', emailVerified: true };
+    await page.route('**/auth/login', route => route.fulfill({ json: profile }));
+    await page.goto('/');
+    await expect.poll(() => Boolean(pending)).toBe(true);
+    await page.getByRole('button', { name: '로그인하고 점검하기' }).click();
+    await page.getByLabel('이메일', { exact: true }).fill(profile.email);
+    await page.getByLabel('비밀번호', { exact: true }).fill('password-1234');
+    await page.getByRole('dialog').getByRole('button', { name: '로그인', exact: true }).click();
+    await expect(page.getByRole('button', { name: profile.nickname, exact: true })).toBeEnabled();
+    const received = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/members/me');
+    await pending!.fulfill({ status: lateStatus, json: lateStatus === 200 ? { ...profile, id: 1, nickname: '이전 조회 회원' } : { detail: '이전 조회 만료' } });
+    await received; await page.waitForTimeout(150);
+    await expect(page.getByRole('button', { name: profile.nickname, exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: '이전 조회 회원', exact: true })).toHaveCount(0);
+  });
+}
+
+test('계정 경계 최초 회원 확인 중 로그인 실패해도 로그인 버튼을 다시 사용할 수 있다', async ({ page }) => {
+  await mockApi(page);
+  let pending: Route | undefined;
+  await page.route('**/members/me', route => { pending = route; });
+  await page.route('**/auth/login', route => route.fulfill({ status: 401, json: { detail: '로그인 실패' } }));
+  await page.goto('/');
+  await expect.poll(() => Boolean(pending)).toBe(true);
+  await page.getByRole('button', { name: '로그인하고 점검하기' }).click();
+  await page.getByLabel('이메일', { exact: true }).fill('failed@example.invalid');
+  await page.getByLabel('비밀번호', { exact: true }).fill('password-1234');
+  await page.getByRole('dialog').getByRole('button', { name: '로그인', exact: true }).click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.header-actions').getByRole('button', { name: '로그인', exact: true })).toBeEnabled();
+  await pending!.fulfill({ status: 401, json: { detail: '이전 조회 만료' } });
+});
+
 for (const preferenceStatus of [200, 204, 503]) {
   test(`회원 복원 단일 검색조건 ${preferenceStatus}에도 기본 프로필과 사전점검을 불러온다`, async ({ page }) => {
     await mockApi(page);

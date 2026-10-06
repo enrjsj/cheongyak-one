@@ -1202,7 +1202,10 @@ export default function Home() {
 
   const handleLogin = async (email: string, password: string) => {
     const epoch = ++memberScope.current;
-    const profile = await loginMember(email, password);
+    const profile = await loginMember(email, password).finally(() => {
+      // Login supersedes bootstrap, including its responsibility to unlock the header.
+      if (epoch === memberScope.current) setAuthLoading(false);
+    });
     if (epoch !== memberScope.current) return;
     const synchronized = await synchronizeMemberLists(profile, epoch);
     if (epoch !== memberScope.current) return;
