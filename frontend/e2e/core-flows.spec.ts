@@ -2308,3 +2308,25 @@ test("알림 검색을 되돌리면 늦은 서버 응답을 무시한다", async
   await page.getByRole("button", { name: "알림 1개", exact: true }).click();
   await expect(page.locator(".notification-item")).toContainText("기본 목록");
 });
+
+test("전체 이력 모두 읽음 후 재조회 실패는 빈 알림으로 표시하지 않고 복구한다", async ({ page }) => {
+  await mockApi(page);
+  let read = false;
+  let fail = false;
+  await page.route(/\/api\/v1\/members\/me\/notifications(?:\?.*)?$/, route => {
+    if (fail) return route.fulfill({ status: 503, json: { detail: "temporary" } });
+    return route.fulfill({ json: { notifications: [{ ...inboxRows[0], readAt: read ? "2026-10-06T00:00:00Z" : null }], unreadCount: read ? 0 : 1, page: 0, size: 50, totalElements: 1, totalPages: 1, snapshotId: 99 } });
+  });
+  await page.route("**/api/v1/members/me/notifications/read-all", route => {
+    read = true; fail = true;
+    return route.fulfill({ status: 204 });
+  });
+  await openMemberInbox(page);
+  await page.getByRole("button", { name: "모두 읽음", exact: true }).click();
+  await expect(page.getByText(/읽음 처리는 완료됐지만 목록을 갱신하지 못했습니다/)).toBeVisible();
+  await expect(page.getByText("아직 도착한 알림이 없어요")).toHaveCount(0);
+  await expect(page.getByText("알림 목록을 확인하지 못했습니다. 새로고침으로 다시 불러와주세요.")).toBeVisible();
+  fail = false;
+  await page.getByRole("button", { name: "새로고침", exact: true }).click();
+  await expect(page.locator(".notification-item.read")).toHaveCount(1);
+});

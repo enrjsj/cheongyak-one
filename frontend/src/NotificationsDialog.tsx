@@ -236,7 +236,7 @@ export default function NotificationsDialog({
   }, [open, onUnreadCountChange, loadVersion]);
 
   useEffect(() => {
-    if (!open || tab !== "inbox" || sessionExpired || loading || saving || busyId !== undefined || historyPending || (inbox.page ?? 0) > 0 || appliedCriteria.current !== criteriaKey) return;
+    if (!open || tab !== "inbox" || sessionExpired || loading || saving || busyId !== undefined || historyPending || (inbox.page ?? 0) > 0 || (serverHistory && appliedCriteria.current !== criteriaKey)) return;
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") void refreshInbox();
     };
@@ -246,7 +246,7 @@ export default function NotificationsDialog({
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [open, tab, sessionExpired, loading, saving, busyId, historyPending, criteriaKey, inbox.page]);
+  }, [open, tab, sessionExpired, loading, saving, busyId, historyPending, criteriaKey, inbox.page, serverHistory]);
 
   useEffect(() => {
     if (!open || !serverHistory || sessionExpired) return;
@@ -328,6 +328,7 @@ export default function NotificationsDialog({
         } catch (requestError) {
           if (scope !== requestScope.current) return;
           setInbox(current => ({ ...current, page: 0, totalPages: 1, notifications: [], totalElements: 0 }));
+          setInboxLoaded(false);
           setRefreshWarning("읽음 처리는 완료됐지만 목록을 갱신하지 못했습니다. 새로고침으로 다시 확인해주세요.");
           blockOnAuthError(requestError);
         }
@@ -406,7 +407,7 @@ export default function NotificationsDialog({
               </>}
               {invalidPeriod && <p role="alert">시작일은 종료일보다 늦을 수 없습니다.</p>}
               <small role="status">{historyPending ? "전체 알림 이력을 조회하고 있습니다…" : serverHistory ? `검색 결과 ${inbox.totalElements ?? 0}건 · ${inbox.notifications.length}건 표시` : `불러온 ${inbox.notifications.length}건 중 ${filteredNotifications.length}건 표시`}</small>
-              {query && <button type="button" onClick={() => setQuery("")}>검색 초기화</button>}
+              {query && <button type="button" disabled={saving || sessionExpired} onClick={() => setQuery("")}>검색 초기화</button>}
             </div>}
             {(serverHistory || inbox.notifications.length > 0) && <div className="notification-filter" role="group" aria-label="알림 분류">
               {filterOptions.map((option) => <button key={option.value} type="button" disabled={saving || sessionExpired} aria-pressed={filter === option.value} className={filter === option.value ? "active" : ""} onClick={() => setFilter(option.value)}>{option.label}</button>)}
