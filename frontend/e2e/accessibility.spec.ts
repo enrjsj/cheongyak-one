@@ -5,6 +5,8 @@ test('대비 검사: 불투명 자식 위 조상의 합성 효과도 통과시�
   await page.setContent(`<main><div id="wrapper"><article style="background: white; color: black">${'<p>대비 검증 문구</p>'.repeat(11)}</article></div></main>`);
   const card = page.locator('article');
   await expectTextContrast(card);
+  await page.locator('#wrapper').evaluate(element => element.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150 }));
+  await expectTextContrast(card);
   for (const effect of ['opacity: .2', 'filter: opacity(.2)', 'mix-blend-mode: screen']) {
     await page.locator('#wrapper').evaluate((element, value) => element.setAttribute('style', value), effect);
     await expect(expectTextContrast(card)).rejects.toThrow(/unsupported paint/);
@@ -60,6 +62,7 @@ for (const width of [320, 390, 1440]) test.describe(`접근성 ${width}px`, () =
     await page.getByRole('button', { name: /^청약 필터 열기/ }).click();
     const dialog = page.getByRole('dialog', { name: '청약 조건 선택' });
     await expect(dialog).toHaveAttribute('aria-modal', 'true');
+    await expect(dialog).toHaveCSS('opacity', '1');
     for (const [heading, selected, alternative] of [['지역', '서울', '경기'], ['주택 유형', '아파트', '오피스텔'], ['공급 방식', '분양', '공공임대']]) {
       const group = dialog.locator('.filter-group').filter({ has: page.getByRole('heading', { name: heading, exact: true }) });
       await group.getByRole('button', { name: selected, exact: true }).click();
@@ -86,6 +89,7 @@ for (const width of [320, 390, 1440]) test.describe(`접근성 ${width}px`, () =
     const dialog = page.getByRole('dialog', { name: notices[0].title, exact: true });
     await expect(dialog).toHaveAttribute('aria-busy', 'false');
     await expect(dialog).toHaveAttribute('aria-modal', 'true');
+    await expect(dialog).toHaveCSS('opacity', '1');
     await expect(dialog.getByRole('heading', { level: 2, name: notices[0].title })).toBeVisible();
     await expect(dialog.getByRole('table', { name: '주택형 공급 목록' })).toBeVisible();
     await expectAccessibleControls(dialog);

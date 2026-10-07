@@ -14,6 +14,14 @@
 - `node scripts/harness.mjs verify --base d78c052d81b731d8ef322aca7352dfe087208a4a --scope full --extended`: 자체 테스트 14개와 프런트 타입/빌드/단위 141개 통과. 전체는 **blocked**이며 기본 PATH Maven·표준 Playwright Chromium/WebKit 경로 부족 때문이다. 별도 도구 경로의 로컬 백엔드/Chromium 결과와 구분한다. 증거 `.harness/reports/2026-10-07T08-48-09-788Z-57349/report.json`.
 - CI·Git main 자동 배포와 운영 동일 SHA 확인은 아직 진행 전이다. 운영 관리자 로그인/원본 전수 정확성/운영 규모 집계 성능/실제 기기 Safari는 미검증이다. 이전 d78c052 운영 성공을 이 기능 배포로 취급하지 않는다.
 
+### PR #129 첫 CI 및 보완
+
+- 첫 기능 커밋 d9a7957의 CI #315에서 backend 153개, PostgreSQL 8개, 실제 로그인 2개 및 Chromium 240개가 통과했다. iPhone은 기존/신규 45개 통과·접근성 4개 실패로 병합하지 않았다.
+- 필터 실패는 WebKit 기본 placeholder `rgb(169,169,169)`가 흰 배경에 2.35:1인 실제 대비 결함이다. 필터 입력 예시에도 `#737373`, opacity 1을 명시했다.
+- 상세 실패는 모달의 미지원 합성 효과로 판정됐으며 첫 trace에 정확한 computed 값이 없어 원인을 단정하지 않는다. 모달 및 조상의 애니메이션 완료를 기다린 뒤 검사하도록 보완하고, 실패 시 실제 opacity/filter/blend/background 값을 남긴다. 정상 등장 애니메이션 완료를 기다리는 회귀와 고정 opacity/filter 거부 회귀를 함께 유지한다. 임계값 완화·브라우저 제외는 없다.
+- 첫 실패 로그 `/tmp/supplier-accessibility-iphone-ci.log`, CI artifact `iphone-webkit-report`, 로컬 추적 `/tmp/iphone-a11y-artifact`. 수정 후 새 CI 결과로 최종 판정한다.
+- 보완 후 로컬 접근성 10개 통과 (`/tmp/supplier-accessibility-settled.log`). 프런트 하네스 재검증에서 자체 14개·타입/빌드/단위 141개 통과, 표준 Chromium 경로 부족은 동일하게 blocked다 (`.harness/reports/2026-10-07T08-59-06-446Z-60019/report.json`). 변경 없는 백엔드는 위 별도 CI 결과를 유지한다.
+
 ## GitHub main 연동 배포 점검 (2026-10-07)
 
 ### main 푸시 후 운영 재확인

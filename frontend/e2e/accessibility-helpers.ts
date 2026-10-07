@@ -11,6 +11,12 @@ export async function expectAccessibleControls(root: Locator) {
 
 /** WCAG 1.4.3, for the app's solid surfaces. Unknown paint must fail, not silently pass. */
 export async function expectTextContrast(root: Locator) {
+  // Audit the settled surface; a modal's entrance animation is not its text color.
+  await root.evaluate(async element => {
+    const animations: Animation[] = [];
+    for (let parent: Element | null = element; parent; parent = parent.parentElement) animations.push(...parent.getAnimations());
+    await Promise.all(animations.map(animation => animation.finished));
+  });
   const result = await root.evaluate(element => {
     type Color = [number, number, number, number];
     const color = (value: string): Color => {
@@ -44,7 +50,7 @@ export async function expectTextContrast(root: Locator) {
         const paint = getComputedStyle(parent);
         // Ancestor compositing still affects descendants with opaque backgrounds.
         if (Number(paint.opacity) !== 1 || (!opaqueBackground && paint.backgroundImage !== 'none') || paint.filter !== 'none' || paint.mixBlendMode !== 'normal') {
-          unsupported.push(`${label}: unsupported paint on ${parent.tagName}.${parent.className}`); unknown = true; break;
+          unsupported.push(`${label}: unsupported paint on ${parent.tagName}.${parent.className} (opacity=${paint.opacity}, filter=${paint.filter}, blend=${paint.mixBlendMode}, background=${paint.backgroundImage})`); unknown = true; break;
         }
         if (!opaqueBackground) {
           const layer = color(paint.backgroundColor); layers.push(layer);

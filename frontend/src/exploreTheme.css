@@ -188,7 +188,7 @@ footer { border-top: 1px solid var(--line); background: #f5f5f5; }
 .result-summary, .active-filter-summary, .search-select > span, .quick-filters > span,
 .week-card .data-note, .week-stats span, .recommendation-disclaimer { color: #737373; }
 /* AA contrast on the light surfaces, including text inherited from the dark theme. */
-.search-field input::placeholder { color: #737373; opacity: 1; }
+.search-field input::placeholder, .filter-modal input::placeholder { color: #737373; opacity: 1; }
 .type-tag, .week-card .live-dot, .week-card .next-event > span:nth-child(2) small,
 .timeline-date span, .schedule-card li > div:nth-child(2) > span,
 .footer-inner p, .footer-inner small, .filter-group h3 small, .search-preference-box span,
