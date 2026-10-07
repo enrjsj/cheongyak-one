@@ -1,5 +1,7 @@
 import { Icon, type IconName } from "./Icon";
 import NoticeDetailDialog from "./NoticeDetailDialog";
+import NoticeCardOverview from "./NoticeCardOverview";
+import ExploreFilters from "./ExploreFilters";
 import { StatusKey, Application, CATEGORY_LABELS, koreaToday, dateValue, daysBetween, formatShortDate, formatChangedAt, weekday, toApplication } from "./noticePresentation";
 import { FavoriteProgressFilter, FavoriteChecklistKey, FavoriteSortKey, FAVORITE_PROGRESS_LABELS, FAVORITE_PROGRESS_PRIORITY, FAVORITE_APPLICATION_RESULT_LABELS, FAVORITE_APPLICATION_RESULT_PRIORITY, FAVORITE_CHECKLIST_ITEMS, completedChecklistCount, incompleteChecklistLabels, applicationResultFromFilter, resultDueLabel } from "./favoritePresentation";
 import { SourceFreshnessPanel } from "./SourceFreshnessPanel";
@@ -299,6 +301,7 @@ export default function Home() {
   useEffect(() => { if (!filterOpen) { setPriceInvalid(false); setAreaInvalid(false); } }, [filterOpen]);
   const [selected, setSelected] = useState<Application | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<NoticeDetail | null>(null);
+  const [knownSuppliers, setKnownSuppliers] = useState<Record<number, { name?: string; syncedAt: string }>>({});
   const [selectedChanges, setSelectedChanges] = useState<NoticeChange[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
@@ -860,6 +863,7 @@ export default function Home() {
         if (controller.signal.aborted || detailRequest.current !== controller) return;
         setSelected(toApplication(detail));
         setSelectedDetail(detail);
+        setKnownSuppliers(current => ({ ...current, [detail.id]: { name: detail.businessEntityName, syncedAt: detail.syncedAt } }));
         setSelectedChanges(changes);
         setKnownNotices((known) => new Map(known).set(detail.id, detail));
         rememberNotice(detail.id);
@@ -1566,6 +1570,7 @@ export default function Home() {
       const detail = await fetchNotice(item.id, controller.signal);
       if (controller.signal.aborted || detailRequest.current !== controller) return;
       setSelectedDetail(detail);
+      setKnownSuppliers(current => ({ ...current, [detail.id]: { name: detail.businessEntityName, syncedAt: detail.syncedAt } }));
       rememberNotice(detail.id);
     } catch (error) {
       if (controller.signal.aborted || detailRequest.current !== controller) return;
@@ -1595,6 +1600,7 @@ export default function Home() {
       if (controller.signal.aborted || detailRequest.current !== controller) return;
       setSelected(toApplication(detail));
       setSelectedDetail(detail);
+      setKnownSuppliers(current => ({ ...current, [detail.id]: { name: detail.businessEntityName, syncedAt: detail.syncedAt } }));
       rememberNotice(detail.id);
     } catch (error) {
       if (controller.signal.aborted || detailRequest.current !== controller) return;
@@ -1687,7 +1693,8 @@ export default function Home() {
   const eligibilityResult = buildEligibilityCheckResult(answers);
 
   return (
-    <main>
+    <main className="explore-app">
+      <a className="skip-link" href="#applications">공고 목록으로 건너뛰기</a>
       {!online && <section className="connection-banner" role="status" aria-label="오프라인 안내">
         <strong>인터넷 연결이 끊겼어요.</strong>
         <p>목록 자동 재시도를 잠시 멈췄습니다. 연결되면 현재 검색조건으로 다시 불러옵니다.</p>
@@ -1696,7 +1703,7 @@ export default function Home() {
       <header className="site-header">
         <div className="header-inner">
           <a className="brand" href="#top" aria-label="청약한눈 홈">
-            <img className="brand-mark" src="/brand/logo.png" alt="" />
+            <span className="brand-symbol" aria-hidden="true"><Icon name="home" /></span>
             <span>청약한눈</span>
           </a>
           <nav className="main-nav" aria-label="주요 메뉴">
@@ -1705,7 +1712,7 @@ export default function Home() {
             <a href="#guide">자격 가이드</a>
           </nav>
           <div className="header-actions">
-            <span className="demo-chip live-chip">LIVE DATA</span>
+            <span className="demo-chip live-chip"><i /> 공공데이터 기반</span>
             <button
               className={`saved-button ${savedOnly ? "active" : ""}`}
               aria-label={`관심청약 ${savedIds.size}개`}
@@ -1742,15 +1749,17 @@ export default function Home() {
 
       <section className="hero" id="top">
         <div className="hero-copy">
-          <div className="eyebrow"><span></span> 매일 업데이트되는 청약 정보</div>
-          <h1>내 조건에 맞는 청약만,<br/><em>한눈에.</em></h1>
-          <p>흩어진 모집공고를 일일이 찾지 마세요.<br/>청약홈 공고를 지역과 일정별로 보기 쉽게 정리해드려요.</p>
+          <div className="eyebrow"><span></span> 나의 다음 집을 찾는 곳</div>
+          <h1>새로운 시작, <em>나에게 맞는 집.</em></h1>
+          <p>분양부터 공공임대까지. 원하는 지역의 청약을 한눈에 살펴보세요.</p>
           <form className="search-box" role="search" onSubmit={submitSearch}>
             <label className="search-field">
               <Icon name="search" />
               <input value={query} maxLength={100} onChange={(event) => { setQuery(event.target.value); resetVisible(); }} placeholder="지역 또는 단지명을 검색해보세요" aria-label="청약 검색어" />
               {query && <button className="clear-search" type="button" onClick={() => setQuery("")} aria-label="검색어 지우기"><Icon name="close" /></button>}
             </label>
+            <label className="search-select"><span>어디에서 찾으세요?</span><select aria-label="빠른 지역 선택" value={region} onChange={event => { setRegion(event.target.value); resetVisible(); }}><option value="전체">전국</option>{availableRegions.map(value => <option key={value}>{value}</option>)}</select></label>
+            <label className="search-select"><span>어떤 집을 찾으세요?</span><select aria-label="빠른 주택 유형 선택" value={category} onChange={event => { setCategory(event.target.value); resetVisible(); }}><option value="전체">모든 주택 유형</option>{availableCategories.map(value => <option key={value}>{value}</option>)}</select></label>
             <button className="search-submit" type="submit">청약 찾기 <Icon name="arrow" /></button>
           </form>
           <div className="quick-filters">
@@ -1769,28 +1778,7 @@ export default function Home() {
           )}
         </div>
 
-        <aside className="week-card" aria-label="이번 주 청약 요약">
-          <div className="week-card-head">
-            <div><span className="mini-label">{thisMonth}월 {Math.ceil(thisDay / 7)}주차</span><h2>이번 주 청약</h2></div>
-            <span className="live-dot">LIVE</span>
-          </div>
-          <div className="week-stats">
-            <div><strong>{facetsUnavailable ? "–" : openCount}</strong><span>접수중</span></div>
-            <div><strong>{facetsUnavailable ? "–" : todayCount}</strong><span>오늘 마감</span></div>
-            <div><strong>{facetsUnavailable ? "–" : upcomingCount}</strong><span>오픈 예정</span></div>
-          </div>
-          {highlight && highlightEvent ? (
-            <button className="next-event" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); void openDetail(highlight); }}>
-              <span className="date-box"><strong>{Number(highlightEvent.date.slice(8))}</strong><span>{weekday(highlightEvent.date)}</span></span>
-              <span><small>{highlightEvent.label}</small><b>{highlight.title}</b></span>
-              <Icon name="arrow" />
-            </button>
-          ) : (
-            <div className="next-event no-event"><span>새로운 접수 일정을 확인 중입니다.</span></div>
-          )}
-          <p className={`data-note ${noticeFreshness?.status === "DELAYED" ? "delayed" : ""}`}>공개 공고 데이터 · {dataFreshnessMessage}</p>
-          <SourceFreshnessPanel sources={noticeFreshness?.sources} />
-        </aside>
+
       </section>
 
       <section className="dashboard" id="applications" tabIndex={-1} aria-label="청약 검색 결과">
@@ -1811,7 +1799,7 @@ export default function Home() {
           <div className="list-panel">
             <div className="section-head">
               <div>
-                <span className="section-kicker">{savedOnly ? "MY SAVED" : "REAL-TIME NOTICES"}</span>
+                <span className="section-kicker">{savedOnly ? "나의 청약 보관함" : "FIND YOUR NEXT HOME"}</span>
                 <h2>{savedOnly ? "관심 청약" : "지금 확인할 청약"}</h2>
                 <p className="result-summary" aria-live="polite">{loading ? "실제 공고를 불러오는 중" : `${includeClosed && activeStatus === "all" ? "마감 공고를 포함한" : "조건에 맞는"} 공고 ${savedOnly && favoriteProgressFilter !== "ALL" ? visible.length : noticeTotal}건`}</p>
               </div>
@@ -1964,11 +1952,7 @@ export default function Home() {
                         <div className="tags"><span className={`state ${item.stateTone}`}>{item.state}</span><span className="type-tag">{item.type}</span></div>
                         <button className={`bookmark ${savedIds.has(item.id) ? "saved" : ""}`} type="button" onClick={() => void toggleSaved(item.id)} disabled={favoritePendingId === item.id} aria-label={`${item.title} 관심청약 ${savedIds.has(item.id) ? "해제" : "저장"}`} aria-pressed={savedIds.has(item.id)}><Icon name="bookmark" /></button>
                       </div>
-                      <div className="card-main">
-                        <div><h3>{item.title}</h3><p className="location"><Icon name="pin" /> {item.location}</p></div>
-                        <div className="deadline"><strong>{item.dday}</strong><span>{item.period}</span></div>
-                      </div>
-                      <div className="card-facts"><span>{item.price}</span><i></i><span>{item.scale}</span><i></i><span>{item.region}</span></div>
+                      <NoticeCardOverview item={item} supplier={knownSuppliers[item.id]?.syncedAt === item.syncedAt ? knownSuppliers[item.id].name : undefined} />
                       {savedOnly && member && (
                         <div className="favorite-tracker">
                           <label>준비 상태
@@ -2043,6 +2027,31 @@ export default function Home() {
           </div>
 
           <aside className="side-column">
+            {!savedOnly && <ExploreFilters region={region} category={category} supplyType={supplyType} regions={availableRegions} categories={availableCategories} activeCount={activeFilterCount}
+              onRegion={value => { setRegion(value); resetVisible(); }} onCategory={value => { setCategory(value); resetVisible(); }} onSupply={value => { setSupplyType(value); resetVisible(); }}
+              onMore={() => setFilterOpen(true)} onReset={resetSearchConditions} />}
+        <section className="week-card" aria-label="이번 주 청약 요약">
+          <div className="week-card-head">
+            <div><span className="mini-label">{thisMonth}월 {Math.ceil(thisDay / 7)}주차</span><h2>이번 주 청약</h2></div>
+            <span className="live-dot">LIVE</span>
+          </div>
+          <div className="week-stats">
+            <div><strong>{facetsUnavailable ? "–" : openCount}</strong><span>접수중</span></div>
+            <div><strong>{facetsUnavailable ? "–" : todayCount}</strong><span>오늘 마감</span></div>
+            <div><strong>{facetsUnavailable ? "–" : upcomingCount}</strong><span>오픈 예정</span></div>
+          </div>
+          {highlight && highlightEvent ? (
+            <button className="next-event" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); void openDetail(highlight); }}>
+              <span className="date-box"><strong>{Number(highlightEvent.date.slice(8))}</strong><span>{weekday(highlightEvent.date)}</span></span>
+              <span><small>{highlightEvent.label}</small><b>{highlight.title}</b></span>
+              <Icon name="arrow" />
+            </button>
+          ) : (
+            <div className="next-event no-event"><span>새로운 접수 일정을 확인 중입니다.</span></div>
+          )}
+          <p className={`data-note ${noticeFreshness?.status === "DELAYED" ? "delayed" : ""}`}>공개 공고 데이터 · {dataFreshnessMessage}</p>
+          <SourceFreshnessPanel sources={noticeFreshness?.sources} />
+        </section>
             <RecommendationPanel
               key={member?.id ?? "visitor"}
               signedIn={Boolean(member)}
@@ -2055,7 +2064,7 @@ export default function Home() {
 
             <section className="plan-card" id="guide">
               <div className="plan-head">
-                <span className="plan-illustration"></span>
+                <span className="plan-illustration"><Icon name="check" /></span>
                 <div><span>신청 전 확인사항 정리</span><h2>청약 조건 사전점검</h2></div>
               </div>
               <p>몇 가지 질문에 답하고 공식 공고문에서 확인할 조건을 정리해보세요.</p>

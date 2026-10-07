@@ -1,12 +1,12 @@
 .notification-filter { display: flex; gap: 6px; margin: 0 0 5px; overflow-x: auto; padding: 1px 0 4px; scrollbar-width: thin; }
-.notification-filter button { flex: 0 0 auto; min-height: 30px; padding: 0 10px; border: 1px solid #dfe5ee; border-radius: 15px; background: white; color: #7a8799; font-size: 9px; font-weight: 750; cursor: pointer; }
-.notification-filter button.active { border-color: #b9cef5; background: #edf4ff; color: var(--blue); }
-.notification-item em strong { display: inline; margin-right: 5px; color: #4c75ba; font-weight: 800; }
+.notification-filter button { flex: 0 0 auto; min-height: 30px; padding: 0 10px; border: 1px solid #e5e5e5; border-radius: 15px; background: white; color: #808080; font-size: 9px; font-weight: 750; cursor: pointer; }
+.notification-filter button.active { border-color: #cccccc; background: #f5f5f5; color: var(--blue); }
+.notification-item em strong { display: inline; margin-right: 5px; color: #737373; font-weight: 800; }
 .notification-search { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin: 10px 0; }
 .notification-search label { display: grid; gap: 4px; font-size: 12px; min-width: 0; flex: 1 1 140px; }
-.notification-search input, .notification-search select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 38px; border: 1px solid #dfe5ee; border-radius: 8px; padding: 8px; background: white; color: inherit; }
-.notification-search small { flex-basis: 100%; color: #65758b; }
-.notification-search button { border: 1px solid #dfe5ee; border-radius: 8px; padding: 8px; background: white; cursor: pointer; }
+.notification-search input, .notification-search select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 38px; border: 1px solid #e5e5e5; border-radius: 8px; padding: 8px; background: white; color: inherit; }
+.notification-search small { flex-basis: 100%; color: #737373; }
+.notification-search button { border: 1px solid #e5e5e5; border-radius: 8px; padding: 8px; background: white; cursor: pointer; }
 
 .notification-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 0; }
 .notification-pagination button { padding: 8px 12px; }
