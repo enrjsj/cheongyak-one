@@ -1,0 +1,4 @@
+[agents]
+enabled = true
+# 주 대화가 총괄하며, 동시에 실행할 하위 에이전트 수를 제한한다.
+max_concurrent_threads_per_session = 3

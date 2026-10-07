@@ -1,6 +1,6 @@
 # 프로젝트 지도
 
-기준: 2026-10-07, `main`의 `0bc8b95c200704941f84d24c7583b6f87860c7b8`을 읽어 정리했다. 이후 변경은 실제 소스로 재확인한다.
+기준: 2026-10-07, `main`의 `fc51550f40df4cd846c8d4e0b42122960f41f3fb`. 아래 과거 작업 설명은 당시 기록이며 현재 상태는 코드와 `docs/HANDOFF.md`를 우선한다.
 
 | 영역 | 기준 파일 | 역할 |
 | --- | --- | --- |
@@ -29,6 +29,7 @@
 - 서버 구조: `docs/project-structure.md`
 - UI 변경: `docs/frontend-architecture.md`
 - 하네스 사용과 한계: `docs/HARNESS.md`
+- 단일·멀티 자동 선택과 격리·통합: `docs/MULTI_AGENT.md`, `.codex/config.toml`, `.codex/agents/`
 - 지속할 결정: `docs/DECISIONS.md`
 - 현재 상태: `docs/HANDOFF.md`
 
