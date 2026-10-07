@@ -1,5 +1,27 @@
 # 작업 인계
 
+## 자동 분업 설정 통합 (2026-10-07)
+
+- 다른 환경의 ‘청약 세팅’ 미커밋 설정을 main `fc51550f40df4cd846c8d4e0b42122960f41f3fb` 기준으로 선별 통합했다. 설정 전용 worktree/브랜치는 `cheongyak-one-settings` / `chore/auto-delegation`이다.
+- AGENTS에 단일/멀티 자동 선택, 하위 최대 3명, 모델·추론 상속, 재귀 위임 금지, worktree·미커밋 snapshot·파일 소유권·고정 포트 테스트 직렬화를 명시했다. `.codex` 역할 3개와 설정, `docs/MULTI_AGENT.md`를 추가했다.
+- 원본의 오래된 HANDOFF/PROJECT_CONTEXT 상태로 덮어쓰지 않았다. 아래 PR #125/#127 기록과 루트 문서 포인터를 보존했다. CLI 미설치라는 과거 환경 설명은 제거했다.
+- 공급기관 누락 집계 기능의 미커밋 앱/테스트 파일은 별도 `feat/admin-supplier-quality` 브랜치와 원래 worktree에 보존했다. 이번 설정 반영에 포함되지 않으며 완료/배포된 기능으로 간주하지 않는다.
+
+### 검증·리뷰
+
+- TOML 4개 파싱, 역할 이름/필수 필드, 한도 3, 모델/추론 미고정, reviewer read-only, 권한·네트워크 override 없음 확인 통과.
+- `node scripts/harness.mjs plan --base fc51550f40df4cd846c8d4e0b42122960f41f3fb`: `.codex`를 공통 설정으로 취급해 auto=full. 해당 범위 회귀 사례를 기존 테스트에 추가했다.
+- `node scripts/harness.mjs verify --scope docs --base fc51550f40df4cd846c8d4e0b42122960f41f3fb`: 자체 테스트 14개 및 규칙 검사 통과. 초기 증거 `.harness/reports/2026-10-07T07-38-43-208Z-45387/report.json`. 설정·문서 변경이라 명시적으로 docs로 좁혔으며 앱 전체 통과로 표시하지 않는다. 최종 기록 후 동일 명령으로 재검증한다.
+- 읽기 전용 기본 서브에이전트 `settings_review`에 reviewer 역할 지침을 전달해 독립 리뷰를 수행했다. 앱 코드 혼입·최신 기록 손실·권한 경계 결함은 발견되지 않았다. 사용자 정의 TOML 역할의 자동 로딩을 입증한 실행은 아니다.
+- 공식 OpenAI Codex `codex-rs/core/config.schema.json`의 `AgentsToml`과 `codex-rs/agent-roles/src`의 파서/탐색 코드를 대조했다. 설정 활성화·한도 및 standalone 역할 형식의 근거로 사용하며, 특정 사용자 PC 버전 지원을 보장하지 않는다.
+- 이 환경의 CLI는 `0.159.0-alpha.3`이다. `codex --strict-config -c agents.enabled=true -c agents.max_concurrent_threads_per_session=3 doctor --summary`에서 config loaded를 확인했으나 외부 provider 연결 검사 실패로 전체 doctor는 exit 1이다. 전체 정상이나 실제 역할 생성 성공으로 기록하지 않는다.
+
+### 미검증·후속 작업
+
+- 사용자 PC의 프로젝트 신뢰/버전별 역할 자동 로딩, 동시 한도 실제 적용은 미검증. `docs/MULTI_AGENT.md`의 읽기 전용 새 세션 절차로 확인한다. 글로벌 설정이나 신뢰 정책을 우회하지 않았다.
+- 이번 변경의 앱 전체 CI·main 병합·운영 배포는 이 기록 시점에는 대기 중이며 이전 CI 성공을 재사용하지 않는다. 사용자 승인 범위에서 설정 전용 PR로 검증 후 반영한다.
+- 공급기관 집계 기능의 PostgreSQL/iPhone/실제 인증 CI 및 운영 관리자 로그인 검증은 별도 미완료 작업이다. 기존 브랜치의 테스트 증거와 작업 기록을 확인해 이어간다.
+
 ## 최종 상태 (2026-10-07 16:00 KST)
 
 - 공급기관 첫 화면 표시 PR #125와 검증 보완·문서 통합 [PR #127](https://github.com/enrjsj/cheongyak-one/pull/127)을 main에 병합했다. PR #127 병합 커밋은 `5bf2b754221c2f2553f436e8da9422d60958ec5a`다.

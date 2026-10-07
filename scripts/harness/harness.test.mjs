@@ -17,6 +17,7 @@ test('scope: docs/tooling/frontend/backend/shared configuration', () => {
     [rows('frontend/src/App.tsx'), 'frontend'], [rows('backend/pom.xml'), 'backend'],
     [rows('frontend/src/api.ts', 'backend/pom.xml'), 'full'],
     [rows('pom.xml'), 'full'], [rows('.github/workflows/ci.yml'), 'full'], [rows('unknown.config'), 'full'],
+    [rows('.codex/config.toml'), 'full'], [rows('.codex/agents/cheongyak_reviewer.toml'), 'full'],
   ]) assert.equal(selectScope(files), scope);
 });
 
