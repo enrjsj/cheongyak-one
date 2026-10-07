@@ -1188,6 +1188,8 @@ class MemberApiIntegrationTest {
 
     @Test
     void allowsOnlyConfiguredAdminToInspectSanitizedSyncHistory() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/sync-executions"))
+                .andExpect(status().isUnauthorized());
         signup("admin-reader@example.com", "일반회원");
         AuthenticatedSession regularSession = authenticatedSession(
                 login("admin-reader@example.com", PASSWORD).andReturn()
@@ -1280,6 +1282,10 @@ class MemberApiIntegrationTest {
 
         mockMvc.perform(get("/api/v1/admin/sync-executions").cookie(adminSession.cookie()))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.supplierQuality.length()").value(3))
+                .andExpect(jsonPath("$.supplierQuality[0].sourceSystem").value("REB_APT"))
+                .andExpect(jsonPath("$.supplierQuality[0].totalCount").isNumber())
+                .andExpect(jsonPath("$.supplierQuality[0].missingSupplierCount").isNumber())
                 .andExpect(jsonPath("$.executions.length()").value(2))
                 .andExpect(jsonPath("$.executions[0].status").value("FAILED"))
                 .andExpect(jsonPath("$.executions[0].errorMessage").value(

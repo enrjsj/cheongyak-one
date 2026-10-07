@@ -19,6 +19,33 @@ import static org.assertj.core.api.Assertions.assertThat;
 abstract class NoticeMatchingContract extends PersistenceSafetyContract {
     @Autowired SubscriptionNoticeRepository matchingNotices;
     @Autowired NoticeQueryService noticeQueries;
+    @Autowired com.cheongyakone.application.admin.NoticeSupplierQualityService supplierQuality;
+
+    @Test @Transactional
+    void supplierQualityCountsBlankNamesAndClosedNoticesOncePerSource() {
+        var before = supplierQuality.summarize();
+        String[] names = {null, "", " \t\r\n ", "\u00a0\u3000\ufeff", " 기관명 ", "청약홈"};
+        for (var source : SourceSystem.values()) {
+            for (int index = 0; index < names.length; index++) {
+                var notice = new SubscriptionNotice(source, UUID.randomUUID().toString(),
+                        HousingCategory.APARTMENT, NoticeStatus.CLOSED, "기관 집계 계약 테스트");
+                entities.persist(notice);
+                entities.flush();
+                jdbc.update("UPDATE SUBSCRIPTION_NOTICE SET BUSINESS_ENTITY_NAME = ? WHERE ID = ?", names[index], notice.getId());
+                // Multiple unit types must not multiply notice-level counts.
+                for (int unitIndex = 0; unitIndex < 2; unitIndex++) entities.persist(new SubscriptionNoticeUnitType(
+                        notice, "unit-" + unitIndex, "test", null, 1, 0, 1, null, Instant.now()));
+            }
+        }
+        entities.flush();
+        entities.clear();
+        var after = supplierQuality.summarize();
+        assertThat(after).extracting(item -> item.sourceSystem()).containsExactly(SourceSystem.values());
+        for (int index = 0; index < after.size(); index++) {
+            assertThat(after.get(index).totalCount() - before.get(index).totalCount()).isEqualTo(6);
+            assertThat(after.get(index).missingSupplierCount() - before.get(index).missingSupplierCount()).isEqualTo(4);
+        }
+    }
 
     @Test @Transactional
     void searchFacetsAndInMemoryMatchingUseTheSameUnitAndMissingDataRules() {

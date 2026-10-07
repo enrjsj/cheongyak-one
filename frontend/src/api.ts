@@ -228,6 +228,13 @@ export interface AdminSyncDashboard {
   lastSuccessfulAt?: string | null;
   executions: AdminSyncExecution[];
   sources?: SourceFreshness[];
+  supplierQuality?: NoticeSupplierQuality[];
+}
+
+export interface NoticeSupplierQuality {
+  sourceSystem: SourceSystem;
+  totalCount: number;
+  missingSupplierCount: number;
 }
 
 export type AdminMemberStatus = "ACTIVE" | "SUSPENDED" | "WITHDRAWN";

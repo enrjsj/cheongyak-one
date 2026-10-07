@@ -9,6 +9,7 @@ public record AdminSyncDashboardResponse(
         long failuresLast24Hours,
         Instant lastSuccessfulAt,
         List<AdminSyncExecutionResponse> executions,
-        List<com.cheongyakone.api.SourceFreshnessResponse> sources
+        List<com.cheongyakone.api.SourceFreshnessResponse> sources,
+        List<NoticeSupplierQualityResponse> supplierQuality
 ) {
 }

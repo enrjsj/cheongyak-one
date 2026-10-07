@@ -22,19 +22,22 @@ public class AdminSyncDashboardService {
     private final NoticeSyncCoordinator noticeSyncCoordinator;
     private final Clock clock;
     private final com.cheongyakone.application.NoticeFreshnessService freshnessService;
+    private final NoticeSupplierQualityService supplierQualityService;
 
     public AdminSyncDashboardService(
             MemberService memberService,
             SyncExecutionRepository executionRepository,
             NoticeSyncCoordinator noticeSyncCoordinator,
             Clock clock,
-            com.cheongyakone.application.NoticeFreshnessService freshnessService
+            com.cheongyakone.application.NoticeFreshnessService freshnessService,
+            NoticeSupplierQualityService supplierQualityService
     ) {
         this.memberService = memberService;
         this.executionRepository = executionRepository;
         this.noticeSyncCoordinator = noticeSyncCoordinator;
         this.clock = clock;
         this.freshnessService = freshnessService;
+        this.supplierQualityService = supplierQualityService;
     }
 
     @Transactional(readOnly = true)
@@ -59,7 +62,8 @@ public class AdminSyncDashboardService {
                 ),
                 lastSuccessfulAt,
                 executions,
-                freshnessService.freshness().sources()
+                freshnessService.freshness().sources(),
+                supplierQualityService.summarize()
         );
     }
 

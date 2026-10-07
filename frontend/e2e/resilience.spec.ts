@@ -1,5 +1,86 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 
+async function mockQualityAdmin(page: Page, reply: () => { status?: number; json: unknown }) {
+  await mockPublicApi(page);
+  await page.route('**/api/v1/members/me**', route => {
+    const path = new URL(route.request().url()).pathname;
+    let data: unknown = null;
+    if (path === '/api/v1/members/me') data = { id: 10, nickname: '운영 담당자', role: 'ADMIN', emailVerified: true };
+    else if (path.endsWith('/favorites') || path.endsWith('/comparisons')) data = { noticeIds: [] };
+    else if (path.endsWith('/tracker') || path.endsWith('/saved-search-profiles')) data = [];
+    else if (path.endsWith('/recommendations')) data = { configured: false, recommendations: [], dismissedCount: 0 };
+    else if (path.endsWith('/notifications')) data = { notifications: [], unreadCount: 0 };
+    return route.fulfill({ json: data });
+  });
+  const requests: string[] = [];
+  await page.route('**/api/v1/admin/sync-executions**', route => {
+    requests.push(route.request().method());
+    return route.fulfill(reply());
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: '운영 관리', exact: true }).click();
+  return requests;
+}
+
+const qualityDashboard = (supplierQuality?: unknown[]) => ({ generatedAt: '2026-10-07T00:00:00Z', runningCount: 0, failuresLast24Hours: 0, executions: [], supplierQuality });
+
+for (const width of process.env.IPHONE_TEST ? [390] : [320, 1440]) test(`관리자 공급기관 집계: 누락·0건·작은 비율을 읽기 전용으로 표시 (${width}px)`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 900 });
+  const requests = await mockQualityAdmin(page, () => ({ json: qualityDashboard([
+    { sourceSystem: 'REB_APT', totalCount: 4, missingSupplierCount: 1 },
+    { sourceSystem: 'REB_OFFICETEL', totalCount: 0, missingSupplierCount: 0 },
+    { sourceSystem: 'MYHOME_PUBLIC_RENTAL', totalCount: 20000, missingSupplierCount: 1 },
+  ]) }));
+  const panel = page.getByRole('region', { name: '공급기관 데이터 현황' });
+  await panel.scrollIntoViewIfNeeded();
+  const apt = panel.getByRole('listitem').filter({ has: page.getByRole('heading', { name: '아파트', exact: true }) });
+  await expect(apt).toContainText('저장 공고4건');
+  await expect(apt).toContainText('공급기관 미확인1건');
+  await expect(apt).toContainText('25%');
+  const empty = panel.getByRole('listitem').filter({ hasText: '오피스텔' });
+  await expect(empty).toContainText('저장 공고 없음');
+  await expect(empty).toContainText('미확인 비율–');
+  await expect(panel.getByRole('listitem').filter({ hasText: '공공임대' })).toContainText('0.1% 미만');
+  await expect(panel).toContainText('마감 공고도 포함');
+  await expect(panel).toContainText('수집 실패를 의미하지 않습니다');
+  expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(requests).toEqual(['GET']);
+});
+
+test('관리자 공급기관 집계: 구버전 응답을 0건으로 오인하지 않고 새로고침한다', async ({ page }) => {
+  let ready = false;
+  const requests = await mockQualityAdmin(page, () => ({ json: ready ? qualityDashboard([
+    { sourceSystem: 'REB_APT', totalCount: 10, missingSupplierCount: 0 },
+  ]) : qualityDashboard() }));
+  const panel = page.getByRole('region', { name: '공급기관 데이터 현황' });
+  await expect(panel.getByText('공급기관 집계 정보를 아직 받지 못했습니다.', { exact: true })).toBeVisible();
+  await expect(panel.getByRole('listitem')).toHaveCount(0);
+  ready = true;
+  await page.getByRole('dialog', { name: '운영 관리' }).getByRole('button', { name: '새로고침', exact: true }).click();
+  await expect(panel).toContainText('미확인 없음');
+  await expect(panel).toContainText('저장 공고10건');
+  expect(requests).toEqual(['GET', 'GET']);
+});
+
+test('관리자 공급기관 집계: 갱신 실패 시 이전 집계를 감추고 재시도 결과로 교체한다', async ({ page }) => {
+  let phase = 0;
+  const requests = await mockQualityAdmin(page, () => phase === 1 ? { status: 503, json: { detail: '집계 조회 실패' } } : { json: qualityDashboard([
+    { sourceSystem: 'REB_APT', totalCount: 10, missingSupplierCount: phase === 0 ? 2 : 1 },
+  ]) });
+  const dialog = page.getByRole('dialog', { name: '운영 관리' });
+  const panel = dialog.getByRole('region', { name: '공급기관 데이터 현황' });
+  await expect(panel).toContainText('공급기관 미확인2건');
+  phase = 1;
+  await dialog.getByRole('button', { name: '새로고침', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('집계 조회 실패');
+  await expect(panel).toHaveCount(0);
+  phase = 2;
+  await dialog.getByRole('button', { name: '다시 시도', exact: true }).click();
+  await expect(panel).toContainText('공급기관 미확인1건');
+  expect(requests).toEqual(['GET', 'GET', 'GET']);
+});
+
 // Keep phone emulation at phone widths; desktop projects cover the 1440px layout.
 const supplierWidths = process.env.IPHONE_TEST ? [320, 390] : [320, 390, 1440];
 const longSupplier = '한국토지주택공사 서울지역본부 주거복지사업단 공동공급기관';

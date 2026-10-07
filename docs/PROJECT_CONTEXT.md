@@ -62,9 +62,8 @@
 
 CI의 frontend, iphone, auth-browsers, backend, postgres, infrastructure, real-data를 확인한 뒤 main에 병합한다. 배포는 `node scripts/verify-deployment.mjs <웹 origin> <API origin> <main SHA>`로 웹·API·프록시의 동일 리비전과 응답을 확인한다. 실행 환경별 제한과 실제 결과는 HANDOFF.md에 기록한다.
 
-## 다음 후보 (우선순위 제안)
+## 관리자 현황·접근성 후속 개발
 
-1. 공급기관 데이터 누락 비율을 수집 소스별로 측정하고 원본에 값이 있는 경우의 매핑 누락을 점검한다. 공급기관을 임의 추정하지 않는다.
-2. 탐색 카드·상세의 접근성 자동 검사 범위를 확대한다. 현재 키보드·초점 복원·터치 회귀 테스트에 더해 의미 구조와 대비를 점검한다.
+관리자 수집 API의 `supplierQuality`는 저장 공고 전체를 소스별로 집계해 공급기관 미확인 수·비율을 표시한다. 원본 매핑은 기존 필드를 유지하며 기관을 추정하거나 운영 데이터를 변경하지 않는다. `AdminSupplierQualityPanel.tsx`와 `NoticeSupplierQualityService.java`가 담당한다.
 
-후보는 이번 작업에서 완료한 기능이 아니며, 다음 작업 시 실제 데이터와 요구를 다시 확인한다.
+공개 탐색의 접근성 회귀는 `frontend/e2e/accessibility.spec.ts`에 있다. 목록·필터·상세의 이름/구조/선택 상태와 단색 배경 텍스트 대비를 PC·모바일에서 검사한다. 전체 WCAG 적합성이나 실제 보조기기 검증으로 해석하지 않는다. 구현·CI·배포의 최신 확인 결과와 남은 제한은 HANDOFF를 참고한다.
