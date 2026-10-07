@@ -9,6 +9,14 @@
 
 Vercel과 Render를 각각 GitHub 저장소에 연결하면 `main` 병합 뒤 각 서비스가 자동 배포한다. 이 문서는 리소스를 생성하지 않는다.
 
+### 기존 Git 연동으로 배포 확인
+
+- 승인된 변경을 검증하고 `main`에 반영한 뒤 Vercel과 Render의 배포 커밋을 각각 확인한다. Codex의 Vercel API 인증과 GitHub Git 연동의 인증은 별개다.
+- `CI` 성공만으로 운영 배포 완료라고 표시하지 않는다. `scripts/verify-deployment.mjs <웹 origin> <API origin> <main SHA>`가 웹·API·프록시의 동일 revision과 공개 응답을 확인해야 한다.
+- 배포가 보이지 않으면 GitHub의 Vercel bot/check/status, Vercel의 대상 프로젝트·브랜치·커밋별 배포 기록을 대조한다. Preview 성공이 Production 성공을 의미하지는 않는다.
+- 배포 생성 전 누락과 생성 후 빌드 실패를 구분한다. 내부 이벤트/웹훅 로그를 읽을 권한이 없으면 원인은 미확정으로 남기고, 403을 앱 오류나 Git 자동 배포 실패의 원인으로 단정하지 않는다.
+- 실패 원인이나 입력 변화 없이 빈 커밋/직접 배포 요청을 반복하지 않는다. 후속 커밋은 실제 검토한 변경과 결과 기록만 반영한다. 기존 배포의 Redeploy는 이전 소스 커밋을 다시 사용할 수 있으므로 목표 SHA를 확인한다.
+
 ## 1. Supabase PostgreSQL
 
 Supabase 프로젝트를 만든 뒤 **Connect**에서 Session pooler 또는 Direct connection의 JDBC URL을 확인한다. Render에서 외부 DB에 연결하므로 다음 세 값을 Render Secret으로 등록한다.

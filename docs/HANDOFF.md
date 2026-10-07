@@ -1,5 +1,14 @@
 # 작업 인계
 
+## GitHub main 연동 배포 점검 (2026-10-07)
+
+- 사용자 요청에 따라 이후 배포는 기존 GitHub `main` → Vercel/Render Git 연동을 우선한다. 이번에는 아래 확정 결과와 조사 기록을 main의 문서 커밋으로 반영한다. 진행 중 공급기관 집계 앱 파일은 배포하지 않는다.
+- `75a7d6f`는 main 반영과 CI #313의 8개 작업 성공까지 확인됐다. [운영 검증 실행](https://github.com/enrjsj/cheongyak-one/actions/runs/37590579364)은 새 웹 revision이 반영되지 않은 상태에서 실패했다. CI 빌드/테스트 실패와 배포 버전 불일치를 구분한다.
+- Vercel bot의 [PR #128 기록](https://github.com/enrjsj/cheongyak-one/pull/128#issuecomment-6033374504)에서 `4d90a41` Preview Ready를 확인했다. 반면 main `75a7d6f`의 Vercel 배포/commit status는 조회되지 않았고 운영 alias는 `fc51550`에 남았다. Render는 `75a7d6f`, health 200/UP이었다.
+- 정상 운영 배포 `fc51550`도 문서만 바꾼 커밋이었다. 따라서 문서 변경이라는 이유만으로 이번 배포가 생략됐다고 단정할 수 없다. 이전 정상 squash merge와 이번 커밋 모두 작성자 `enrjsj`, committer GitHub이며 프런트·워크플로·Render·Docker 설정 diff도 없다.
+- 확인 범위에서는 GitHub main 이벤트에서 Vercel 배포 생성까지 이어지는 구간이 조사 대상이다. 웹훅 전달 실패, 서비스 내부 필터/설정 등 정확한 원인은 미확정이다. Vercel 팀 이벤트 조회 `GET /v3/events`도 403으로 거부되어 내부 원인을 확인하지 못했다. 연결 context는 teams 빈 목록을 반환했지만 실제 계정 소유권 변경의 증거로 간주하지 않는다.
+- Vercel 직접 API 권한 403과 Git 자동 배포 누락을 같은 원인이라고 단정하지 않는다. 이번 main 후속 커밋의 자동 배포·동일 revision 확인 결과는 후속 기록 또는 GitHub 운영 검증 실행을 확인한다. 결과를 만들기 위해 보호 설정·검증 기준·앱 코드를 변경하지 않는다.
+
 ## 자동 분업 설정 통합 (2026-10-07)
 
 - 다른 환경의 ‘청약 세팅’ 미커밋 설정을 main `fc51550f40df4cd846c8d4e0b42122960f41f3fb` 기준으로 선별 통합했다. 설정 전용 worktree/브랜치는 `cheongyak-one-settings` / `chore/auto-delegation`이다.
@@ -19,7 +28,13 @@
 ### 미검증·후속 작업
 
 - 사용자 PC의 프로젝트 신뢰/버전별 역할 자동 로딩, 동시 한도 실제 적용은 미검증. `docs/MULTI_AGENT.md`의 읽기 전용 새 세션 절차로 확인한다. 글로벌 설정이나 신뢰 정책을 우회하지 않았다.
-- 이번 변경의 앱 전체 CI·main 병합·운영 배포는 이 기록 시점에는 대기 중이며 이전 CI 성공을 재사용하지 않는다. 사용자 승인 범위에서 설정 전용 PR로 검증 후 반영한다.
+- 설정 전용 [PR #128](https://github.com/enrjsj/cheongyak-one/pull/128)을 [CI #312](https://github.com/enrjsj/cheongyak-one/actions/runs/37589060055) 8개 작업 성공 후 main에 병합했다. 병합 커밋은 `75a7d6f1054fc7e9a7d16cd70e3343658bc52232`다. Chromium 226개·iPhone 39개·실제 로그인 2개 모두 재시도 없이 통과했다. 최종 로컬 설정 하네스 증거는 `.harness/reports/2026-10-07T07-41-42-245Z-45975/report.json`이다.
+- 원래 기능 브랜치를 새 main으로 fast-forward하고 진행 중 파일 15개의 SHA-256이 모두 동일함을 확인했다. `/tmp/supplier-preserved-before-settings.json`은 로컬 보존 확인 증거다. 이 후속 상태 기록은 해당 기능 worktree에 남기며 설정 전용 병합의 파일 내용과 구분한다.
+- 병합 커밋의 [main CI #313](https://github.com/enrjsj/cheongyak-one/actions/runs/37589825952)도 8개 작업 성공. Chromium 226개와 iPhone 39개는 재시도 없이 통과했다.
+- Render `/api/v1/release`는 병합 SHA, `/actuator/health`는 HTTP 200/UP을 반환했다. Vercel은 기존 `fc51550`을 반환하며 새 main 운영 배포가 조회되지 않았다. 배포 생성은 팀 `1-4156` 권한 부족(HTTP 403)으로 거부됐다. 별도 Vercel CLI/인증도 없어 같은 요청을 재시도하거나 설정을 우회하지 않았다. 웹·API 동일 revision 검증은 **미완료**이며, 프런트 배포 성공으로 표시하지 않는다.
+- Vercel 대상은 기존 `prj_U2Rrn4ZSI2p6FnEbR1b0TG8CZa91` 프로젝트와 `cheongyak-one-five.vercel.app`이다. 권한 있는 연결에서 해당 main 커밋을 배포한 뒤 `scripts/verify-deployment.mjs`로 다시 확인해야 한다. 앱 동작 코드는 이번 설정 변경에 포함되지 않았다.
+- 사용자 재연결 안내 후 같은 팀/프로젝트를 명시한 배포 목록 조회도 HTTP 403이었다. 첨부 화면은 `Vercel(으)로 계속` 인증 진입 단계로 보여, Vercel 측 로그인·승인 완료와 해당 팀 접근 권한을 확인해야 한다. 변경 없는 배포 생성 요청은 반복하지 않았다.
+- 동일 revision을 기다리던 로컬 검증 프로세스는 Vercel 배포 권한 차단을 확인한 후 종료했다. 빈 `/tmp/settings-production-verification.json`을 통과 증거로 사용하지 않는다. 서버 응답과 배포 차단의 최종 요약은 `/tmp/settings-integration-result.json`에 기록했다.
 - 공급기관 집계 기능의 PostgreSQL/iPhone/실제 인증 CI 및 운영 관리자 로그인 검증은 별도 미완료 작업이다. 기존 브랜치의 테스트 증거와 작업 기록을 확인해 이어간다.
 
 ## 최종 상태 (2026-10-07 16:00 KST)
