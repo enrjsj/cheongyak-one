@@ -243,6 +243,15 @@ footer { border-top: 1px solid var(--line); background: #f5f5f5; }
 .notice-countdown time { font-size: 11px; line-height: 1.5; font-variant-numeric: tabular-nums; }
 .notice-countdown.attention-neutral { background: transparent; border-color: transparent; }
 .notice-countdown.attention-neutral strong { font-size: 15px; font-weight: 600; }
+/* The summary opens details; the bookmark and all footer/tracker controls stay separate. */
+.notice-card-summary { position: relative; isolation: isolate; }
+.notice-summary-open { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
+.notice-summary-open:focus-visible { outline: 3px solid var(--blue); outline-offset: 5px; }
+.notice-card-summary:has(.notice-summary-open:hover) h3 { color: var(--blue); }
+.notice-bookmark-zone { position: relative; z-index: 2; flex-shrink: 0; align-self: stretch; display: flex; align-items: flex-start; padding-inline-start: 12px; margin-inline-start: 12px; border-inline-start: 1px solid var(--line); background: white; cursor: default; }
+.notice-bookmark-zone .bookmark { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+.notice-card-summary .card-topline { align-items: flex-start; }
+.notice-card-summary .tags { max-width: calc(100% - 70px); }
 @media (max-width: 1150px) {
   .header-inner { gap: 22px; padding-inline: 28px; }
   .main-nav { margin-left: 0; gap: 20px; }

@@ -1949,11 +1949,16 @@ export default function Home() {
                   {visible.map((item) => {
                     const attention = noticeAttention(item, today);
                     return <article className={`application-card attention-${attention.tone}${attention.near ? " schedule-near" : ""}`} key={item.id} id={`notice-card-${item.id}`} tabIndex={-1} aria-label={item.title}>
-                      <div className="card-topline">
-                        <div className="tags"><span className={`notice-status attention-${attention.tone}`}>{attention.badge}</span>{attention.hint && <span className={`schedule-hint attention-${attention.tone}`}>{attention.hint}</span>}<span className="type-tag">{item.type}</span></div>
-                        <button className={`bookmark ${savedIds.has(item.id) ? "saved" : ""}`} type="button" onClick={() => void toggleSaved(item.id)} disabled={favoritePendingId === item.id} aria-label={`${item.title} 관심청약 ${savedIds.has(item.id) ? "해제" : "저장"}`} aria-pressed={savedIds.has(item.id)}><Icon name="bookmark" /></button>
+                      <div className="notice-card-summary">
+                        <button className="notice-summary-open" type="button" aria-label={`${item.title} 공고 상세 보기`} aria-haspopup="dialog" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); void openDetail(item); }} />
+                        <div className="card-topline">
+                          <div className="tags"><span className={`notice-status attention-${attention.tone}`}>{attention.badge}</span>{attention.hint && <span className={`schedule-hint attention-${attention.tone}`}>{attention.hint}</span>}<span className="type-tag">{item.type}</span></div>
+                          <div className="notice-bookmark-zone">
+                            <button className={`bookmark ${savedIds.has(item.id) ? "saved" : ""}`} type="button" onClick={() => void toggleSaved(item.id)} disabled={favoritePendingId === item.id} aria-label={`${item.title} 관심청약 ${savedIds.has(item.id) ? "해제" : "저장"}`} aria-pressed={savedIds.has(item.id)}><Icon name="bookmark" /></button>
+                          </div>
+                        </div>
+                        <NoticeCardOverview item={item} attention={attention} supplier={knownSuppliers[item.id]?.syncedAt === item.syncedAt ? knownSuppliers[item.id].name : undefined} />
                       </div>
-                      <NoticeCardOverview item={item} attention={attention} supplier={knownSuppliers[item.id]?.syncedAt === item.syncedAt ? knownSuppliers[item.id].name : undefined} />
                       {savedOnly && member && (
                         <div className="favorite-tracker">
                           <label>준비 상태
@@ -2003,7 +2008,7 @@ export default function Home() {
                       )}
                       {savedOnly && member && (favoriteTrackers.get(item.id)?.progress ?? "SAVED") === "APPLIED" && <span className={`application-result-badge result-${favoriteTrackers.get(item.id)?.applicationResult?.toLowerCase() ?? "pending"}`}>{FAVORITE_APPLICATION_RESULT_LABELS[favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING"]}</span>}
                       <div className="card-actions">
-                        <button className="detail-link" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); void openDetail(item); }}>공고 핵심만 보기 <Icon name="arrow" /></button>
+                        <button className="detail-link" type="button" aria-haspopup="dialog" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); void openDetail(item); }}>공고 핵심만 보기 <Icon name="arrow" /></button>
                         <button className={`compare-button ${comparisonIds.includes(item.id) ? "selected" : ""}`} type="button" onClick={() => void toggleComparison(item.id)} disabled={comparisonPendingId !== undefined || comparisonResetPending} aria-pressed={comparisonIds.includes(item.id)}><Icon name="grid" /> {comparisonIds.includes(item.id) ? "비교 해제" : "비교 담기"}</button>
                       </div>
                     </article>;
