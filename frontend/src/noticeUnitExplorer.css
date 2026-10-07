@@ -8,6 +8,9 @@
 .unit-explorer .notice-unit-types-table-wrap { max-width: 100%; }
 .unit-comparison { margin-top: 18px; padding-top: 15px; border-top: 1px solid #e3e8f0; }
 .unit-comparison h4 { margin: 0 0 8px; font-size: 13px; color: #243858; }
+.unit-explorer .unit-comparison table { width: max-content; min-width: 100%; }
+.unit-explorer .unit-comparison :is(th, td) { min-width: 150px; max-width: 160px; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.unit-explorer .unit-comparison tr > th:first-child { position: sticky; left: 0; z-index: 1; width: 80px; min-width: 80px; max-width: 80px; background: #f5f8fd; }
 .unit-explorer .unit-comparison > p, .unit-explorer-empty p { text-align: left; }
 .unit-comparison-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .unit-comparison-actions button, .unit-explorer-empty button { min-height: 44px; padding: 8px 12px; border: 1px solid #ccd5e1; border-radius: 8px; background: #f5f8fd; color: #33445d; font-size: 11px; }

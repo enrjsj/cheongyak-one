@@ -37,6 +37,11 @@ for (const width of [320, 1280]) test(`주택형 ${width}px: 정렬·필터 중 
   await panel.getByRole('checkbox', { name: '59B 주택형 비교 선택' }).check();
   const comparison = panel.getByRole('table', { name: '선택 주택형 비교표', exact: true });
   await expect(comparison.getByRole('columnheader', { name: '84A (기준)' })).toBeVisible();
+  expect(await comparison.evaluate(table => {
+    const cell = table.querySelector('tbody td')!, wrapper = table.parentElement!;
+    const text = document.createRange(); text.selectNodeContents(cell);
+    return text.getBoundingClientRect().right <= wrapper.getBoundingClientRect().right;
+  })).toBe(true);
   await expect(comparison.getByRole('row', { name: /^최고 분양가/ })).toContainText('기준 대비 −300,000,001원');
   await panel.getByRole('checkbox', { name: '검색 조건 일치만 보기' }).uncheck();
   await panel.getByRole('checkbox', { name: '84C 주택형 비교 선택' }).check();
