@@ -497,7 +497,7 @@ class MemberApiIntegrationTest {
     }
 
     @Test
-    void returnsExpandedNoticeDetailsWithoutAddingThemToListPayloads() throws Exception {
+    void returnsSupplierInSummaryWhileKeepingExpandedFieldsInDetails() throws Exception {
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
         SubscriptionNotice notice = new SubscriptionNotice(
                 SourceSystem.REB_APT,
@@ -555,6 +555,21 @@ class MemberApiIntegrationTest {
         mockMvc.perform(get("/api/v1/notices").param("keyword", "상세정보 테스트 공고"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].businessEntityName").value("테스트 사업주체"))
+                .andExpect(jsonPath("$.content[0].constructionCompanyName").doesNotExist())
+                .andExpect(jsonPath("$.content[0].contactPhone").doesNotExist())
+                .andExpect(jsonPath("$.content[0].unitTypes").doesNotExist());
+    }
+
+    @Test
+    void doesNotInventSupplierFromSourceWhenMissing() throws Exception {
+        noticeRepository.save(new SubscriptionNotice(SourceSystem.REB_APT, "missing-supplier",
+                HousingCategory.APARTMENT, NoticeStatus.OPEN, "공급기관 미확인 공고"));
+
+        mockMvc.perform(get("/api/v1/notices").param("keyword", "공급기관 미확인 공고"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].sourceSystem").value("REB_APT"))
                 .andExpect(jsonPath("$.content[0].businessEntityName").doesNotExist());
     }
 

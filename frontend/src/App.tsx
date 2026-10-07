@@ -301,7 +301,7 @@ export default function Home() {
   useEffect(() => { if (!filterOpen) { setPriceInvalid(false); setAreaInvalid(false); } }, [filterOpen]);
   const [selected, setSelected] = useState<Application | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<NoticeDetail | null>(null);
-  const [knownSuppliers, setKnownSuppliers] = useState<Record<number, { name?: string; syncedAt: string }>>({});
+  const [knownSuppliers, setKnownSuppliers] = useState<Record<number, { name?: string | null; syncedAt: string }>>({});
   const [selectedChanges, setSelectedChanges] = useState<NoticeChange[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");

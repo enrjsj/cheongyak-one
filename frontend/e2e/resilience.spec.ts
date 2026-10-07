@@ -1,5 +1,40 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 
+for (const width of [320, 390, 1440]) test(`목록 공급기관: 첫 화면 표시·미확인 값·상세 응답과 독립 (${width}px)`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 900 });
+  await mockPublicApi(page);
+  const supplier = '한국토지주택공사 서울지역본부 주거복지사업단 공동공급기관';
+  const entries = [
+    { ...notice, businessEntityName: `  ${supplier}  ` },
+    { ...notice, id: 2, businessEntityName: null },
+    { ...notice, id: 3, businessEntityName: '   ' },
+  ];
+  let details = 0;
+  await page.route('**/api/v1/notices?**', route => route.fulfill({ json: {
+    content: entries, number: 0, size: 24, totalElements: 3, totalPages: 1,
+  } }));
+  await page.route(/\/api\/v1\/notices\/[123]$/, route => {
+    details++;
+    const id = Number(new URL(route.request().url()).pathname.split('/').at(-1));
+    return route.fulfill({ json: { ...notice, id, businessEntityName: '상세 응답 기관' } });
+  });
+  await page.goto('/');
+  await expect(page.locator('.application-card')).toHaveCount(3);
+  await expect(page.locator('#notice-card-1 .notice-provider')).toHaveText(`공급기관 ${supplier}`);
+  for (const id of [2, 3]) await expect(page.locator(`#notice-card-${id} .notice-provider`)).toHaveText('공급기관 공고문 확인');
+  expect(details).toBe(0);
+  for (const id of [1, 2, 3]) {
+    const card = page.locator(`#notice-card-${id}`);
+    await card.getByRole('button', { name: '공고 핵심만 보기', exact: true }).click();
+    await expect(page.getByRole('dialog')).toContainText('상세 응답 기관');
+    await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
+    await expect(card.locator('.notice-provider')).toHaveText(`공급기관 ${id === 1 ? supplier : '공고문 확인'}`);
+    expect(await card.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
+  expect(details).toBe(3);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test('카드 본문 모바일 터치: 상세 열기와 북마크를 분리하고 닫은 뒤 초점을 복원한다', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockPublicApi(page); await page.goto('/');

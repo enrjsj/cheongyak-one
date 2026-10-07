@@ -63,6 +63,7 @@ export interface NoticeSummary {
   housingCategory: HousingCategory;
   status: NoticeStatus;
   title: string;
+  businessEntityName?: string | null;
   regionCode?: string;
   address?: string;
   noticeDate?: string;
@@ -82,7 +83,6 @@ export interface NoticeDetail extends NoticeSummary {
   postalCode?: string;
   housingDetailType?: string;
   rentType?: string;
-  businessEntityName?: string;
   constructionCompanyName?: string;
   contactPhone?: string;
   homepageUrl?: string;

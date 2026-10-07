@@ -224,6 +224,9 @@ jobs:
             jq -e --argjson notice_id "$notice_id" \
               '.id == $notice_id and .officialUrl != null' \
               backend/target/notice-detail.json
+            jq -e --slurpfile detail backend/target/notice-detail.json \
+              '.content[0] | has("businessEntityName") and (.businessEntityName == $detail[0].businessEntityName)' \
+              backend/target/notice-page.json
           else
             echo "Public APIs returned zero current notices; response contracts remain valid."
           fi
