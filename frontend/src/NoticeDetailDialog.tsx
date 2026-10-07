@@ -3,14 +3,14 @@ import { Icon } from "./Icon";
 import { AiConsultationPanel } from "./AiConsultationPanel";
 import CashPlanCalculator from "./CashPlanCalculator";
 import NoticeSchedulePanel from "./NoticeSchedulePanel";
+import NoticeUnitExplorer from "./NoticeUnitExplorer";
 import LinkCopyFeedback from "./LinkCopyFeedback";
 import type { useLinkCopy } from "./useLinkCopy";
 import { useDialogAccessibility } from "./useDialogAccessibility";
-import { hasUnitRange, unitMatchesRange } from "./unitTypeMatching";
 import type { UnitRange } from "./unitTypeMatching";
 import { FAVORITE_APPLICATION_RESULT_LABELS, FAVORITE_CHECKLIST_ITEMS, FAVORITE_PROGRESS_LABELS } from "./favoritePresentation";
 import type { FavoriteChecklistKey } from "./favoritePresentation";
-import { formatChangedAt, formatShortDate, hasExpandedDetails, formatMoveInMonth, optionalPeriod, formatArea, formatWon, formatHousingType, formatPyeong, unitTypeSummary } from "./noticePresentation";
+import { formatChangedAt, formatShortDate, hasExpandedDetails, formatMoveInMonth, optionalPeriod } from "./noticePresentation";
 import type { Application } from "./noticePresentation";
 
 type Props = {
@@ -38,9 +38,6 @@ type Props = {
 export default function NoticeDetailDialog({ detailApplication, selectedDetail, selectedChanges, detailLoading, detailError, online, detailUnitRange, signedIn, saved, tracker, trackerBusy, favoriteBusy, noticeCopy, closeDetail, onRetry, onToggleSaved, onCopy, onSaveTracker }: Props) {
   const detailDialogRef = useDialogAccessibility<HTMLElement>(Boolean(detailApplication), closeDetail);
   if (!detailApplication) return null;
-  const selectedUnitTypeSummary = unitTypeSummary(selectedDetail?.unitTypes ?? []);
-  const showUnitMatches = hasUnitRange(detailUnitRange);
-  const matchingUnitCount = selectedDetail?.unitTypes?.filter(unit => unitMatchesRange(unit, detailUnitRange)).length ?? 0;
   return (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDetail(); }}>
           <section ref={detailDialogRef} tabIndex={-1} className="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title" aria-busy={detailLoading}>
@@ -83,21 +80,7 @@ export default function NoticeDetailDialog({ detailApplication, selectedDetail, 
                 {selectedDetail.homepageUrl && <a className="notice-homepage-link" href={selectedDetail.homepageUrl} target="_blank" rel="noreferrer">분양 홈페이지 열기 <Icon name="arrow" /></a>}
               </section>
             )}
-            {selectedDetail && (selectedDetail.unitTypes?.length ?? 0) > 0 && (
-              <section className="notice-unit-types" aria-labelledby="notice-unit-types-title">
-                <div><h3 id="notice-unit-types-title">주택형별 공급·분양가</h3><p>최고 분양가 기준이며, 최종 금액은 공식 공고문을 확인하세요.</p></div>
-                <dl className="notice-unit-types-summary" aria-label="주택형 공급 요약">
-                  <div><dt>주택형</dt><dd>{selectedDetail.unitTypes?.length.toLocaleString("ko-KR")}개</dd></div>
-                  <div><dt>공급 세대</dt><dd>{selectedUnitTypeSummary.totalSupply?.toLocaleString("ko-KR") ?? "공고문 확인"}</dd></div>
-                  <div><dt>공급면적</dt><dd>{selectedUnitTypeSummary.areaRange ? `${formatArea(selectedUnitTypeSummary.areaRange.min)} ~ ${formatArea(selectedUnitTypeSummary.areaRange.max)}` : "공고문 확인"}</dd></div>
-                  <div><dt>최고 분양가 범위</dt><dd>{selectedUnitTypeSummary.priceRange ? `${formatWon(selectedUnitTypeSummary.priceRange.min)} ~ ${formatWon(selectedUnitTypeSummary.priceRange.max)}` : "공고문 확인"}</dd></div>
-                </dl>
-                {showUnitMatches && <p className="unit-match-summary" role="status">현재 검색의 예산·면적 조건에 맞는 주택형 {matchingUnitCount}개 · 모든 주택형을 함께 표시합니다.</p>}
-                <div className="notice-unit-types-table-wrap"><table><thead><tr><th scope="col">주택형</th><th scope="col">공급면적</th><th scope="col">일반</th><th scope="col">특별</th><th scope="col">합계</th><th scope="col">최고 분양가</th></tr></thead><tbody>
-                  {selectedDetail.unitTypes?.map((unitType) => <tr key={unitType.modelId} className={showUnitMatches && unitMatchesRange(unitType, detailUnitRange) ? "unit-match" : undefined}><th scope="row">{formatHousingType(unitType.housingTypeName)}{showUnitMatches && unitMatchesRange(unitType, detailUnitRange) && <span className="unit-match-badge">검색 조건 일치</span>}</th><td>{formatArea(unitType.supplyArea)}{formatPyeong(unitType.supplyArea) && <small>{formatPyeong(unitType.supplyArea)}</small>}</td><td>{unitType.generalSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{unitType.specialSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td>{unitType.totalSupplyCount?.toLocaleString("ko-KR") ?? "-"}</td><td className="notice-unit-types-price">{formatWon(unitType.maxPrice) ?? "공고문 확인"}</td></tr>)}
-                </tbody></table></div>
-              </section>
-            )}
+            {selectedDetail && !detailLoading && !detailError && (selectedDetail.unitTypes?.length ?? 0) > 0 && <NoticeUnitExplorer key={`units-${selectedDetail.id}`} units={selectedDetail.unitTypes!} range={detailUnitRange} />}
             {selectedDetail && (selectedDetail.housingCategory === "APARTMENT" || selectedDetail.housingCategory === "OFFICETEL") && (selectedDetail.unitTypes?.length ?? 0) === 0 && (
               <section className="notice-unit-types notice-unit-types-empty" aria-labelledby="notice-unit-types-title">
                 <h3 id="notice-unit-types-title">주택형별 공급·분양가</h3>

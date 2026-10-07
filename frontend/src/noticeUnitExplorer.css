@@ -1,0 +1,20 @@
+.unit-explorer { min-width: 0; }
+.unit-explorer-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 14px; }
+.unit-explorer-controls label { display: flex; align-items: center; gap: 8px; min-height: 44px; color: #33445d; font-size: 12px; }
+.unit-explorer-controls select { min-height: 44px; max-width: 100%; border: 1px solid #ccd5e1; border-radius: 8px; background: white; padding: 8px; color: #33445d; }
+.unit-explorer input[type="checkbox"] { width: 18px; height: 18px; accent-color: #2354d8; flex-shrink: 0; }
+.unit-explorer .unit-explorer-note { margin-top: 10px; text-align: left; line-height: 1.6; font-size: 11px; color: #667386; }
+.unit-explorer .unit-select { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; min-width: 60px; cursor: pointer; }
+.unit-explorer .notice-unit-types-table-wrap { max-width: 100%; }
+.unit-comparison { margin-top: 18px; padding-top: 15px; border-top: 1px solid #e3e8f0; }
+.unit-comparison h4 { margin: 0 0 8px; font-size: 13px; color: #243858; }
+.unit-explorer .unit-comparison table { width: max-content; min-width: 100%; }
+.unit-explorer .unit-comparison :is(th, td) { min-width: 150px; max-width: 160px; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.unit-explorer .unit-comparison tr > th:first-child { position: sticky; left: 0; z-index: 1; width: 80px; min-width: 80px; max-width: 80px; background: #f5f8fd; }
+.unit-explorer .unit-comparison > p, .unit-explorer-empty p { text-align: left; }
+.unit-comparison-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.unit-comparison-actions button, .unit-explorer-empty button { min-height: 44px; padding: 8px 12px; border: 1px solid #ccd5e1; border-radius: 8px; background: #f5f8fd; color: #33445d; font-size: 11px; }
+.unit-explorer-empty { margin-top: 12px; padding: 12px; background: #f5f8fd; border-radius: 8px; }
+.unit-explorer-empty button { margin-top: 8px; background: white; }
+.unit-explorer :is(button, select, input, [tabindex]):focus-visible { outline: 3px solid #2354d8; outline-offset: 3px; }
+@media (max-width: 420px) { .unit-explorer-controls > label { width: 100%; flex-wrap: wrap; } .unit-comparison-actions > button { width: 100%; } }
