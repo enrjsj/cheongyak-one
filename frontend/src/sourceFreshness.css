@@ -1,7 +1,7 @@
-.source-freshness { margin: 12px 0; padding: 12px; border: 1px solid #dce5ed; border-radius: 12px; background: #f8fafc; color: #334155; font-size: 13px; }
+.source-freshness { margin: 12px 0; padding: 12px; border: 1px solid #e5e5e5; border-radius: 12px; background: #fafafa; color: #444444; font-size: 13px; }
 .source-freshness summary { cursor: pointer; font-weight: 600; }
 .source-freshness ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; list-style: none; padding: 0; margin: 12px 0 0; }
 .source-freshness li { min-width: 0; padding: 12px; border-radius: 8px; background: white; overflow-wrap: anywhere; }
 .source-freshness li > div { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
 .source-freshness p { margin: 8px 0; line-height: 1.5; }
-.source-freshness button { padding: 8px 12px; min-height: 44px; border: 1px solid #b5c6d8; border-radius: 8px; background: white; color: #155b96; }
+.source-freshness button { padding: 8px 12px; min-height: 44px; border: 1px solid #cccccc; border-radius: 8px; background: white; color: #525252; }

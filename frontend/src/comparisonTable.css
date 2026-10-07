@@ -1,16 +1,16 @@
 .comparison-workspace { min-width: 0; }
 .comparison-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-top: 16px; }
 .comparison-controls label { display: grid; gap: 5px; font-size: 12px; }
-.comparison-controls button, .comparison-controls select { min-height: 44px; padding: 8px 12px; border: 1px solid #ccd8eb; border-radius: 8px; background: white; color: #24416b; }
-.comparison-controls button[aria-pressed="true"] { background: #e4edff; border-color: #658ccf; }
-.comparison-workspace p, .comparison-workspace > small { font-size: 12px; line-height: 1.6; color: #566985; }
-.comparison-workspace [role="alert"] { color: #a13838; }
-.comparison-workspace .comparison-different td { background: #f4f8ff; }
-.comparison-workspace th small { display: block; color: #315a97; }
-.comparison-workspace .compare-table tr > th:first-child { position: sticky; left: 0; z-index: 1; background: #f6f8fc; }
+.comparison-controls button, .comparison-controls select { min-height: 44px; padding: 8px 12px; border: 1px solid #d4d4d4; border-radius: 8px; background: white; color: #444444; }
+.comparison-controls button[aria-pressed="true"] { background: #ebebeb; border-color: #808080; }
+.comparison-workspace p, .comparison-workspace > small { font-size: 12px; line-height: 1.6; color: #666666; }
+.comparison-workspace [role="alert"] { color: #525252; }
+.comparison-workspace .comparison-different td { background: #f8f8f8; }
+.comparison-workspace th small { display: block; color: #525252; }
+.comparison-workspace .compare-table tr > th:first-child { position: sticky; left: 0; z-index: 1; background: #f8f8f8; }
 .comparison-workspace .compare-table thead th button { width: 44px; height: 44px; font-size: 22px; }
 .comparison-workspace .compare-table thead th strong { padding-right: 35px; }
-.comparison-workspace .compare-table-wrap:focus-visible { outline: 3px solid #719de4; outline-offset: 2px; }
+.comparison-workspace .compare-table-wrap:focus-visible { outline: 3px solid #999999; outline-offset: 2px; }
 .comparison-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 @media(max-width:680px) {
   .comparison-workspace .compare-table { width: calc(90px + 190px * var(--comparison-count)); min-width: calc(90px + 190px * var(--comparison-count)); }

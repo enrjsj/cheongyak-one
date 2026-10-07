@@ -1,16 +1,16 @@
-.notice-schedule { margin: 24px 0; padding: 20px; border: 1px solid #dce6e5; border-radius: 16px; background: #f7fbfa; }
+.notice-schedule { margin: 24px 0; padding: 20px; border: 1px solid #e5e5e5; border-radius: 16px; background: #fafafa; }
 .notice-schedule h3 { margin: 0 0 10px; font-size: 17px; }
-.notice-schedule p, .notice-schedule small { font-size: 12px; line-height: 1.7; color: #536470; overflow-wrap: anywhere; }
+.notice-schedule p, .notice-schedule small { font-size: 12px; line-height: 1.7; color: #666666; overflow-wrap: anywhere; }
 .notice-schedule ol { list-style: none; margin: 16px 0; padding: 0; }
-.notice-schedule li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid #dce6e5; }
+.notice-schedule li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid #e5e5e5; }
 .notice-schedule label { display: flex; gap: 10px; align-items: center; min-height: 44px; min-width: 0; cursor: pointer; }
-.notice-schedule input { width: 18px; height: 18px; flex-shrink: 0; accent-color: #167664; }
+.notice-schedule input { width: 18px; height: 18px; flex-shrink: 0; accent-color: #666666; }
 .notice-schedule strong { display: block; font-size: 14px; }
-.notice-schedule-dates { display: block; font-size: 12px; line-height: 1.7; color: #536470; }
-.notice-schedule-status { flex-shrink: 0; color: #116452; background: #e1f0ea; padding: 5px 8px; border-radius: 8px; font-size: 12px; }
-.notice-schedule-status.unconfirmed { color: #745514; background: #faf0d7; }
+.notice-schedule-dates { display: block; font-size: 12px; line-height: 1.7; color: #666666; }
+.notice-schedule-status { flex-shrink: 0; color: #525252; background: #ebebeb; padding: 5px 8px; border-radius: 8px; font-size: 12px; }
+.notice-schedule-status.unconfirmed { color: #525252; background: #f0f0f0; }
 .notice-schedule-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-.notice-schedule-actions button { min-height: 44px; padding: 8px 12px; border: 1px solid #c5d7d0; border-radius: 8px; background: white; font-size: 12px; }
+.notice-schedule-actions button { min-height: 44px; padding: 8px 12px; border: 1px solid #d4d4d4; border-radius: 8px; background: white; font-size: 12px; }
 .notice-schedule-actions button:disabled { opacity: .5; cursor: not-allowed; }
 @media (max-width: 420px) {
   .notice-schedule { padding: 12px; }

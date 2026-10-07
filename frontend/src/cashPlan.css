@@ -1,30 +1,30 @@
-.cash-plan { margin: 24px 0; padding: 20px; border: 1px solid #d9e7e4; border-radius: 16px; background: #f8fcfb; min-width: 0; }
+.cash-plan { margin: 24px 0; padding: 20px; border: 1px solid #e5e5e5; border-radius: 16px; background: #fafafa; min-width: 0; }
 .cash-plan h3 { margin: 0 0 10px; font-size: 18px; }
 .cash-plan p, .cash-plan small { line-height: 1.7; overflow-wrap: anywhere; }
-.cash-plan small { color: #536862; display: block; font-size: 12px; }
+.cash-plan small { color: #666666; display: block; font-size: 12px; }
 .cash-plan-unit, .cash-plan-field { display: grid; gap: 8px; font-size: 14px; font-weight: 600; min-width: 0; }
-.cash-plan input, .cash-plan select { width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid #aebfba; border-radius: 8px; background: white; padding: 12px; font-size: 16px; color: #173b32; }
+.cash-plan input, .cash-plan select { width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid #b3b3b3; border-radius: 8px; background: white; padding: 12px; font-size: 16px; color: #333333; }
 .cash-plan-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .cash-plan-source { font-weight: 600; }
 .cash-plan-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0; }
 .cash-plan-actions button { min-height: 44px; padding: 10px 14px; border-radius: 10px; font: inherit; cursor: pointer; }
-.cash-plan [role="alert"] { color: #a32e26; }
-.cash-plan-result { margin: 20px 0; border-top: 1px solid #c4d9d1; }
+.cash-plan [role="alert"] { color: #444444; }
+.cash-plan-result { margin: 20px 0; border-top: 1px solid #d4d4d4; }
 .cash-plan-result h4 { font-size: 18px; line-height: 1.6; }
 .cash-plan-stages { display: grid; gap: 12px; }
-.cash-plan-stages article { background: white; padding: 16px; border: 1px solid #d9e7e4; border-radius: 10px; min-width: 0; }
+.cash-plan-stages article { background: white; padding: 16px; border: 1px solid #e5e5e5; border-radius: 10px; min-width: 0; }
 .cash-plan-stages h5 { margin: 0 0 12px; font-size: 15px; }
 .cash-plan-stages dl { display: grid; gap: 10px; margin: 0; }
 .cash-plan-stages dl div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; font-size: 14px; }
 .cash-plan-stages dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 @media (max-width: 600px) { .cash-plan { padding: 14px; } .cash-plan-fields { grid-template-columns: minmax(0, 1fr); } }
-.cash-comparison { min-width: 0; margin-top: 24px; border-top: 1px solid #c4d9d1; }
+.cash-comparison { min-width: 0; margin-top: 24px; border-top: 1px solid #d4d4d4; }
 .cash-comparison h4 { font-size: 18px; }
-.cash-comparison-scroll { overflow-x: auto; max-width: 100%; border: 1px solid #d9e7e4; border-radius: 10px; }
+.cash-comparison-scroll { overflow-x: auto; max-width: 100%; border: 1px solid #e5e5e5; border-radius: 10px; }
 .cash-comparison table { border-collapse: collapse; width: max-content; min-width: 100%; background: white; font-size: 13px; }
 .cash-comparison caption { text-align: left; padding: 12px; white-space: normal; }
-.cash-comparison th, .cash-comparison td { width: 190px; max-width: 210px; padding: 12px; text-align: left; vertical-align: top; border-bottom: 1px solid #d9e7e4; overflow-wrap: anywhere; }
-.cash-comparison tbody th { width: 145px; max-width: 145px; background: #f1f7f5; }
-.cash-comparison thead th { background: #e9f3ef; }
-.cash-comparison th button { display: block; min-height: 44px; margin-top: 8px; padding: 8px 12px; background: white; border: 1px solid #aebfba; border-radius: 8px; color: #324f46; cursor: pointer; }
+.cash-comparison th, .cash-comparison td { width: 190px; max-width: 210px; padding: 12px; text-align: left; vertical-align: top; border-bottom: 1px solid #e5e5e5; overflow-wrap: anywhere; }
+.cash-comparison tbody th { width: 145px; max-width: 145px; background: #f5f5f5; }
+.cash-comparison thead th { background: #f0f0f0; }
+.cash-comparison th button { display: block; min-height: 44px; margin-top: 8px; padding: 8px 12px; background: white; border: 1px solid #b3b3b3; border-radius: 8px; color: #444444; cursor: pointer; }
 .cash-comparison-scroll:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
