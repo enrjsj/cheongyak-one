@@ -11,12 +11,12 @@ export default defineConfig({
   },
   projects: [
     ...(process.env.IPHONE_TEST ? [
-      { name: "iphone-webkit", testMatch: /resilience\.spec\.ts/, use: { ...devices["iPhone 13"], browserName: "webkit" as const } },
+      { name: "iphone-webkit", testMatch: /(resilience|accessibility)\.spec\.ts/, use: { ...devices["iPhone 13"], browserName: "webkit" as const } },
     ] : []),
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     ...(process.env.CROSS_BROWSER ? [
-      { name: "firefox", testMatch: /resilience\.spec\.ts/, use: { ...devices["Desktop Firefox"] } },
-      { name: "webkit", testMatch: /resilience\.spec\.ts/, use: { ...devices["Desktop Safari"] } },
+      { name: "firefox", testMatch: /(resilience|accessibility)\.spec\.ts/, use: { ...devices["Desktop Firefox"] } },
+      { name: "webkit", testMatch: /(resilience|accessibility)\.spec\.ts/, use: { ...devices["Desktop Safari"] } },
     ] : []),
   ],
   webServer: {

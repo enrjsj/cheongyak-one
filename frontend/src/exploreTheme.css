@@ -59,8 +59,8 @@ button:disabled { cursor: not-allowed; }
 .status-tabs button { height: 70px; flex: 0 0 auto; min-width: 100px; gap: 8px; padding: 0 4px; background: transparent; border-radius: 0; }
 .status-tabs .tab-icon { width: 23px; height: 23px; display: grid; color: #808080; background: transparent; }
 .status-tabs .tab-icon .icon { width: 18px; height: 18px; }
-.status-tabs button > span:last-child { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; color: #808080; font-weight: 600; }
-.status-tabs button b { min-width: 22px; padding: 3px 6px; background: #f0f0f0; border-radius: 5px; font-size: 11px; color: #808080; }
+.status-tabs button > span:last-child { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; color: #666666; font-weight: 600; }
+.status-tabs button b { min-width: 22px; padding: 3px 6px; background: #f0f0f0; border-radius: 5px; font-size: 11px; color: #666666; }
 .status-tabs button.selected { background: transparent; }
 .status-tabs button.selected > span:last-child, .status-tabs button.selected .tab-icon { color: var(--primary); }
 .status-tabs button.selected b { background: #e8efff; color: var(--primary); }
@@ -69,7 +69,7 @@ button:disabled { cursor: not-allowed; }
 .list-panel { grid-column: 2; grid-row: 1; min-width: 0; }
 .side-column { grid-column: 1; grid-row: 1; display: flex; gap: 20px; min-width: 0; }
 .section-head { align-items: flex-start; flex-wrap: wrap; gap: 14px; margin-bottom: 20px; }
-.section-kicker { display: block; font-size: 10px; color: #999999; letter-spacing: .12em; margin-bottom: 8px; }
+.section-kicker { display: block; font-size: 10px; color: #666666; letter-spacing: .12em; margin-bottom: 8px; }
 .section-head h2 { font-size: 25px; font-weight: 750; letter-spacing: -.045em; }
 .result-summary { margin-top: 8px; color: #808080; font-size: 12px; }
 .section-actions { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; max-width: 550px; margin-top: 3px; }
@@ -78,7 +78,7 @@ button:disabled { cursor: not-allowed; }
 .sort-control select { border: 0; min-width: 105px; background: transparent; color: #525252; }
 .sort-control > span { display: none; }
 .filter-button { background: #fff; color: var(--blue); border: 1px solid #cccccc; }
-.closed-notice-toggle { background: white; color: #808080; }
+.closed-notice-toggle { background: white; color: #666666; }
 .closed-notice-toggle.selected { background: var(--blue-soft); color: var(--primary); border-color: #d2dffc; }
 .search-share-button { color: #737373; background: white; }
 .active-filter-summary { color: #737373; font-size: 12px; }
@@ -130,12 +130,12 @@ button:disabled { cursor: not-allowed; }
 .card-facts .notice-price dd { color: var(--navy); font-weight: 750; }
 .card-actions { margin-top: 12px; gap: 12px; }
 .detail-link { min-height: 40px; color: var(--blue); font-size: 12px; }
-.compare-button { min-height: 36px; border-radius: 6px; border: 0; background: #f5f5f5; color: #808080; font-size: 11px; }
+.compare-button { min-height: 36px; border-radius: 6px; border: 0; background: #f5f5f5; color: #666666; font-size: 11px; }
 .compare-button.selected { background: var(--primary); color: white; }
 .more-button { min-height: 48px; border-color: #e0e0e0; background: white; border-radius: 9px; color: #666666; font-size: 13px; }
 .side-column :is(.week-card, .recommendation-card, .plan-card, .recent-card, .schedule-card) { padding: 20px 18px; background: white; border: 1px solid var(--line); border-radius: 12px; box-shadow: none; }
 .week-card-head h2, .side-title h2 { font-size: 16px; }
-.week-card .mini-label, .side-title > div > span { color: #999999; font-size: 9px; letter-spacing: .08em; }
+.week-card .mini-label, .side-title > div > span { color: #666666; font-size: 9px; letter-spacing: .08em; }
 .week-card .week-stats { gap: 0; margin: 20px 0; }
 .week-stats strong { font-size: 27px; color: var(--navy); }
 .week-stats span { font-size: 10px; color: #808080; }
@@ -165,7 +165,7 @@ footer { border-top: 1px solid var(--line); background: #f5f5f5; }
 .modal-backdrop { background: #2626265f; backdrop-filter: blur(4px); }
 .modal { border: 1px solid #e5e5e5; border-radius: 18px; box-shadow: 0 25px 90px #33333326; }
 .modal-head h2 { letter-spacing: -.04em; }
-.modal-head > div > span { color: #999999; font-size: 10px; letter-spacing: .1em; }
+.modal-head > div > span { color: #666666; font-size: 10px; letter-spacing: .1em; }
 .modal-head > button { background: #f5f5f5; color: #737373; min-width: 40px; min-height: 40px; }
 .primary-button { background: var(--blue); border-color: var(--blue); border-radius: 9px; }
 .secondary-button { background: #fafafa; border-color: #e5e5e5; color: #525252; border-radius: 9px; }
@@ -184,9 +184,18 @@ footer { border-top: 1px solid var(--line); background: #f5f5f5; }
 .loading-card { border-color: #e5e5e5; border-radius: 13px; }
 .connection-banner { background: #f8f8f8; }
 /* Secondary text still carries required notice information: keep it readable. */
-.type-tag, .notice-provider > span, .location, .card-facts dt, .deadline span,
+.notice-provider > span, .location, .card-facts dt, .deadline span,
 .result-summary, .active-filter-summary, .search-select > span, .quick-filters > span,
 .week-card .data-note, .week-stats span, .recommendation-disclaimer { color: #737373; }
+/* AA contrast on the light surfaces, including text inherited from the dark theme. */
+.search-field input::placeholder { color: #737373; opacity: 1; }
+.type-tag, .week-card .live-dot, .week-card .next-event > span:nth-child(2) small,
+.timeline-date span, .schedule-card li > div:nth-child(2) > span,
+.footer-inner p, .footer-inner small, .filter-group h3 small, .search-preference-box span,
+.detail-status small, .detail-grid span, .notice-detail-extra dt,
+.notice-unit-types p, .notice-unit-types-summary dt, .notice-unit-types thead th,
+.notice-unit-types td small, .eligibility-box > div > span, .eligibility-box p { color: #666666; }
+.week-card h2, .week-card .next-event { color: var(--ink); }
 /* Keep filter controls readable and consistent with native Korean UI fonts. */
 .explore-filters, .filter-modal, .search-select, .quick-filters,
 .section-actions, .filter-removal-controls, .active-filter-summary {
@@ -360,7 +369,7 @@ footer { border-top: 1px solid var(--line); background: #f5f5f5; }
   .side-column :is(.week-card, .recommendation-card, .plan-card, .recent-card, .schedule-card) { padding: 20px; }
   .footer-inner { padding: 25px 20px 105px; gap: 10px; flex-direction: column; align-items: flex-start; }
   .mobile-nav { background: #fff; border-color: var(--line); box-shadow: 0 -4px 20px #3333330a; }
-  .mobile-nav a, .mobile-nav button { color: #999999; min-height: 52px; }
+  .mobile-nav a, .mobile-nav button { color: #666666; min-height: 52px; }
   .mobile-nav .active { color: var(--blue); }
   .mobile-nav .icon { width: 19px; height: 19px; }
   .modal { border-radius: 18px 18px 0 0; }

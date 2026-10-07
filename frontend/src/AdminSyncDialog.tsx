@@ -13,6 +13,7 @@ import AdminAuditPanel from "./AdminAuditPanel";
 import AdminAiUsagePanel from "./AdminAiUsagePanel";
 import AdminMemberStatisticsPanel from "./AdminMemberStatisticsPanel";
 import AdminPushNotificationPanel from "./AdminPushNotificationPanel";
+import AdminSupplierQualityPanel from "./AdminSupplierQualityPanel";
 import { useDialogAccessibility } from "./useDialogAccessibility";
 import { useHorizontalTabs } from "./useHorizontalTabs";
 
@@ -139,6 +140,7 @@ export default function AdminSyncDialog({ open, onClose, currentMemberId }: Admi
             <div className="admin-sync-headline"><b>최근 실행 50건</b><span><button type="button" className="admin-sync-trigger" onClick={() => void requestSynchronization()} disabled={requestingSync}>{requestingSync ? "요청 중…" : "지금 동기화"}</button><button type="button" className="admin-sync-trigger" onClick={() => void requestUnitTypeBackfill()} disabled={requestingSync}>{requestingSync ? "요청 중…" : "타입·분양가 재수집"}</button><button type="button" onClick={() => setVersion((value) => value + 1)} disabled={loading}>{loading ? "갱신 중…" : "새로고침"}</button></span></div>
             {syncNotice && <p className="admin-member-message success" role="status">{syncNotice}</p>}
             <SourceFreshnessPanel sources={dashboard.sources} onRetry={source => void requestSynchronization(source)} busy={requestingSync || dashboard.runningCount > 0} />
+            <AdminSupplierQualityPanel items={dashboard.supplierQuality} />
             <div className="admin-sync-list">
               {dashboard.executions.map((execution) => (
                 <article key={execution.id}>

@@ -1,0 +1,11 @@
+.supplier-quality { margin: 16px 0; padding: 14px; border: 1px solid #e5e5e5; border-radius: 12px; background: #fafafa; color: #444; }
+.supplier-quality h3 { margin: 0; font-size: 15px; }
+.supplier-quality > p { margin: 8px 0; font-size: 13px; line-height: 1.6; }
+.supplier-quality ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px; margin: 12px 0 0; padding: 0; list-style: none; }
+.supplier-quality li { min-width: 0; padding: 12px; border-radius: 8px; background: #fff; overflow-wrap: anywhere; }
+.supplier-quality li > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.supplier-quality h4 { margin: 0; font-size: 14px; }
+.supplier-quality li > div > span { font-size: 12px; color: #555; }
+.supplier-quality dl { margin: 12px 0 0; font-size: 13px; }
+.supplier-quality dl > div { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; }
+.supplier-quality dd { margin: 0; font-weight: 600; text-align: right; }

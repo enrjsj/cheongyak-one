@@ -1,6 +1,28 @@
 # 작업 인계
 
+## 관리자 공급기관 현황·탐색 접근성 통합 (2026-10-07, 진행 중)
+
+- 사용자 요청 1~2번을 d78c052 기준으로 통합한다. 관리자 화면에 소스별 전체 공고 수·공급기관 미확인 수·비율을 추가하고, 공개 목록·필터·상세 접근성 검사를 확대한다. 자세한 범위/분업은 `docs/tasks/2026-10-07-supplier-quality.md`.
+- 관리자 API는 권한 확인 후 한 번의 집계 쿼리를 사용한다. 마감 공고 포함, null/공백을 미확인으로 세며 주택형 수에 따라 중복 집계하지 않는다. 0건과 구버전 API의 집계 미제공을 구분한다. DB migration·데이터 보정·재수집은 없다.
+- 원본 매핑은 청약홈 `BSNS_MBY_NM`, 마이홈 `suplyInsttNm`이 기존 공급기관 필드로 연결됨을 코드로 확인했다. 원본 전체 데이터의 정확성을 확인하거나 운영 누락 수를 측정했다는 의미는 아니다.
+- 접근성 신규 패키지는 npm 403 정책 차단으로 설치하지 않는다. 기존 Playwright 기반의 명시적 접근 가능한 이름·ARIA 연결·의미 구조 및 단색 배경 텍스트 대비 검사로 범위를 제한한다. axe 전체 검사/전체 WCAG 적합성 인증은 아니다.
+- 로컬 백엔드 153개 통과, PostgreSQL 8개 건너뜀 (`/tmp/supplier-quality-backend-final.log`). JDK ct.sym 누락 때문에 source/target 21 실행 인자와 작업 공간 Maven 캐시를 사용했으며 저장소 빌드 설정은 유지했다. 관리자·공급기관·카드 모바일 관련 Chromium 33개 통과 (`/tmp/supplier-quality-related-final.log`).
+- 별도 읽기 전용 `supplier_review`가 고정된 관리자 변경과 위 증거를 검토했고 확정 결함을 발견하지 못했다. 실제 PostgreSQL 정규식·Unicode 공백 호환, iPhone·실제 인증은 최종 CI에서 확인해야 한다.
+- 공개 탐색은 저대비 보조 문구와 흰색 테마에 남은 흰색 주간 제목/일정 글자를 수정했다. 지역·주택유형·공급방식 선택 버튼에 `aria-pressed`를 추가했다. 레이아웃·API·검색 동작 변경은 없다.
+- 통합 Chromium 회귀 55개 통과 (`/tmp/supplier-accessibility-integrated.log`). 접근성 독립 리뷰에서 불투명 자식 위 조상의 opacity/filter를 누락하는 검사 도구 결함을 찾아 수정하고 정상/미지원 효과 회귀를 추가했다. 첫 회귀는 오류 assertion 순서 때문에 실패했으며 원인별 assertion 순서를 보정했다. 테스트 무시나 허용 기준 완화는 하지 않았다.
+- 최종 접근성 Chromium 10개 통과 (`/tmp/supplier-accessibility-a11y-final-fixed.log`): 세 너비의 목록·필터·상세 9개와 검사 도구 합성 효과 회귀 1개다.
+- `node scripts/harness.mjs verify --base d78c052d81b731d8ef322aca7352dfe087208a4a --scope full --extended`: 자체 테스트 14개와 프런트 타입/빌드/단위 141개 통과. 전체는 **blocked**이며 기본 PATH Maven·표준 Playwright Chromium/WebKit 경로 부족 때문이다. 별도 도구 경로의 로컬 백엔드/Chromium 결과와 구분한다. 증거 `.harness/reports/2026-10-07T08-48-09-788Z-57349/report.json`.
+- CI·Git main 자동 배포와 운영 동일 SHA 확인은 아직 진행 전이다. 운영 관리자 로그인/원본 전수 정확성/운영 규모 집계 성능/실제 기기 Safari는 미검증이다. 이전 d78c052 운영 성공을 이 기능 배포로 취급하지 않는다.
+
 ## GitHub main 연동 배포 점검 (2026-10-07)
+
+### main 푸시 후 운영 재확인
+
+- 문서 후속 커밋 `d78c052d81b731d8ef322aca7352dfe087208a4a`을 main에 반영한 직후 Vercel Production `dpl_5p8oWuRoqnRtsBH5hveGVgwAUkB6`가 생성돼 READY가 됐다. 출처 `git`, branch `main`, 공식 운영 alias와 동일 SHA를 확인했다. 직접 Vercel 배포 API는 호출하지 않았다.
+- 2026-10-07 08:18:56 UTC `scripts/verify-deployment.mjs` 통과. 웹·API·프록시 모두 새 SHA 일치, 공개 응답 4개 HTTP 200, 비로그인 인증 경계 3개 HTTP 401로 총 7개 통과. 증거 `/tmp/git-autodeploy-production.json`.
+- 같은 커밋의 [CI #314](https://github.com/enrjsj/cheongyak-one/actions/runs/37592497325) 8개 작업 모두 성공했다. Chromium 226개, iPhone 39개, 실제 로그인 2개 모두 재시도 없이 통과했다. [GitHub 운영 검증 #17](https://github.com/enrjsj/cheongyak-one/actions/runs/37593231452)도 성공했다. 로컬 문서 하네스 14개 증거는 `.harness/reports/2026-10-07T08-14-06-369Z-47610/report.json`이다.
+- 결론: Git 자동 배포는 현재 정상 작동하며 코드/배포 설정을 수정하지 않고 복구됐다. 이전 `75a7d6f`의 배포 생성 단계 누락만 확인했으며 일시적인 이벤트 전달/처리 누락은 추정이다. 내부 이벤트 로그 403 때문에 정확한 원인은 미확정이고, 직접 API 권한 403의 해결을 의미하지 않는다.
+- 이 운영 후속 기록은 원래 기능 worktree의 로컬 HANDOFF에 남긴다. 아직 미커밋인 공급기관 기능 파일 15개는 원문 그대로 보존돼 있으며 이번 운영 배포에 포함되지 않았다.
 
 - 사용자 요청에 따라 이후 배포는 기존 GitHub `main` → Vercel/Render Git 연동을 우선한다. 이번에는 아래 확정 결과와 조사 기록을 main의 문서 커밋으로 반영한다. 진행 중 공급기관 집계 앱 파일은 배포하지 않는다.
 - `75a7d6f`는 main 반영과 CI #313의 8개 작업 성공까지 확인됐다. [운영 검증 실행](https://github.com/enrjsj/cheongyak-one/actions/runs/37590579364)은 새 웹 revision이 반영되지 않은 상태에서 실패했다. CI 빌드/테스트 실패와 배포 버전 불일치를 구분한다.
