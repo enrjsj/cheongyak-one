@@ -1,5 +1,27 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 
+test('주택형 탐색 모바일: 비교 선택·정렬·해제 후 닫으면 포커스를 복원한다', async ({ page }) => {
+  await mockPublicApi(page);
+  await page.route('**/api/v1/notices/1', route => route.fulfill({ json: { ...notice, unitTypes: [
+    { modelId: 'a', housingTypeName: '84A', supplyArea: 84.12, maxPrice: 700000000 },
+    { modelId: 'b', housingTypeName: '59B', supplyArea: 59.9, maxPrice: 400000000 },
+  ] } }));
+  await page.goto('/');
+  const opener = page.locator('article').filter({ hasText: notice.title }).getByRole('button', { name: /공고 핵심만 보기/ });
+  await opener.click();
+  const panel = page.getByRole('region', { name: '주택형별 공급·분양가', exact: true });
+  await panel.getByRole('checkbox', { name: '84A 주택형 비교 선택' }).check();
+  await panel.getByRole('checkbox', { name: '59B 주택형 비교 선택' }).check();
+  await panel.getByLabel('주택형 정렬').selectOption('PRICE_ASC');
+  await expect(panel.getByRole('table', { name: '주택형 공급 목록' }).locator('tbody th').first()).toContainText('59B');
+  await expect(panel.getByRole('table', { name: '선택 주택형 비교표', exact: true })).toContainText('기준 대비 −300,000,000원');
+  expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await panel.getByRole('button', { name: '주택형 비교 비우기' }).click();
+  await expect(panel.getByRole('checkbox', { checked: true })).toHaveCount(0);
+  await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
+  await expect(opener).toBeFocused();
+});
+
 test('상세 일정 모바일: 계약 기간을 선택해 캘린더 파일을 저장하고 초점을 복원한다', async ({ page }) => {
   await mockPublicApi(page);
   await page.route('**/api/v1/notices/1', route => route.fulfill({ json: { ...notice, contractStartDate: '2026-10-20', contractEndDate: '2026-10-22' } }));
