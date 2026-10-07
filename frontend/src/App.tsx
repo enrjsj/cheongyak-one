@@ -2,7 +2,7 @@ import { Icon, type IconName } from "./Icon";
 import NoticeDetailDialog from "./NoticeDetailDialog";
 import NoticeCardOverview from "./NoticeCardOverview";
 import ExploreFilters from "./ExploreFilters";
-import { StatusKey, Application, CATEGORY_LABELS, koreaToday, dateValue, daysBetween, formatShortDate, formatChangedAt, weekday, toApplication } from "./noticePresentation";
+import { StatusKey, Application, CATEGORY_LABELS, koreaToday, dateValue, daysBetween, formatShortDate, formatChangedAt, weekday, toApplication, noticeAttention } from "./noticePresentation";
 import { FavoriteProgressFilter, FavoriteChecklistKey, FavoriteSortKey, FAVORITE_PROGRESS_LABELS, FAVORITE_PROGRESS_PRIORITY, FAVORITE_APPLICATION_RESULT_LABELS, FAVORITE_APPLICATION_RESULT_PRIORITY, FAVORITE_CHECKLIST_ITEMS, completedChecklistCount, incompleteChecklistLabels, applicationResultFromFilter, resultDueLabel } from "./favoritePresentation";
 import { SourceFreshnessPanel } from "./SourceFreshnessPanel";
 // 서비스의 주요 사용자 흐름(검색·관심청약·비교·회원·사전점검)을 조합하는 화면 컨테이너다.
@@ -1946,13 +1946,14 @@ export default function Home() {
                   </section>
                 )}
                 <div className="application-list">
-                  {visible.map((item) => (
-                    <article className="application-card" key={item.id} id={`notice-card-${item.id}`} tabIndex={-1} aria-label={item.title}>
+                  {visible.map((item) => {
+                    const attention = noticeAttention(item, today);
+                    return <article className={`application-card attention-${attention.tone}${attention.near ? " schedule-near" : ""}`} key={item.id} id={`notice-card-${item.id}`} tabIndex={-1} aria-label={item.title}>
                       <div className="card-topline">
-                        <div className="tags"><span className={`state ${item.stateTone}`}>{item.state}</span><span className="type-tag">{item.type}</span></div>
+                        <div className="tags"><span className={`notice-status attention-${attention.tone}`}>{attention.badge}</span>{attention.hint && <span className={`schedule-hint attention-${attention.tone}`}>{attention.hint}</span>}<span className="type-tag">{item.type}</span></div>
                         <button className={`bookmark ${savedIds.has(item.id) ? "saved" : ""}`} type="button" onClick={() => void toggleSaved(item.id)} disabled={favoritePendingId === item.id} aria-label={`${item.title} 관심청약 ${savedIds.has(item.id) ? "해제" : "저장"}`} aria-pressed={savedIds.has(item.id)}><Icon name="bookmark" /></button>
                       </div>
-                      <NoticeCardOverview item={item} supplier={knownSuppliers[item.id]?.syncedAt === item.syncedAt ? knownSuppliers[item.id].name : undefined} />
+                      <NoticeCardOverview item={item} attention={attention} supplier={knownSuppliers[item.id]?.syncedAt === item.syncedAt ? knownSuppliers[item.id].name : undefined} />
                       {savedOnly && member && (
                         <div className="favorite-tracker">
                           <label>준비 상태
@@ -2005,8 +2006,8 @@ export default function Home() {
                         <button className="detail-link" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); void openDetail(item); }}>공고 핵심만 보기 <Icon name="arrow" /></button>
                         <button className={`compare-button ${comparisonIds.includes(item.id) ? "selected" : ""}`} type="button" onClick={() => void toggleComparison(item.id)} disabled={comparisonPendingId !== undefined || comparisonResetPending} aria-pressed={comparisonIds.includes(item.id)}><Icon name="grid" /> {comparisonIds.includes(item.id) ? "비교 해제" : "비교 담기"}</button>
                       </div>
-                    </article>
-                  ))}
+                    </article>;
+                  })}
                 </div>
                 <div className="pagination-feedback">
                   {moreError && <p role="alert">다음 공고를 불러오지 못했습니다. 현재 목록은 유지됩니다. {moreError}</p>}
