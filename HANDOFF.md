@@ -1,0 +1,26 @@
+# 작업 인계
+
+## 2026-10-07 공급기관 첫 화면 표시
+
+### 시작 상태와 범위
+
+- 요청된 AGENTS.md, PROJECT_CONTEXT.md, HANDOFF.md는 저장소와 상위 작업 디렉터리에 없었다. README·설계 문서·코드를 확인하고 PROJECT_CONTEXT와 이 파일을 신규 작성했다.
+- 작업 시작 시 로컬·원격 main은 PR #124의 `3b6540e1f7c36f78144946f2116cbae42f0f4a17`, 작업 트리는 깨끗했다.
+- 15:18 KST 운영 기준 검증: 웹·API·같은 origin 프록시의 리비전 일치, 공개 응답·인증 경계 7개 통과 (`/tmp/supplier-baseline-deployment.json`, 실행 환경 임시 파일).
+- 다음 개발건으로 문서화된 공급기관 표시의 한계를 해결했다. 기존 DB 필드를 목록 DTO에 추가하고 카드에서 즉시 표시한다. null·공백 안내, 구버전 목록의 상세 캐시 호환을 유지한다. DB 마이그레이션·외부 API 변경·기관별 추가 요청은 없다.
+
+### 테스트와 결과
+
+- `npm --prefix frontend run build`: TypeScript와 Vite 빌드 통과.
+- `node --experimental-strip-types --test --test-isolation=none frontend/tests/*.test.mjs`: 141개 통과.
+- 시스템 Chromium을 쓰는 임시 Playwright 설정, 포트 4175에서 `resilience.spec.ts`, `explore-design.spec.ts`, `notice-card-click.spec.ts`: 45개 통과. 임시 설정은 커밋에서 제외했다.
+- 추가한 브라우저 테스트 3개: 320/390/1440px에서 첫 목록의 기관명, null·공백, 긴 기관명의 줄바꿈, 자동 상세 조회 0회, 상세 응답 이후 목록값 유지. 기존 카드 본문·키보드·북마크·비교·구버전 API 호환 테스트도 통과했다.
+- 백엔드 통합 테스트는 공급기관의 목록·상세 일치와 상세 전용 필드 제외를 검증하도록 변경하고, 기관명 없는 공고에서 출처명으로 대체하지 않는 테스트를 추가했다.
+- CI real-data 하네스에 실제 수집 공고의 목록·상세 공급기관 값 일치 검사를 추가했다.
+
+### 제한과 배포 상태
+
+- 로컬 Maven의 기본 캐시 경로 쓰기 제한은 작업 공간의 캐시 경로 지정으로 해결했다. 이후 Java 컴파일 단계에서 `release version 21 not supported`로 중단되어 로컬 백엔드 테스트는 통과로 간주하지 않는다. Java 21 GitHub CI에서 백엔드·실제 세션·PostgreSQL·실데이터 검증이 통과해야 병합한다.
+- iPhone WebKit과 실제 PostgreSQL·수집 API 검증도 GitHub CI에서 확인할 예정이다. 로컬 Chromium 결과를 해당 환경의 결과로 대체하지 않는다.
+- 이 기록 시점에는 변경 사항의 CI·운영 배포가 아직 완료되지 않았다. 결과 확인 후 아래에 후속 기록을 추가한다.
+- 운영 회원 데이터 변경, 실제 기기 Safari 수동 검사, 공급기관 원본 데이터의 전수 정확성 검증은 이번 범위에서 수행하지 않는다.
