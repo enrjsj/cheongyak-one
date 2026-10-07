@@ -25,6 +25,9 @@ frontend/vite.config.d.ts
 frontend/playwright-report/
 frontend/test-results/
 
+# Local development harness evidence
+.harness/
+
 # OS
 .DS_Store
 Thumbs.db
