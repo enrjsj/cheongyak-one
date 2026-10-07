@@ -1,6 +1,8 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 
-for (const width of [320, 390, 1440]) test(`목록 공급기관: 첫 화면 표시·미확인 값·상세 응답과 독립 (${width}px)`, async ({ page }) => {
+// Keep phone emulation at phone widths; desktop projects cover the 1440px layout.
+const supplierWidths = process.env.IPHONE_TEST ? [320, 390] : [320, 390, 1440];
+for (const width of supplierWidths) test(`목록 공급기관: 첫 화면 표시·미확인 값·상세 응답과 독립 (${width}px)`, async ({ page }, testInfo) => {
   await page.setViewportSize({ width, height: 900 });
   await mockPublicApi(page);
   const supplier = '한국토지주택공사 서울지역본부 주거복지사업단 공동공급기관';
@@ -25,9 +27,14 @@ for (const width of [320, 390, 1440]) test(`목록 공급기관: 첫 화면 표�
   expect(details).toBe(0);
   for (const id of [1, 2, 3]) {
     const card = page.locator(`#notice-card-${id}`);
-    await card.getByRole('button', { name: '공고 핵심만 보기', exact: true }).click();
-    await expect(page.getByRole('dialog')).toContainText('상세 응답 기관');
-    await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
+    const opener = card.getByRole('button', { name: '공고 핵심만 보기', exact: true });
+    if (testInfo.project.use.hasTouch) await opener.tap(); else await opener.click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toContainText('상세 응답 기관');
+    const close = dialog.getByRole('button', { name: '닫기', exact: true });
+    if (testInfo.project.use.hasTouch) await close.tap(); else await close.click();
+    await expect(dialog).toHaveCount(0);
+    await expect(opener).toBeFocused();
     await expect(card.locator('.notice-provider')).toHaveText(`공급기관 ${id === 1 ? supplier : '공고문 확인'}`);
     expect(await card.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   }
