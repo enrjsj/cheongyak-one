@@ -226,6 +226,23 @@ footer { border-top: 1px solid var(--line); background: #f5f5f5; }
 .filter-modal .search-preference-box span, .filter-modal .saved-preference p { font-size: 12px; }
 .filter-modal .search-preference-box button { font-size: 13px; }
 .filter-modal .modal-actions button { height: auto; min-height: 48px; padding: 10px; font-size: 15px; font-weight: 600; }
+/* A consistent status color and an explicit event make nearby dates scannable. */
+.attention-open { --schedule-ink: #315abb; --schedule-bg: #eef3ff; --schedule-line: #d7e3ff; }
+.attention-upcoming { --schedule-ink: #7051ae; --schedule-bg: #f5f1fc; --schedule-line: #e4d9f6; }
+.attention-urgent { --schedule-ink: #9b581b; --schedule-bg: #fff5e8; --schedule-line: #f3d5ad; }
+.attention-neutral { --schedule-ink: #687180; --schedule-bg: #f5f6f8; --schedule-line: #e7ebf0; }
+.application-card { border-inline-start: 3px solid var(--schedule-line, var(--line)); }
+.application-card.schedule-near { border-color: var(--schedule-line); border-inline-start-color: var(--schedule-ink); }
+.notice-status { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 6px; background: var(--schedule-bg); color: var(--schedule-ink); font-size: 12px; font-weight: 700; line-height: 1.4; }
+.notice-status::before { content: ""; width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: currentColor; }
+.schedule-hint { color: var(--schedule-ink); font-size: 12px; font-weight: 650; }
+.notice-identity { flex: 1; }
+.notice-countdown { flex: 0 0 166px; display: grid; gap: 5px; padding: 13px 15px; border: 1px solid var(--schedule-line); border-radius: 10px; background: var(--schedule-bg); color: var(--schedule-ink); }
+.notice-countdown > span { font-size: 11px; font-weight: 500; }
+.notice-countdown strong { font-size: 21px; font-weight: 750; line-height: 1.3; letter-spacing: -.035em; }
+.notice-countdown time { font-size: 11px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.notice-countdown.attention-neutral { background: transparent; border-color: transparent; }
+.notice-countdown.attention-neutral strong { font-size: 15px; font-weight: 600; }
 @media (max-width: 1150px) {
   .header-inner { gap: 22px; padding-inline: 28px; }
   .main-nav { margin-left: 0; gap: 20px; }
@@ -310,6 +327,13 @@ footer { border-top: 1px solid var(--line); background: #f5f5f5; }
   .notice-identity { gap: 11px; }
   .notice-symbol { width: 42px; height: 42px; flex-basis: 42px; border-radius: 9px; }
   .notice-symbol .icon { width: 22px; }
+  .notice-status { font-size: 12px; }
+  .schedule-hint { font-size: 11px; }
+  .notice-countdown { flex: auto; width: 100%; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 12px 14px; }
+  .notice-countdown > span { grid-column: 1; grid-row: 1; }
+  .notice-countdown strong { grid-column: 2; grid-row: 1 / span 2; font-size: 20px; }
+  .notice-countdown time { grid-column: 1; grid-row: 2; }
+  .notice-countdown.attention-neutral { padding: 4px 0; }
   .notice-provider { font-size: 10px; }
   .card-main h3 { font-size: 18px; line-height: 1.5; }
   .location { font-size: 10px; }

@@ -172,6 +172,50 @@ export function statusPresentation(status: NoticeStatus, applyEndDate?: string):
   return { state: "접수 마감", stateTone: "gray", statusKey: "closed" };
 }
 
+export type NoticeAttention = {
+  tone: "open" | "upcoming" | "urgent" | "neutral";
+  badge: string;
+  near: boolean;
+  hint?: string;
+  label: string;
+  countdown: string;
+  date?: string;
+};
+
+/** Emphasis is based on confirmed calendar dates in Korea, never on a guessed date. */
+export function noticeAttention(notice: NoticeSummary, today = koreaToday()): NoticeAttention {
+  const valid = (value?: string): value is string => {
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const time = Date.parse(`${value}T00:00:00Z`);
+    return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value;
+  };
+  const opening = notice.status === "UPCOMING";
+  const accepting = notice.status === "OPEN";
+  const badge = opening ? "오픈 예정" : accepting ? "접수중" : notice.status === "ANNOUNCED" ? "당첨 발표" : "접수 마감";
+  const fallback: NoticeAttention = {
+    tone: "neutral", badge, near: false, label: "접수 일정", countdown: "공고문 확인",
+  };
+  if (!opening && !accepting) return { ...fallback, label: "접수 종료", countdown: badge };
+  const date = opening ? notice.applyStartDate : notice.applyEndDate;
+  const { applyStartDate: start, applyEndDate: end } = notice;
+  if (!valid(today) || !valid(date) || (start && !valid(start)) || (end && !valid(end))
+      || (start && end && start > end) || (accepting && start && start > today)) return fallback;
+  const days = daysBetween(today, date)!;
+  if (days < 0) return fallback;
+  const urgent = accepting && days <= 3;
+  const near = urgent || (opening && days <= 7);
+  const action = opening ? "시작" : "마감";
+  return {
+    tone: urgent ? "urgent" : opening ? "upcoming" : "open",
+    badge: accepting && days === 0 ? "오늘 마감" : badge,
+    near,
+    hint: opening && near ? "곧 접수 시작" : urgent && days > 0 ? "마감 임박" : undefined,
+    label: opening ? "접수 시작" : "접수 마감",
+    countdown: days === 0 ? `오늘 ${action}` : days === 1 ? `내일 ${action}` : `${action} D-${days}`,
+    date,
+  };
+}
+
 export function toApplication(notice: NoticeSummary): Application {
   const today = koreaToday();
   const status = statusPresentation(notice.status, notice.applyEndDate);
@@ -210,4 +254,3 @@ export function toApplication(notice: NoticeSummary): Application {
       : "신청 자격과 예치금은 원문 공고에서 확인",
   };
 }
-
