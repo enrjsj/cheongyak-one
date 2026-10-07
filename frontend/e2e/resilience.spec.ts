@@ -1,5 +1,29 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 
+test('카드 본문 모바일 터치: 상세 열기와 북마크를 분리하고 닫은 뒤 초점을 복원한다', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockPublicApi(page); await page.goto('/');
+  const card = page.locator('#notice-card-1');
+  const opener = card.getByRole('button', { name: `${notice.title} 공고 상세 보기`, exact: true });
+  await expect(opener).toBeVisible();
+  const title = card.locator('h3');
+  await title.evaluate(el => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  const box = await title.boundingBox();
+  expect(box).not.toBeNull();
+  if (testInfo.project.use.hasTouch) await page.touchscreen.tap(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  else await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', { name: notice.title, exact: true })).toBeVisible();
+  const close = dialog.getByRole('button', { name: '닫기', exact: true });
+  if (testInfo.project.use.hasTouch) await close.tap(); else await close.click();
+  await expect(opener).toBeFocused();
+  const bookmark = card.locator('.bookmark');
+  if (testInfo.project.use.hasTouch) await bookmark.tap(); else await bookmark.click();
+  await expect(bookmark).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(new URL(page.url()).searchParams.has('notice')).toBe(false);
+});
+
 test('주택형 탐색 모바일: 비교 선택·정렬·해제 후 닫으면 포커스를 복원한다', async ({ page }) => {
   await mockPublicApi(page);
   await page.route('**/api/v1/notices/1', route => route.fulfill({ json: { ...notice, unitTypes: [
