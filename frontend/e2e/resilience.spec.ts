@@ -1,37 +1,40 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 
-for (const width of [320, 390, 1440]) test(`목록 공급기관: 첫 화면 표시·미확인 값·상세 응답과 독립 (${width}px)`, async ({ page }) => {
+// Keep phone emulation at phone widths; desktop projects cover the 1440px layout.
+const supplierWidths = process.env.IPHONE_TEST ? [320, 390] : [320, 390, 1440];
+const longSupplier = '한국토지주택공사 서울지역본부 주거복지사업단 공동공급기관';
+const supplierCases = [
+  { label: '긴 기관명', value: `  ${longSupplier}  `, expected: longSupplier },
+  { label: 'null', value: null, expected: '공고문 확인' },
+  { label: '공백', value: '   ', expected: '공고문 확인' },
+];
+for (const width of supplierWidths) for (const scenario of supplierCases) test(`목록 공급기관: ${scenario.label} 첫 표시·상세 응답과 독립 (${width}px)`, async ({ page }, testInfo) => {
   await page.setViewportSize({ width, height: 900 });
   await mockPublicApi(page);
-  const supplier = '한국토지주택공사 서울지역본부 주거복지사업단 공동공급기관';
-  const entries = [
-    { ...notice, businessEntityName: `  ${supplier}  ` },
-    { ...notice, id: 2, businessEntityName: null },
-    { ...notice, id: 3, businessEntityName: '   ' },
-  ];
   let details = 0;
   await page.route('**/api/v1/notices?**', route => route.fulfill({ json: {
-    content: entries, number: 0, size: 24, totalElements: 3, totalPages: 1,
+    content: [{ ...notice, businessEntityName: scenario.value }], number: 0, size: 24, totalElements: 1, totalPages: 1,
   } }));
-  await page.route(/\/api\/v1\/notices\/[123]$/, route => {
+  await page.route('**/api/v1/notices/1', route => {
     details++;
-    const id = Number(new URL(route.request().url()).pathname.split('/').at(-1));
-    return route.fulfill({ json: { ...notice, id, businessEntityName: '상세 응답 기관' } });
+    return route.fulfill({ json: { ...notice, businessEntityName: '상세 응답 기관' } });
   });
   await page.goto('/');
-  await expect(page.locator('.application-card')).toHaveCount(3);
-  await expect(page.locator('#notice-card-1 .notice-provider')).toHaveText(`공급기관 ${supplier}`);
-  for (const id of [2, 3]) await expect(page.locator(`#notice-card-${id} .notice-provider`)).toHaveText('공급기관 공고문 확인');
+  await expect(page.locator('.application-card')).toHaveCount(1);
+  const card = page.locator('#notice-card-1');
+  await expect(card.locator('.notice-provider')).toHaveText(`공급기관 ${scenario.expected}`);
   expect(details).toBe(0);
-  for (const id of [1, 2, 3]) {
-    const card = page.locator(`#notice-card-${id}`);
-    await card.getByRole('button', { name: '공고 핵심만 보기', exact: true }).click();
-    await expect(page.getByRole('dialog')).toContainText('상세 응답 기관');
-    await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
-    await expect(card.locator('.notice-provider')).toHaveText(`공급기관 ${id === 1 ? supplier : '공고문 확인'}`);
-    expect(await card.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
-  }
-  expect(details).toBe(3);
+  const opener = card.getByRole('button', { name: '공고 핵심만 보기', exact: true });
+  if (testInfo.project.use.hasTouch) await opener.tap(); else await opener.click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('상세 응답 기관');
+  const close = dialog.getByRole('button', { name: '닫기', exact: true });
+  if (testInfo.project.use.hasTouch) await close.tap(); else await close.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  await expect(card.locator('.notice-provider')).toHaveText(`공급기관 ${scenario.expected}`);
+  expect(await card.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  expect(details).toBe(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
