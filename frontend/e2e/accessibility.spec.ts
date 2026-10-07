@@ -84,9 +84,21 @@ for (const width of [320, 390, 1440]) test.describe(`접근성 ${width}px`, () =
   });
 
   test('상세의 모달·표·폼 이름과 텍스트 대비', async ({ page }) => {
+    let release!: () => void;
+    const detailResponse = new Promise<void>(resolve => { release = resolve; });
+    await page.route('**/api/v1/notices/951', async route => {
+      await detailResponse;
+      await route.fallback();
+    });
     const opener = page.getByRole('button', { name: `${notices[0].title} 공고 상세 보기`, exact: true });
     await opener.click();
     const dialog = page.getByRole('dialog', { name: notices[0].title, exact: true });
+    try {
+      await expect(dialog).toHaveAttribute('aria-busy', 'true');
+      await expect(dialog.getByRole('status')).toHaveText('최신 상세 정보를 확인하고 있어요.');
+      await expectAccessibleControls(dialog);
+      await expectTextContrast(dialog);
+    } finally { release(); }
     await expect(dialog).toHaveAttribute('aria-busy', 'false');
     await expect(dialog).toHaveAttribute('aria-modal', 'true');
     await expect(dialog).toHaveCSS('opacity', '1');
