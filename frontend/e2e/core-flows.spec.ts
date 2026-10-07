@@ -2104,9 +2104,13 @@ test("회원가입 후 사전점검 답변을 계정에 저장한다", async ({ 
 const savedProfileFixture = { id: 11, name: "서울 기본 조건", region: "서울", housingCategory: "APARTMENT", status: "OPEN", sort: "DEADLINE", defaultProfile: true, newNoticeEnabled: true, updatedAt: "2026-10-01T00:00:00Z" };
 async function prepareSavedProfiles(page: Page) {
   await mockApi(page); await page.goto("/"); await signup(page);
+  // The header can show the member before post-login restoration closes the form.
+  await expect(page.getByRole("dialog", { name: /로그인|회원가입/ })).toHaveCount(0);
+  await expect.poll(() => new URL(page.url()).searchParams.get("region")).toBe("서울");
 }
 async function openSavedProfiles(page: Page) {
   await page.getByRole("button", { name: /청약 필터 열기/ }).click();
+  await expect(page.getByRole("dialog", { name: "청약 조건 선택", exact: true })).toBeVisible();
   return page.getByRole("region", { name: "저장 검색조건 관리" });
 }
 

@@ -8,9 +8,14 @@
 - Chromium 240개·iPhone WebKit 49개·실제 로그인 2개가 재시도 없이 통과했다. iPhone의 PC 전용 너비 3개만 의도적으로 건너뛴다. 단위 141개·일반 backend 153개·실제 PostgreSQL 8개와 하네스/인프라/실데이터 검사도 성공했다. 초기 CI 실패는 아래 기록처럼 수정 후 새 CI로 해결했다.
 - Git main 연동으로 Vercel·Render에 e99451b가 반영됐다. 09:12:12 UTC 웹·API·프록시 동일 revision과 공개 응답/인증 경계 7개가 통과했다 (`/tmp/supplier-accessibility-deployment.json`). 직접 Vercel 배포 API는 사용하지 않았다.
 - 운영 실제 공고의 PC/모바일 검증에서 상세 로딩 안내 문구가 4.27:1로 기준에 못 미치는 추가 결함을 발견했다 (`/tmp/supplier-accessibility-production.log`). `detail-loading`의 글자를 `#666`으로 보정하고, 상세 응답을 보류한 로딩 상태와 응답 완료 상태 모두 검사하도록 기존 접근성 테스트를 확대했다. 로컬 접근성 10개가 통과했다 (`/tmp/supplier-accessibility-loading.log`).
-- 이 후속은 로컬 검증·읽기 전용 리뷰 후 기존 사용자 권한으로 main에 반영한다. 후속 커밋의 main CI와 Git 자동 배포/정확한 revision 검증 결과를 최종 확인한다. e99451b의 최초 공개 화면 검사를 전체 통과로 기록하지 않는다.
+- 로딩 후속을 `e3c9e7141d361ef463ffe53d70bf2c5ea148ac44`로 main에 반영했다. 09:19:27 UTC 웹·API·프록시 동일 revision 및 공개/인증 응답 7개가 통과했다 (`/tmp/supplier-accessibility-final-deployment.json`). Vercel·Render 모두 기존 Git 자동 배포만 사용했다.
+- 실제 운영 브라우저 검증도 1440/390px에서 목록 공급기관 값 일치·추가 상세 자동 요청 없음·필터와 상세의 이름/대비·상세 응답 완료·닫기 후 초점 복원·가로 넘침 없음이 통과했다. 관리자 집계 API/프록시는 비로그인 401, 브라우저 오류/데이터 쓰기 요청은 0건이다. 증거 `/tmp/supplier-accessibility-production-result.json`, `/tmp/supplier-accessibility-production-loaded.log`와 `/workspace/ui-redesign-preview/production-supplier-accessibility-*.png`. 시스템 프록시로 전달한 실제 GET 응답이며 운영 관리자 계정의 집계 정확성 검증과는 구분한다.
+- 기능 후속 [CI #318](https://github.com/enrjsj/cheongyak-one/actions/runs/37599323797)의 8개 작업 모두 성공했다. iPhone 49개는 최초 통과다. Chromium은 239개 최초 통과·기존 중첩 편집창 Tab 테스트 1개 재시도 통과다. 전체를 재시도 없는 통과로 표시하지 않는다. e99451b의 최초 공개 화면 검사도 전체 통과로 기록하지 않는다.
+- 간헐 실패의 trace에서 저장 조건 API는 정상 200이었으나 필터 창이 열리지 않았다. 로그인 후 조건 복원과 클릭 시점이 겹쳤고 요소 위치 불안정이 기록됐지만 정확한 오클릭 원인이나 새 접근성 변경과의 인과관계는 미확정이다. 코드 변경 전 해당 테스트를 로컬 직렬 3회 재검증해 모두 통과했다 (`/tmp/supplier-saved-profile-recheck.log`). 임계값/재시도 횟수를 늘리지 않고 준비 helper가 회원 창 종료·기본 지역 적용을 기다리며 필터 창 열림을 명시적으로 확인하도록 보완했다. `/tmp/supplier-final-chromium-artifact`, `/tmp/supplier-accessibility-final-chromium-ci.log`에 증거가 있다.
+- 준비 조건 보완 후 저장 조건·중첩 창 관련 Chromium 20개 통과 (`/tmp/supplier-profile-ready.log`). 이 후속은 앱 코드 변경이 없어 관련 브라우저 검사와 문서 범위 하네스로 검증하며 전체 CI는 main에서 다시 확인한다.
 - 로딩 후속 독립 리뷰에서 차단 결함이 없었고 로컬 접근성 10개 통과를 확인했다. 하네스 첫 실행은 기록 문서 수정이 겹쳐 변경 지문 검사에서 실패했으며 파일을 고정해 재실행했다. 최종 자체 14개·타입/빌드/단위 141개 통과, 표준 Chromium 경로 부족으로 전체는 blocked (`.harness/reports/2026-10-07T09-13-35-532Z-62402/report.json`). 테스트 자체의 실패나 기준 완화로 처리하지 않았다.
 - 미검증: 운영 관리자 계정 로그인/실제 누락 수 및 원본 전수 정확성/운영 규모 집계 성능/실제 기기 Safari·스크린리더/전체 WCAG 감사. 운영 데이터 쓰기·재수집·메일·AI·클라우드 설정 변경은 하지 않았다.
+- 이 최종 결과 기록은 테스트 준비 조건·문서 후속이다. 앱 소스는 위 e3c9e71과 동일하며, 후속 커밋 자체의 CI 및 배포 revision은 기존 워크플로와 `verify-deployment.mjs`로 다시 확인한다. 이전 SHA의 성공을 새 SHA의 성공으로 대신하지 않는다.
 
 ### 구현 및 로컬 검증 기록
 

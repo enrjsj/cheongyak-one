@@ -24,4 +24,8 @@
 - 로컬 백엔드: Java 21 source/target과 작업 공간 Maven 캐시 지정으로 153개 통과, 실제 PostgreSQL 8개는 환경 미설정으로 건너뜀. `/tmp/supplier-quality-backend-final.log`.
 - 검증 명령: `/workspace/.setup-tools/apache-maven-3.9.11/bin/mvn -s /workspace/.setup-tools/maven-settings.xml -Dmaven.repo.local=/workspace/.cache/maven/repository -Dmaven.compiler.release= -Dmaven.compiler.source=21 -Dmaven.compiler.target=21 -B -pl backend test`.
 - 로컬 JDK의 ct.sym 누락으로 표준 `--release 21` 경로를 사용할 수 없어 실행 인자만 조정했다. 저장소 컴파일러 설정은 유지한다. CI Java 21 표준 빌드로 확인해야 한다.
-- 최종 통합 하네스·브라우저·CI·배포 결과는 검증 후 HANDOFF에 기록한다.
+- 최종 통합 하네스·브라우저·CI·배포 결과는 HANDOFF 상단에 기록했다. PR #129 main 병합 후 운영에서 발견한 상세 로딩 대비도 e3c9e71로 보완했다.
+- 관리자 기능 독립 리뷰 및 접근성 독립 리뷰 완료. 검사 도구 조상 합성 효과 누락과 iPhone placeholder/모달 등장 시점 문제를 회귀 테스트와 함께 보완했다.
+- 로컬 단위 141개·백엔드 153개·관련 Chromium 33개/통합 55개/최종 접근성 10개 통과. CI #316 전체 8작업 성공(Chromium 240, iPhone 49, 로그인 2, PostgreSQL 8). 로컬 표준 하네스 도구 부족은 CI 성공과 구분한다.
+- 운영 e3c9e71의 웹/API/프록시 정확한 SHA와 기본 응답 7개, 실제 공고 PC/모바일 검증 통과. 최종 후속 CI 및 문서 기록 커밋의 배포는 HANDOFF와 main 워크플로 결과를 참고한다.
+- 잔여 검증은 운영 관리자 로그인·원본 전수 정확성·운영 규모 집계 성능·실제 기기/스크린리더·전체 WCAG 감사다. 1~2번 구현과 별개로 남는 범위이며 성공으로 간주하지 않는다.
