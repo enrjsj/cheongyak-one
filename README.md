@@ -19,7 +19,7 @@ AWS 운영 배포는 Elastic Beanstalk, RDS PostgreSQL, 비공개 S3, CloudFront
 ### Codex 개발 하네스
 
 저장소 루트에서 `node scripts/harness.mjs doctor`로 도구를 확인하고,
-`node scripts/harness.mjs plan` → `node scripts/harness.mjs verify`로 변경 범위에 맞는 검증을 실행합니다.
+수정 중에는 관련 테스트만 실행하고, 변경과 기록을 모은 뒤 최종 전체 검증을 수행합니다. `node scripts/harness.mjs plan`으로 범위를 확인한 뒤 앱 변경은 `verify --scope full`(UI/모바일·인증은 `--extended`), 문서만 변경하면 docs 범위를 사용합니다.
 작업 규칙은 [AGENTS.md](AGENTS.md), 상세 적용·사용법은 [하네스 가이드](docs/HARNESS.md)를 참고합니다.
 하네스는 commit/push/PR/배포를 자동 실행하지 않습니다.
 단일·멀티 에이전트는 작업에 맞춰 자동 선택합니다. 역할 설정과 적용 확인은 [멀티 에이전트 가이드](docs/MULTI_AGENT.md)를 참고하세요. 실제 위임에는 해당 런타임의 서브에이전트 지원이 필요합니다.
