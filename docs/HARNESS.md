@@ -4,7 +4,7 @@
 
 이 프로젝트에서 하네스는 **AI 개발자가 작업 맥락과 권한을 확인하고, 변경에 맞는 검증을 실행하고, 증거를 남기는 개발 운영 장치**다. 상담용 AI를 서비스에 붙이거나 별도 에이전트 서버를 만드는 작업이 아니다.
 
-작업 순서는 `맥락 확인 → 완료 기준 → 작은 변경 → 테스트 → 원인 수정 → 재검증 → 인수인계`다. AGENTS.md는 행동 지침, scripts/harness.mjs는 실제 실행 가능한 검증 진입점이다. 둘을 구분한다. 문서만으로 권한이 강제되거나 임의의 코드가 안전해지는 것은 아니다.
+작업 순서는 `맥락 확인 → 작은 변경·관련 테스트 → 수정·기록 묶음 → 최종 전체 검증 → 승인된 원격 반영·CI·배포 확인`이다. AGENTS.md는 행동 지침, scripts/harness.mjs는 실제 실행 가능한 검증 진입점이다. 둘을 구분한다. 문서만으로 권한이 강제되거나 임의의 코드가 안전해지는 것은 아니다.
 
 기존 React/Vite, Spring Boot, PostgreSQL, 배치, CI 테스트를 그대로 사용한다. 신규 npm 패키지나 OpenAI API 키 없이 Node 기본 모듈로 실행한다. 하네스 자체의 외부 AI 과금은 없지만 Codex 사용 및 GitHub Actions 실행에는 각각 계정의 기존 사용량 정책이 적용된다. 유료 리소스를 만들지 않는다.
 
@@ -44,6 +44,41 @@ iPhone/실제 인증까지 검사하려면 `frontend`에서 `npx playwright inst
 
 ## 3. 일상 개발 명령
 
+**수정 중에는 관련 테스트만 실행하고, 변경을 모은 뒤 전체 검증을 진행한다.** 아래 두 단계를 구분한다. 현재 하네스의 `frontend` 범위도 Chromium 전체를 실행하므로 수정 중의 좁은 검사로 사용하지 않는다. 새 하네스 옵션이나 CI 실행 조건을 추가한 것은 아니다.
+
+### 개발 중: 변경에 직접 관련된 검사
+
+테스트 파일·이름·클래스로 범위를 좁힌다. 아래 예시는 모두 저장소 루트 기준이며 실제 변경 대상에 맞춰 고른다. 하네스 밖에서 실행하는 명령은 하네스의 환경변수 필터를 적용하지 않으므로, 2절의 비밀값·운영 환경 파일 없는 테스트 작업공간과 로컬/모의 API를 사용한다. Playwright 의존성과 브라우저는 미리 준비한다.
+
+```bash
+# 금액/면적 필터 계산의 관련 단위 테스트만 (빌드·전체 npm test 아님)
+node --experimental-strip-types --test frontend/tests/range-filter.test.mjs
+
+# 필터 관련 Chromium 시나리오만
+npm --prefix frontend run test:e2e -- e2e/resilience.spec.ts --project=chromium --grep "범위 필터"
+
+# 접근성 수정 시 해당 파일만
+npm --prefix frontend run test:e2e -- e2e/accessibility.spec.ts --project=chromium
+
+# 공고 조회 서비스의 관련 백엔드 테스트 클래스만
+mvn -B -pl backend -Dtest=NoticeQueryServiceTest test
+```
+
+iPhone에서만 실패한 문제는 `IPHONE_TEST=1`을 설정한 테스트 프로세스에서 해당 파일/시나리오와 `--project=iphone-webkit`을 지정한다. 이 환경변수 없이 프로젝트 이름만 지정하면 iPhone 프로젝트가 활성화되지 않는다. 모바일 문제를 Chromium 통과만으로 해결됐다고 표시하지 않는다. 좁힌 검사에서 실제 대상이 1개 이상 실행됐는지도 확인한다.
+
+### 변경 묶음 완료: 통합본을 고정하고 최종 검증
+
+HANDOFF 등 예상 가능한 기록을 먼저 정리하고 검증 중 파일을 수정하지 않는다. 단일/멀티 작업 모두 총괄이 통합한 결과에서 다음 검증을 수행한다.
+
+| 변경 묶음 | 최종 검증 기준 |
+| --- | --- |
+| 설명·작업 지침 등 Markdown만 변경 | docs 범위의 규칙 검사·하네스 자체 테스트. 앱 전체 로컬 검사는 반복하지 않음 |
+| 앱 로직·UI·공통 실행 설정 변경 | `--scope full`로 프런트 빌드·단위·전체 Chromium·백엔드 H2 검사 |
+| UI/모바일 또는 인증·세션·CSRF 변경 | 위 검사에 iPhone/실제 인증 추가: `--scope full --extended` |
+| DB schema·migration·PostgreSQL 전용 쿼리 변경 | 위 관련 검사에 격리 PostgreSQL 또는 기존 CI postgres 검사 추가 |
+
+환경 제약으로 최종 로컬 검증을 실행할 수 없으면 차단 사유와 미검증 범위를 남기고, 원격 반영이 승인된 경우 최종 PR head의 해당 CI 결과로 확인한다. 로컬 실행 성공으로 바꾸어 기록하지 않는다. 같은 코드의 전체 로컬 검사를 이미 완료했다면 push 직전에 이유 없이 재실행하지 않는다. 기존 필수 CI는 그대로 확인한다.
+
 ```bash
 # Git 변경 파일, 자동 선택 범위, 실행 예정 명령만 확인
 node scripts/harness.mjs plan
@@ -51,14 +86,17 @@ node scripts/harness.mjs plan
 # 필수 문서/변경 규칙 검사만 실행 (앱 테스트 아님)
 node scripts/harness.mjs check
 
-# 변경 범위를 자동 선택해 테스트
+# 문서만 바꾼 작업의 최종 검사
+node scripts/harness.mjs verify --base <작업시작전_SHA> --scope docs
+
+# 변경 묶음의 범위를 자동 선택해 검증 (앱 전체 검사와 범위를 구분)
 node scripts/harness.mjs verify
 
-# 변경이 없어도 프런트·백엔드 기본 회귀 전체 실행
-node scripts/harness.mjs verify --scope full
+# 앱 변경 묶음의 최종 기본 회귀 전체 실행
+node scripts/harness.mjs verify --base <작업시작전_SHA> --scope full
 
-# 실제 로컬 Spring 인증 + iPhone 검증까지 추가
-node scripts/harness.mjs verify --scope full --extended
+# UI/모바일·인증 변경 묶음: 실제 로컬 Spring 인증 + iPhone까지 추가
+node scripts/harness.mjs verify --base <작업시작전_SHA> --scope full --extended
 ```
 
 | 범위 | 실행 내용 |
@@ -70,6 +108,10 @@ node scripts/harness.mjs verify --scope full --extended
 | `--extended` | 위 범위에 iPhone WebKit, 백엔드 JAR 빌드, 실제 로컬 Spring 인증 브라우저 테스트 추가 |
 
 Markdown/하네스 코드만 바뀌면 docs, 프런트 또는 백엔드만 바뀌면 해당 영역을 선택한다. 루트 빌드·CI·모르는 공통 설정 파일 변경은 보수적으로 full을 선택한다. `--scope frontend` 등으로 범위를 명시할 수 있지만, 그 결과가 전체 프로젝트 통과를 뜻하지는 않는다. 다른 영역 미검증이 보고서에 남는다.
+
+실패 시 전체 검사를 바로 반복하지 말고 실패한 파일·시나리오·클래스와 필요한 로그부터 확인한다. 재시도 통과는 최초 통과와 구분하며 시간 제한·assertion·재시도 횟수를 느슨하게 만들어 통과시키지 않는다. 원인 확인에 필요한 경우에만 범위를 넓히고, 후속 수정이 모이면 영향을 받는 통합 검사를 수행한다. 새 앱 코드에 이전 결과를 적용하지 않는다.
+
+최종 검증 이후 결과 기록 Markdown만 수정했다면 앱·테스트·빌드 설정이 그대로인지 diff로 확인하고 docs 검사만 추가한다. 앱 검증의 원래 SHA/범위와 문서 추가 검증을 구분해 기록한다. 이는 필수 CI를 건너뛰는 규칙이 아니다.
 
 ### 커밋이 이미 있는 경우
 
@@ -108,9 +150,9 @@ node scripts/harness.mjs verify --base <작업시작전_SHA> --scope full
 1. PROJECT_CONTEXT와 기존 frontend-architecture 문서를 읽고 저장 프로필/초기 필터 경로를 확인한다.
 2. 완료 기준을 명시한다: 비로그인 초기 조건, 로그인 기본 프로필 의도, URL 조건 우선순위, 새로고침 후 결과.
 3. 재현 테스트를 추가한 뒤 관련 상태 관리 부분만 수정한다.
-4. `verify --scope frontend`로 빌드·단위·브라우저를 검증한다.
-5. 로그인/세션 계약도 바뀌면 `verify --scope full --extended`를 실행한다.
-6. HANDOFF에 재현 조건, 결과, 실제 운영에서 미확인한 부분을 쓴다.
+4. 수정 중에는 관련 단위 테스트와 필터 Playwright 시나리오만 실행한다. iPhone 문제는 해당 iPhone 시나리오도 확인한다.
+5. 필터·문구·기록 변경을 모으고 파일을 고정한 뒤 UI 변경 묶음의 `verify --base <기준SHA> --scope full --extended`를 한 차례 실행한다. 실패하면 원인별 좁은 검사로 수정한 뒤 필요한 최종 검증을 한다.
+6. HANDOFF에 재현 조건, 검사 대상·결과, 실제 운영에서 미확인한 부분을 쓴다. 결과 기록만 추가하면 코드 동일성을 확인하고 docs 검사를 수행한다.
 
 ### 주택형·분양가를 수정할 때
 
@@ -125,7 +167,7 @@ node scripts/harness.mjs verify --base <작업시작전_SHA> --scope full
 
 > AGENTS.md와 docs/PROJECT_CONTEXT.md, docs/HANDOFF.md를 읽고 현재 상태부터 확인해줘.
 > 이번 목표는 [기능]이야. 완료 기준은 [조건]이고 [제외 항목]은 건드리지 마.
-> 재현 테스트를 추가하고 하네스 plan/verify로 검증해줘.
+> 수정 중에는 관련 테스트만 실행하고, 변경과 기록을 모은 뒤 하네스로 최종 전체 검증해줘.
 > 실패 원인을 수정한 뒤 결과와 미검증 사항을 HANDOFF에 남겨줘.
 > 커밋·푸시·배포·운영 데이터 변경은 하지 마.
 
@@ -142,6 +184,8 @@ Codex는 프로젝트의 AGENTS.md 지침을 시작 시 읽는 구조다. 다른
 업로드 대상은 요약 `report.json`만이며 로컬 원문 로그는 올리지 않는다. 운영 API/메일/AI 호출을 새로 추가하지 않았다. GitHub에 반영하기 전에는 추가한 CI 작업도 실행되지 않는다.
 
 **main push는 기존 Vercel/Render 자동배포를 유발할 수 있다.** 하네스는 이를 실행하지 않으며, 커밋/푸시/PR/병합/배포는 사용자의 별도 요청 이후에 수행한다. GitHub Actions의 브랜치 보호 필수 검사 지정도 이 변경만으로 자동 설정되지 않는다.
+
+원격 반영이 승인된 뒤에도 수정·기록을 한 묶음으로 commit/push하고 최종 PR head의 CI 통과를 확인한 뒤 병합한다. 진행 보고·로그 기록만을 위해 커밋이나 수동 CI/배포를 반복하지 않는다. PR과 main에서 자동으로 실행되는 기존 CI는 유지되며, 이 Markdown 지침 변경만으로 CI 횟수나 실행 시간이 자동 감소하지는 않는다. 배포 완료는 해당 main SHA의 실제 배포 확인 결과로 보고한다.
 
 ## 8. 보호 장치와 한계
 
