@@ -14,6 +14,7 @@ import {
 } from "./api";
 import {
   filterNotifications,
+  formatNotificationDate,
   notificationCategoryLabel,
   notificationFilterOptions,
   searchAndSortNotifications,
@@ -59,11 +60,6 @@ const PREFERENCE_OPTIONS: Array<{ key: Exclude<keyof Omit<NotificationPreference
   { key: "newMatchingNoticeEnabled", label: "저장 조건 신규 공고" },
   { key: "noticeUpdatedEnabled", label: "관심 공고 정보 변경" },
 ];
-
-function formatNotificationDate(value: string): string {
-  const [, month, day] = value.split("-").map(Number);
-  return `${month}월 ${day}일`;
-}
 
 function notificationDateLabel(notification: MemberNotification): string {
   const date = formatNotificationDate(notification.eventDate);

@@ -22,11 +22,15 @@ export function buildFavoriteCalendarEvents(notices: NoticeSummary[]): FavoriteC
     if (seen.has(notice.id)) return false;
     seen.add(notice.id);
     return true;
-  }).flatMap((notice) => [
-    notice.applyStartDate && { notice, date: notice.applyStartDate, type: "APPLY_START" as const, label: EVENT_LABELS.APPLY_START },
-    notice.applyEndDate && { notice, date: notice.applyEndDate, type: "APPLY_END" as const, label: EVENT_LABELS.APPLY_END },
+  }).flatMap((notice) => {
+    const reversed = isCalendarDate(notice.applyStartDate) && isCalendarDate(notice.applyEndDate)
+      && notice.applyStartDate > notice.applyEndDate;
+    return [
+    !reversed && notice.applyStartDate && { notice, date: notice.applyStartDate, type: "APPLY_START" as const, label: EVENT_LABELS.APPLY_START },
+    !reversed && notice.applyEndDate && { notice, date: notice.applyEndDate, type: "APPLY_END" as const, label: EVENT_LABELS.APPLY_END },
     notice.winnerAnnounceDate && { notice, date: notice.winnerAnnounceDate, type: "WINNER" as const, label: EVENT_LABELS.WINNER },
-  ].filter((event): event is FavoriteCalendarEvent => Boolean(event) && isCalendarDate(event ? event.date : undefined)))
+  ].filter((event): event is FavoriteCalendarEvent => Boolean(event) && isCalendarDate(event ? event.date : undefined));
+  })
     .sort((left, right) => left.date.localeCompare(right.date) || left.notice.id - right.notice.id || left.type.localeCompare(right.type));
 }
 
@@ -57,7 +61,7 @@ export function monthLabel(date: string): string {
 }
 
 export function isCalendarDate(value: string | undefined): value is string {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value < "0001-01-01" || value >= "9999-12-31") return false;
   const parsed = new Date(value + "T00:00:00Z");
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }

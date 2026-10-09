@@ -57,3 +57,11 @@ export function notificationFilterOptions(notifications: MemberNotification[]): 
     { value: "UPDATED", label: `변경 ${count("UPDATED")}` },
   ];
 }
+
+export function formatNotificationDate(value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value < "0001-01-01") return "날짜 미확인";
+  const parsed = new Date(value + "T00:00:00Z");
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) return "날짜 미확인";
+  const [, month, day] = value.split("-").map(Number);
+  return `${month}월 ${day}일`;
+}

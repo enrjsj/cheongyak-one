@@ -21,7 +21,7 @@ test("favorite calendar builds and filters schedule event types", () => {
 });
 
 test("calendar rejects malformed dates and impossible days but accepts leap dates", () => {
-  for (const value of ["", "2026-2-03", "2026-02-29", "2026-04-31", "2026-13-01", "2026-10-01T00:00:00Z", undefined]) {
+  for (const value of ["0000-01-01", "9999-12-31", "", "2026-2-03", "2026-02-29", "2026-04-31", "2026-13-01", "2026-10-01T00:00:00Z", undefined]) {
     assert.equal(isCalendarDate(value), false);
   }
   assert.equal(isCalendarDate("2028-02-29"), true);
@@ -36,7 +36,7 @@ test("calendar deduplicates notices and does not mutate input", () => {
 });
 
 test("calendar query and month apply before type counts", () => {
-  const events = buildFavoriteCalendarEvents([notice, { ...notice, id: 2, title: "서울 ＡＰＴ", address: "강남", applyStartDate: "2026-11-01" }]);
+  const events = buildFavoriteCalendarEvents([notice, { ...notice, id: 2, title: "서울 ＡＰＴ", address: "강남", applyStartDate: "2026-09-01" }]);
   const scoped = filterFavoriteCalendarEvents(events, "ALL", true, "2026-10-01", { query: "apt  강남", month: "2026-10" });
   assert.deepEqual(favoriteCalendarEventCounts(scoped), { ALL: 2, APPLY_START: 0, APPLY_END: 1, WINNER: 1 });
   assert.equal(filterFavoriteCalendarEvents(events, "ALL", true, "2026-10-01", { query: "없는 공고" }).length, 0);
@@ -65,4 +65,16 @@ test("filtered calendar export keeps only selected event dates and preserves sou
   assert.match(ics, /DTEND;VALUE=DATE:20261006/);
   assert.doesNotMatch(ics, /notice-1-apply-start|notice-1-winner/);
   assert.deepEqual(calendarSelectionNotices([]), []);
+});
+
+test("calendar display and export agree on reversed and partial dates", () => {
+  const reversed = { ...notice, applyStartDate: "2026-10-06" };
+  const before = structuredClone(reversed);
+  const events = buildFavoriteCalendarEvents([reversed]);
+  assert.deepEqual(events.map(event => event.type), ["WINNER"]);
+  const calendar = buildNoticeCalendar(calendarSelectionNotices(events));
+  assert.equal((calendar.match(/BEGIN:VEVENT/g) ?? []).length, events.length);
+  assert.doesNotMatch(calendar, /notice-1-apply-/);
+  assert.deepEqual(reversed, before);
+  assert.deepEqual(buildFavoriteCalendarEvents([{ ...notice, applyStartDate: "bad" }]).map(event => event.type), ["APPLY_END", "WINNER"]);
 });

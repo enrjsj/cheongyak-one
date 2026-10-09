@@ -717,6 +717,9 @@ for (const field of ["businessEntityName", "address", "applyStartDate", "syncedA
     await expect.poll(() => page.evaluate(() =>
       Object.keys(sessionStorage).filter(key => key.startsWith("cheongyak-one-notice-page:v2:")).length,
     )).toBeGreaterThan(0);
+    const activeCacheKey = await page.evaluate(() => Object.keys(sessionStorage).find(key =>
+      key.startsWith("cheongyak-one-notice-page:v2:") && JSON.parse(key.slice("cheongyak-one-notice-page:v2:".length)).activeOnly === true));
+    expect(activeCacheKey).toBeTruthy();
     await page.addInitScript(({ field }) => {
       for (const key of Object.keys(sessionStorage)) {
         if (!key.startsWith("cheongyak-one-notice-page:v2:")) continue;
@@ -735,14 +738,20 @@ for (const field of ["businessEntityName", "address", "applyStartDate", "syncedA
     try {
       await page.reload();
       await expect(page.getByRole("status", { name: "청약 공고 불러오는 중" })).toBeVisible();
-      await expect.poll(() => page.evaluate(() =>
-        Object.keys(sessionStorage).filter(key => key.startsWith("cheongyak-one-notice-page:v2:")).length,
-      )).toBe(0);
+      // Only the selected tab is read before the first successful response.
+      await expect.poll(() => page.evaluate(key => sessionStorage.getItem(key!), activeCacheKey)).toBeNull();
       await expect(page.getByRole("heading", { name: "화면을 표시하지 못했어요" })).toHaveCount(0);
     } finally {
       release();
     }
     await expect(page.getByRole("heading", { name: notice.title, exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate(key => JSON.parse(sessionStorage.getItem(key!) ?? "null")?.page.content[0]?.title, activeCacheKey)).toBe(notice.title);
+    // The successful cache write also prunes corrupt inactive tab entries.
+    await expect.poll(() => page.evaluate(field => Object.keys(sessionStorage)
+      .filter(key => key.startsWith("cheongyak-one-notice-page:v2:"))
+      .every(key => JSON.parse(sessionStorage.getItem(key)!).page.content.every((row: Record<string, unknown>) =>
+        field === "syncedAt" ? typeof row[field] === "string" && Number.isFinite(Date.parse(row[field] as string))
+          : row[field] == null || typeof row[field] === "string")), field)).toBe(true);
     expect(new URL(page.url()).searchParams.get("region")).toBe("서울");
     expect(await page.evaluate(() => localStorage.getItem("cache-recovery-unrelated"))).toBe("keep");
     expect(errors).toEqual([]);
@@ -803,24 +812,26 @@ test("지연된 목록: 모바일에서 기다리지 않고 필터를 열어 새
     return route.fulfill({ json: { content: [{ ...notice, title: "새 조건 부산 공고", regionCode: "부산", address: "부산 해운대구" }], number: 0, size: 12, totalElements: 1, totalPages: 1 } });
   });
   await page.goto("/");
-  await expect.poll(() => pending.length).toBeGreaterThan(0);
+  await expect.poll(() => pending.length).toBe(1);
   await expect(page.getByRole("status", { name: "청약 공고 불러오는 중" })).toBeVisible();
   const filterButton = page.getByRole("button", { name: /청약 필터 열기/ });
   await expect(filterButton).toBeEnabled();
   await filterButton.click();
   const dialog = page.getByRole("dialog", { name: "청약 조건 선택" });
   await expect(dialog).toBeVisible();
+  const cancelled = page.waitForEvent("requestfailed", request => request === pending[0].request());
   await dialog.getByRole("button", { name: "부산", exact: true }).click();
+  await cancelled;
   await expect.poll(() => newConditionRequests).toBeGreaterThan(0);
   await expect.poll(() => new URL(page.url()).searchParams.get("region")).toBe("부산");
   await dialog.getByRole("button", { name: "닫기", exact: true }).click();
   await expect(page.getByRole("heading", { name: "새 조건 부산 공고", exact: true })).toBeVisible();
-  // All earlier active/prefetch responses deliberately arrive after the new result.
+  // A canceled initial request must neither spawn prefetches nor replace the new condition.
   for (const route of pending) await route.fulfill({ json: { content: [{ ...notice, title: "이전 조건 공고" }], number: 0, size: 12, totalElements: 1, totalPages: 1 } });
   await expect(page.getByRole("heading", { name: "새 조건 부산 공고", exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => Object.keys(sessionStorage)
     .filter(key => key.startsWith("cheongyak-one-notice-page:v2:"))
-    .some(key => sessionStorage.getItem(key)?.includes("이전 조건 공고")))).toBe(true);
+    .some(key => sessionStorage.getItem(key)?.includes("이전 조건 공고")))).toBe(false);
   await expect(page.getByRole("heading", { name: "새 조건 부산 공고", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "이전 조건 공고", exact: true })).toHaveCount(0);
   await expect(filterButton).toBeFocused();
@@ -859,4 +870,88 @@ test("동기화 시각: 잘못된 목록·최신성·소스 시각에도 탐색�
   await expect(page.getByRole("heading", { name: notice.title, exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "화면을 표시하지 못했어요" })).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+test("목록 우선 조회: 실패 중 사전 요청을 막고 성공 후 탭 캐시를 준비한다", async ({ page }) => {
+  await mockPublicApi(page);
+  const requests: Route[] = [];
+  let revalidating: Route | undefined;
+  let holdOpen = false;
+  await page.route("**/api/v1/notices?**", route => {
+    requests.push(route);
+    if (requests.length === 1) return;
+    const isOpen = new URL(route.request().url()).searchParams.get("status") === "OPEN";
+    if (isOpen && holdOpen) { revalidating = route; return; }
+    return route.fulfill({ json: { content: [{ ...notice, title: isOpen ? "미리 읽은 접수중 공고" : notice.title }], number: 0, size: 12, totalElements: 1, totalPages: 1 } });
+  });
+  await page.goto("/");
+  await expect.poll(() => requests.length).toBe(1);
+  await expect(page.getByRole("status", { name: "청약 공고 불러오는 중" })).toBeVisible();
+  await requests[0].fulfill({ status: 503, json: { detail: "temporary unavailable" } });
+  await expect(page.getByText(/서버에 연결하지 못했어요/)).toBeVisible();
+  expect(requests.length).toBe(1);
+  await expect.poll(() => requests.length).toBe(5);
+  await expect.poll(() => page.evaluate(() => Object.keys(sessionStorage).some(key => sessionStorage.getItem(key)?.includes("미리 읽은 접수중 공고")))).toBe(true);
+  holdOpen = true;
+  await page.getByRole("tab", { name: /접수중/ }).click();
+  await expect.poll(() => Boolean(revalidating)).toBe(true);
+  await expect(page.getByRole("heading", { name: "미리 읽은 접수중 공고", exact: true })).toBeVisible();
+  await expect(page.getByRole("status", { name: "청약 공고 불러오는 중" })).toHaveCount(0);
+  await revalidating!.fulfill({ json: { content: [notice], number: 0, size: 12, totalElements: 1, totalPages: 1 } });
+});
+
+test("탐색 복원: 뒤로가기와 앞으로가기에 예산·면적·검색어를 함께 복원한다", async ({ page }) => {
+  const searches = await mockPublicApi(page);
+  await page.goto("/?q=서울&minPriceManwon=30000&maxPriceManwon=60000&minArea=59&maxArea=84");
+  await expect(page.getByRole("heading", { name: notice.title, exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    history.pushState(null, "", "/?q=부산&minPriceManwon=10000&maxPriceManwon=40000&minArea=30&maxArea=60");
+    dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await expect.poll(() => searches.some(q => {
+    const p = new URLSearchParams(q);
+    return p.get("keyword") === "부산" && p.get("minPrice") === "100000000" && p.get("maxArea") === "60";
+  })).toBe(true);
+  await page.goBack();
+  await expect(page.getByLabel("청약 검색어", { exact: true })).toHaveValue("서울");
+  await page.getByRole("button", { name: /청약 필터 열기/ }).click();
+  const dialog = page.getByRole("dialog", { name: "청약 조건 선택" });
+  await expect(dialog.getByLabel("예산 최소 (만원)", { exact: true })).toHaveValue("30000");
+  await expect(dialog.getByLabel("예산 최대 (만원)", { exact: true })).toHaveValue("60000");
+  await expect(dialog.getByLabel("면적 최소 (㎡)", { exact: true })).toHaveValue("59");
+  await expect(dialog.getByLabel("면적 최대 (㎡)", { exact: true })).toHaveValue("84");
+  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+  await page.goForward();
+  await expect(page.getByLabel("청약 검색어", { exact: true })).toHaveValue("부산");
+  await expect.poll(() => new URL(page.url()).searchParams.get("minPriceManwon")).toBe("10000");
+  await page.getByRole("button", { name: /청약 필터 열기/ }).click();
+  await expect(dialog.getByLabel("면적 최대 (㎡)", { exact: true })).toHaveValue("60");
+});
+
+test("탐색 복원: 관심 목록에서 상세 닫기·뒤로가기 후 목록과 초점을 유지한다", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const searches = await mockPublicApi(page);
+  await page.goto("/");
+  const card = page.locator("#notice-card-1");
+  await card.getByLabel(/관심청약 저장/).click();
+  const favorites = page.getByRole("button", { name: "관심청약 1개", exact: true });
+  await favorites.click();
+  await expect(favorites).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => searches.some(q => new URLSearchParams(q).has("ids"))).toBe(true);
+  const opener = card.getByRole("button", { name: "공고 핵심만 보기", exact: true });
+  const count = searches.length;
+  await opener.click();
+  const dialog = page.getByRole("dialog", { name: notice.title });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(favorites).toHaveAttribute("aria-pressed", "true");
+  await expect(opener).toBeFocused();
+  await opener.click();
+  await expect(dialog).toBeVisible();
+  await page.goBack();
+  await expect(dialog).toHaveCount(0);
+  await expect(favorites).toHaveAttribute("aria-pressed", "true");
+  await expect(opener).toBeFocused();
+  expect(searches.length).toBe(count);
 });

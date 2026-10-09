@@ -150,3 +150,23 @@ test("calendar export creates all-day events and escapes user-facing text", () =
     assert.ok(new TextEncoder().encode(line).length <= 75, `calendar line exceeds 75 bytes: ${line}`);
   }
 });
+
+test("calendar export rejects invalid dates without dropping independent valid events", () => {
+  for (const date of ["bad", "2026-02-29", "2026-04-31", "2026-13-01", "0000-01-01", "9999-12-31", "2026-1-1", "2026-10-01T00:00:00Z"]) {
+    const calendar = buildNoticeCalendar([{ ...baseNotice, applyStartDate: date }]);
+    assert.equal((calendar.match(/BEGIN:VEVENT/g) ?? []).length, 2, date);
+    assert.doesNotMatch(calendar, /notice-10-apply-start/);
+  }
+  const reversed = buildNoticeCalendar([{ ...baseNotice, applyStartDate: "2026-09-06" }]);
+  assert.equal((reversed.match(/BEGIN:VEVENT/g) ?? []).length, 1);
+  assert.match(reversed, /notice-10-winner/);
+  assert.doesNotMatch(reversed, /notice-10-apply-/);
+  const empty = buildNoticeCalendar([{ ...baseNotice, applyStartDate: "bad", applyEndDate: undefined, winnerAnnounceDate: undefined }]);
+  assert.doesNotMatch(empty, /BEGIN:VEVENT/);
+});
+
+test("calendar export keeps leap and year boundaries for partial schedules", () => {
+  const calendar = buildNoticeCalendar([{ ...baseNotice, applyStartDate: "2028-02-29", applyEndDate: undefined, winnerAnnounceDate: "2028-12-31" }]);
+  assert.match(calendar, /DTSTART;VALUE=DATE:20280229\r\nDTEND;VALUE=DATE:20280301/);
+  assert.match(calendar, /DTSTART;VALUE=DATE:20281231\r\nDTEND;VALUE=DATE:20290101/);
+});

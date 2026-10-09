@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   filterNotifications,
+  formatNotificationDate,
   notificationCategory,
   notificationCategoryLabel,
   notificationFilterOptions,
@@ -49,4 +50,12 @@ test("notification category labels cover every delivered notification type", () 
   assert.equal(notificationCategoryLabel("APPLY_DEADLINE_3D"), "마감 3일 전");
   assert.equal(notificationCategoryLabel("NEW_MATCHING_NOTICE"), "신규 공고");
   assert.equal(notificationCategoryLabel("NOTICE_UPDATED"), "공고 변경");
+});
+
+test("notification dates do not normalize impossible dates or render NaN", () => {
+  for (const value of ["bad", "", "2026-02-29", "2026-04-31", "0000-01-01", "2026-1-1", "2026-10-01T00:00:00Z"]) {
+    assert.equal(formatNotificationDate(value), "날짜 미확인");
+  }
+  assert.equal(formatNotificationDate("2028-02-29"), "2월 29일");
+  assert.equal(formatNotificationDate("2027-01-01"), "1월 1일");
 });
