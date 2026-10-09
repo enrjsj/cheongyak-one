@@ -38,9 +38,10 @@ export function koreaToday(): string {
 }
 
 export function dateValue(iso?: string): number | undefined {
-  if (!iso) return undefined;
-  const [year, month, day] = iso.split("-").map(Number);
-  return Date.UTC(year, month - 1, day);
+  if (typeof iso !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return undefined;
+  const value = Date.parse(`${iso}T00:00:00Z`);
+  return Number.isFinite(value) && new Date(value).toISOString().slice(0, 10) === iso
+    ? value : undefined;
 }
 
 export function daysBetween(from: string, to?: string): number | undefined {
@@ -51,15 +52,19 @@ export function daysBetween(from: string, to?: string): number | undefined {
 }
 
 export function formatShortDate(iso?: string): string {
-  if (!iso) return "일정 미정";
-  const [, month, day] = iso.split("-").map(Number);
+  if (dateValue(iso) === undefined) return "일정 미정";
+  const [, month, day] = iso!.split("-").map(Number);
   return `${month}. ${day}.`;
 }
 
 export function formatPeriod(start?: string, end?: string, winner?: string): string {
-  if (start && end) return `${formatShortDate(start)} — ${formatShortDate(end)}`;
-  if (start) return `${formatShortDate(start)} 접수 시작`;
-  if (winner) return `당첨 발표 ${formatShortDate(winner)}`;
+  const hasStart = dateValue(start) !== undefined;
+  const hasEnd = dateValue(end) !== undefined;
+  if (hasStart && hasEnd) return start! <= end!
+    ? `${formatShortDate(start)} — ${formatShortDate(end)}` : "접수 일정은 공고문 확인";
+  if (hasStart) return `${formatShortDate(start)} 접수 시작`;
+  if (hasEnd) return `${formatShortDate(end)} 접수 마감`;
+  if (dateValue(winner) !== undefined) return `당첨 발표 ${formatShortDate(winner)}`;
   return "세부 일정은 공고문 확인";
 }
 
@@ -72,11 +77,14 @@ export function formatMoveInMonth(value?: string): string {
 
 export function optionalPeriod(start?: string, end?: string): string {
   if (!start && !end) return "일정 미정";
+  if ((start && dateValue(start) === undefined) || (end && dateValue(end) === undefined)
+      || (start && end && start > end)) return "일정 확인 필요";
   if (start && end) return `${formatShortDate(start)} — ${formatShortDate(end)}`;
   return start ? `${formatShortDate(start)}부터` : `${formatShortDate(end)}까지`;
 }
 
 export function formatChangedAt(value: string): string {
+  if (!value || !Number.isFinite(new Date(value).getTime())) return "변경 시각 미확인";
   return new Intl.DateTimeFormat("ko-KR", {
     timeZone: "Asia/Seoul",
     month: "long",
@@ -165,7 +173,7 @@ export function statusPresentation(status: NoticeStatus, applyEndDate?: string):
   stateTone: StateTone;
   statusKey: PresentationStatus;
 } {
-  if (applyEndDate === koreaToday()) return { state: "오늘 마감", stateTone: "coral", statusKey: "today" };
+  if (status === "OPEN" && applyEndDate === koreaToday()) return { state: "오늘 마감", stateTone: "coral", statusKey: "today" };
   if (status === "OPEN") return { state: "접수중", stateTone: "mint", statusKey: "open" };
   if (status === "UPCOMING") return { state: "오픈 예정", stateTone: "blue", statusKey: "upcoming" };
   if (status === "ANNOUNCED") return { state: "당첨 발표", stateTone: "purple", statusKey: "announcement" };
@@ -185,9 +193,7 @@ export type NoticeAttention = {
 /** Emphasis is based on confirmed calendar dates in Korea, never on a guessed date. */
 export function noticeAttention(notice: NoticeSummary, today = koreaToday()): NoticeAttention {
   const valid = (value?: string): value is string => {
-    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-    const time = Date.parse(`${value}T00:00:00Z`);
-    return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value;
+    return dateValue(value) !== undefined;
   };
   const opening = notice.status === "UPCOMING";
   const accepting = notice.status === "OPEN";
