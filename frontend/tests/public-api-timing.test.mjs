@@ -35,6 +35,11 @@ test("unhealthy or timed out initial response does not launch list queries", asy
 test("malformed payloads and unsafe origins are not reported as successful timing", async () => {
   const invalid = await measurePublicApi("https://api.example.test", async () => new Response("{}"));
   assert.equal(invalid.results[0].reason, "invalid-body");
+  const negative = await measurePublicApi("https://api.example.test", async url => new Response(JSON.stringify(
+    url.includes("health") ? { status: "UP" } : { content: [], totalElements: -1 }
+  )));
+  assert.equal(negative.ok, false);
+  assert.equal(negative.results[1].reason, "invalid-body");
   let calls = 0;
   for (const url of ["https://user:secret@example.test", "https://example.test/path", "https://example.test?key=secret"]) {
     await assert.rejects(() => measurePublicApi(url, async () => { calls++; }));
