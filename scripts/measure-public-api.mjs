@@ -35,7 +35,7 @@ export async function measurePublicApi(apiOrigin, request = fetch, { timeoutMs =
   // Do not send speculative work to an API that has not responded as healthy.
   if (ready) {
     for (let round = 1; round <= 2; round++) {
-      await sample("list-" + round, "/api/v1/notices?page=0&size=12&activeOnly=true&sort=LATEST", body => Array.isArray(body?.content) && Number.isInteger(body?.totalElements));
+      await sample("list-" + round, "/api/v1/notices?page=0&size=12&activeOnly=true&sort=LATEST", body => Array.isArray(body?.content) && Number.isInteger(body?.totalElements) && body.totalElements >= 0);
       await sample("facets-" + round, "/api/v1/notices/facets", body => ["total", "endingToday", "open", "upcoming"].every(key => Number.isInteger(body?.[key]) && body[key] >= 0));
     }
   }
