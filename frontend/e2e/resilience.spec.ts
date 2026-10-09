@@ -705,3 +705,46 @@ test('현금 계획 모바일: 계산·입력 수정·닫기 후 포커스 복�
   await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
   await expect(opener).toBeFocused();
 });
+
+
+for (const field of ["businessEntityName", "address", "applyStartDate"]) {
+  test(`캐시 복구: 잘못된 ${field} 값을 버리고 최신 목록으로 복구한다`, async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await mockPublicApi(page);
+    await page.goto("/?region=서울");
+    await expect(page.getByRole("heading", { name: notice.title, exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate(() =>
+      Object.keys(sessionStorage).filter(key => key.startsWith("cheongyak-one-notice-page:v2:")).length,
+    )).toBeGreaterThan(0);
+    await page.addInitScript(({ field }) => {
+      for (const key of Object.keys(sessionStorage)) {
+        if (!key.startsWith("cheongyak-one-notice-page:v2:")) continue;
+        const entry = JSON.parse(sessionStorage.getItem(key)!);
+        entry.page.content = entry.page.content.map((row: Record<string, unknown>) => ({ ...row, [field]: { invalid: true } }));
+        sessionStorage.setItem(key, JSON.stringify(entry));
+      }
+      localStorage.setItem("cache-recovery-unrelated", "keep");
+    }, { field });
+    let release!: () => void;
+    const responseReady = new Promise<void>(resolve => { release = resolve; });
+    await page.route("**/api/v1/notices?**", async route => {
+      await responseReady;
+      await route.fulfill({ json: { content: [notice], number: 0, size: 12, totalElements: 1, totalPages: 1 } });
+    });
+    try {
+      await page.reload();
+      await expect(page.getByRole("status", { name: "청약 공고 불러오는 중" })).toBeVisible();
+      await expect.poll(() => page.evaluate(() =>
+        Object.keys(sessionStorage).filter(key => key.startsWith("cheongyak-one-notice-page:v2:")).length,
+      )).toBe(0);
+      await expect(page.getByRole("heading", { name: "화면을 표시하지 못했어요" })).toHaveCount(0);
+    } finally {
+      release();
+    }
+    await expect(page.getByRole("heading", { name: notice.title, exact: true })).toBeVisible();
+    expect(new URL(page.url()).searchParams.get("region")).toBe("서울");
+    expect(await page.evaluate(() => localStorage.getItem("cache-recovery-unrelated"))).toBe("keep");
+    expect(errors).toEqual([]);
+  });
+}

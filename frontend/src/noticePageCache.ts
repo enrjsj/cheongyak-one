@@ -32,7 +32,14 @@ function isNotice(value: unknown): value is NoticeSummary {
     && typeof notice.sourceSystem === "string"
     && typeof notice.housingCategory === "string"
     && typeof notice.status === "string"
-    && typeof notice.syncedAt === "string";
+    && typeof notice.syncedAt === "string"
+    && [
+      notice.businessEntityName, notice.regionCode, notice.address,
+      notice.noticeDate, notice.applyStartDate, notice.applyEndDate,
+      notice.winnerAnnounceDate, notice.officialUrl,
+    ].every(value => value == null || typeof value === "string")
+    && [notice.totalUnits, notice.minPrice, notice.maxPrice, notice.minArea, notice.maxArea]
+      .every(value => value == null || (typeof value === "number" && Number.isFinite(value)));
 }
 function isPage(value: unknown): value is PageResponse<NoticeSummary> {
   if (!value || typeof value !== "object") return false;
