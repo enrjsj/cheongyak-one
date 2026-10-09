@@ -748,3 +748,42 @@ for (const field of ["businessEntityName", "address", "applyStartDate"]) {
     expect(errors).toEqual([]);
   });
 }
+
+
+test("날짜 표시: 잘못된 상세 일정과 변경 시각에도 화면을 유지한다", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await mockPublicApi(page);
+  await page.route("**/api/v1/notices/1", route => route.fulfill({ json: {
+    ...notice, applyStartDate: "bad", applyEndDate: "2026-02-30",
+    noticeDate: "2026-13-01", winnerAnnounceDate: "bad",
+    contentChangedAt: "bad", lastChangeSummary: "일정 자료 확인 필요",
+    specialSupplyStartDate: "2026-02-30", specialSupplyEndDate: "2026-03-02",
+  } }));
+  await page.goto("/");
+  const open = page.locator("article").filter({ hasText: notice.title }).getByRole("button", { name: /공고 핵심만 보기/ });
+  await open.click();
+  const dialog = page.getByRole("dialog", { name: notice.title });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("변경 시각 미확인", { exact: false })).toBeVisible();
+  await expect(dialog.locator(".detail-status")).toContainText("일정 확인");
+  await expect(dialog.locator(".detail-status")).toContainText("세부 일정은 공고문 확인");
+  await expect(dialog).not.toContainText("NaN");
+  await expect(page.getByRole("heading", { name: "화면을 표시하지 못했어요" })).toHaveCount(0);
+  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(open).toBeFocused();
+  expect(errors).toEqual([]);
+});
+
+test("날짜 표시: 시작일이 없어도 상세에서 확인된 접수 마감일을 안내한다", async ({ page }) => {
+  await mockPublicApi(page);
+  await page.route("**/api/v1/notices/1", route => route.fulfill({ json: {
+    ...notice, applyStartDate: null, applyEndDate: "2026-10-20", winnerAnnounceDate: "2026-10-30",
+  } }));
+  await page.goto("/");
+  await page.locator("article").filter({ hasText: notice.title }).getByRole("button", { name: /공고 핵심만 보기/ }).click();
+  const dialog = page.getByRole("dialog", { name: notice.title });
+  await expect(dialog.locator(".detail-status")).toContainText("10. 20. 접수 마감");
+  await expect(dialog.locator(".detail-status")).not.toContainText("당첨 발표");
+});
