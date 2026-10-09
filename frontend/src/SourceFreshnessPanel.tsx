@@ -15,7 +15,7 @@ export function SourceFreshnessPanel({ sources, onRetry, busy = false }: {
     <ul>{sources.map(source => <li key={source.sourceSystem}>
       <div><strong>{SOURCE_LABELS[source.sourceSystem]}</strong><span>{!source.configured ? "수집 미설정"
         : source.status === "FRESH" ? "최신" : source.status === "DELAYED" ? "갱신 지연" : "확인 전"}</span></div>
-      <p>마지막 성공: {source.lastSuccessfulAt ? formatter.format(new Date(source.lastSuccessfulAt)) : "확인된 기록 없음"}</p>
+      <p>마지막 성공: {source.lastSuccessfulAt ? Number.isFinite(Date.parse(source.lastSuccessfulAt)) ? formatter.format(new Date(source.lastSuccessfulAt)) : "시각 미확인" : "확인된 기록 없음"}</p>
       {onRetry && <>
         <p>최근 실행: {source.lastAttemptStatus === "RUNNING" ? "진행 중" : source.lastAttemptStatus === "FAILED" ? "실패"
           : source.lastAttemptStatus === "PARTIALLY_SUCCEEDED" ? "부분 성공" : source.lastAttemptStatus === "SUCCEEDED" ? "성공" : source.lastAttemptStatus === "SKIPPED" ? "건너뜀" : "기록 없음"}</p>
