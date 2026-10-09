@@ -33,6 +33,7 @@ function isNotice(value: unknown): value is NoticeSummary {
     && typeof notice.housingCategory === "string"
     && typeof notice.status === "string"
     && typeof notice.syncedAt === "string"
+    && Number.isFinite(Date.parse(notice.syncedAt))
     && [
       notice.businessEntityName, notice.regionCode, notice.address,
       notice.noticeDate, notice.applyStartDate, notice.applyEndDate,
