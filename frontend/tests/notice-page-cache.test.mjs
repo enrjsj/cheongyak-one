@@ -91,3 +91,59 @@ test("malformed notice rows and pagination are rejected and removed before rende
     assert.equal(storage.getItem(key(1)), null);
   }
 });
+
+const notice = {
+  id: 1, title: "정상 공고", sourceSystem: "REB_APT", housingCategory: "APARTMENT",
+  status: "OPEN", syncedAt: "2026-10-09T00:00:00Z",
+};
+const optionalTextFields = [
+  "businessEntityName", "regionCode", "address", "noticeDate",
+  "applyStartDate", "applyEndDate", "winnerAnnounceDate", "officialUrl",
+];
+const optionalNumberFields = ["totalUnits", "minPrice", "maxPrice", "minArea", "maxArea"];
+const populatedPage = (row) => ({ ...page, content: [row], totalElements: 1, totalPages: 1 });
+
+test("cached optional text fields reject values that can crash notice rendering", () => {
+  const storage = storageMock();
+  for (const field of optionalTextFields) {
+    for (const value of [123, true, {}, ["서울"]]) {
+      storage.setItem(key(1), JSON.stringify({ cachedAt: 100, page: populatedPage({ ...notice, [field]: value }) }));
+      assert.equal(readCachedNoticePage(storage, key(1), 101), undefined, field);
+      assert.equal(storage.getItem(key(1)), null, field);
+    }
+  }
+});
+
+test("cached optional numeric fields reject wrong types and non-finite JSON numbers", () => {
+  const storage = storageMock();
+  for (const field of optionalNumberFields) {
+    for (const value of ["100", true, {}, []]) {
+      storage.setItem(key(1), JSON.stringify({ cachedAt: 100, page: populatedPage({ ...notice, [field]: value }) }));
+      assert.equal(readCachedNoticePage(storage, key(1), 101), undefined, field);
+      assert.equal(storage.getItem(key(1)), null, field);
+    }
+    const raw = JSON.stringify({ cachedAt: 100, page: populatedPage({ ...notice, [field]: "__overflow__" }) });
+    storage.setItem(key(1), raw.replace('"__overflow__"', "1e400"));
+    assert.equal(readCachedNoticePage(storage, key(1), 101), undefined, field);
+    assert.equal(storage.getItem(key(1)), null, field);
+  }
+});
+
+test("old summaries, nullable fields and valid zero values remain cache-compatible", () => {
+  const storage = storageMock();
+  const fields = [...optionalTextFields, ...optionalNumberFields];
+  const rows = [
+    notice,
+    { ...notice, ...Object.fromEntries(fields.map(field => [field, null])) },
+    { ...notice, ...Object.fromEntries(optionalTextFields.map(field => [field, ""])),
+      ...Object.fromEntries(optionalNumberFields.map(field => [field, 0])) },
+    { ...notice, businessEntityName: "공급기관", address: "서울",
+      applyStartDate: "2026-10-09", applyEndDate: "2026-10-10", totalUnits: 12,
+      minPrice: 100000000, maxPrice: 200000000, minArea: 59.5, maxArea: 84.9 },
+  ];
+  for (const row of rows) {
+    const expected = populatedPage(row);
+    cacheNoticePage(storage, key(1), expected, 100);
+    assert.deepEqual(readCachedNoticePage(storage, key(1), 101)?.page, expected);
+  }
+});
