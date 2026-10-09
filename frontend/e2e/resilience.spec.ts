@@ -707,7 +707,7 @@ test('현금 계획 모바일: 계산·입력 수정·닫기 후 포커스 복�
 });
 
 
-for (const field of ["businessEntityName", "address", "applyStartDate"]) {
+for (const field of ["businessEntityName", "address", "applyStartDate", "syncedAt"]) {
   test(`캐시 복구: 잘못된 ${field} 값을 버리고 최신 목록으로 복구한다`, async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
@@ -721,7 +721,7 @@ for (const field of ["businessEntityName", "address", "applyStartDate"]) {
       for (const key of Object.keys(sessionStorage)) {
         if (!key.startsWith("cheongyak-one-notice-page:v2:")) continue;
         const entry = JSON.parse(sessionStorage.getItem(key)!);
-        entry.page.content = entry.page.content.map((row: Record<string, unknown>) => ({ ...row, [field]: { invalid: true } }));
+        entry.page.content = entry.page.content.map((row: Record<string, unknown>) => ({ ...row, [field]: field === "syncedAt" ? "bad" : { invalid: true } }));
         sessionStorage.setItem(key, JSON.stringify(entry));
       }
       localStorage.setItem("cache-recovery-unrelated", "keep");
@@ -786,4 +786,77 @@ test("날짜 표시: 시작일이 없어도 상세에서 확인된 접수 마감
   const dialog = page.getByRole("dialog", { name: notice.title });
   await expect(dialog.locator(".detail-status")).toContainText("10. 20. 접수 마감");
   await expect(dialog.locator(".detail-status")).not.toContainText("당첨 발표");
+});
+
+
+test("지연된 목록: 모바일에서 기다리지 않고 필터를 열어 새 조건으로 조회한다", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await mockPublicApi(page);
+  const pending: Route[] = [];
+  let newConditionRequests = 0;
+  await page.route("**/api/v1/notices?**", route => {
+    const params = new URL(route.request().url()).searchParams;
+    if (params.get("region") !== "부산") { pending.push(route); return; }
+    newConditionRequests++;
+    return route.fulfill({ json: { content: [{ ...notice, title: "새 조건 부산 공고", regionCode: "부산", address: "부산 해운대구" }], number: 0, size: 12, totalElements: 1, totalPages: 1 } });
+  });
+  await page.goto("/");
+  await expect.poll(() => pending.length).toBeGreaterThan(0);
+  await expect(page.getByRole("status", { name: "청약 공고 불러오는 중" })).toBeVisible();
+  const filterButton = page.getByRole("button", { name: /청약 필터 열기/ });
+  await expect(filterButton).toBeEnabled();
+  await filterButton.click();
+  const dialog = page.getByRole("dialog", { name: "청약 조건 선택" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "부산", exact: true }).click();
+  await expect.poll(() => newConditionRequests).toBeGreaterThan(0);
+  await expect.poll(() => new URL(page.url()).searchParams.get("region")).toBe("부산");
+  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "새 조건 부산 공고", exact: true })).toBeVisible();
+  // All earlier active/prefetch responses deliberately arrive after the new result.
+  for (const route of pending) await route.fulfill({ json: { content: [{ ...notice, title: "이전 조건 공고" }], number: 0, size: 12, totalElements: 1, totalPages: 1 } });
+  await expect(page.getByRole("heading", { name: "새 조건 부산 공고", exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => Object.keys(sessionStorage)
+    .filter(key => key.startsWith("cheongyak-one-notice-page:v2:"))
+    .some(key => sessionStorage.getItem(key)?.includes("이전 조건 공고")))).toBe(true);
+  await expect(page.getByRole("heading", { name: "새 조건 부산 공고", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "이전 조건 공고", exact: true })).toHaveCount(0);
+  await expect(filterButton).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test("동기화 시각: 잘못된 목록·최신성·소스 시각에도 탐색과 재검색을 유지한다", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await mockPublicApi(page);
+  const searches: string[] = [];
+  await page.route("**/api/v1/notices?**", route => {
+    const params = new URL(route.request().url()).searchParams;
+    searches.push(new URL(route.request().url()).search);
+    const title = params.get("keyword") === "강남" ? "재검색 강남 공고" : notice.title;
+    return route.fulfill({ json: { content: [{ ...notice, title, syncedAt: "bad" }], number: 0, size: 12, totalElements: 1, totalPages: 1 } });
+  });
+  let freshness: Route | undefined;
+  await page.route("**/api/v1/notices/freshness", route => { freshness = route; });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: notice.title, exact: true })).toBeVisible();
+  await expect(page.locator(".data-note")).toContainText("시각 미확인");
+  await expect.poll(() => Boolean(freshness)).toBe(true);
+  await freshness!.fulfill({ json: {
+    status: "FRESH", generatedAt: "2026-10-09T00:00:00Z", lastCompletedAt: "bad",
+    sources: [{ sourceSystem: "REB_APT", configured: true, status: "FRESH", lastSuccessfulAt: "bad" }],
+  } });
+  const sources = page.locator(".source-freshness");
+  await sources.getByText("유형별 수집 현황", { exact: true }).click();
+  await expect(sources).toContainText("마지막 성공: 시각 미확인");
+  await expect(page.locator(".data-note")).toContainText("시각 미확인");
+  await page.getByLabel("청약 검색어", { exact: true }).fill("강남");
+  await expect.poll(() => searches.some(query => new URLSearchParams(query).get("keyword") === "강남")).toBe(true);
+  await expect(page.getByRole("heading", { name: "재검색 강남 공고", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: notice.title, exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "화면을 표시하지 못했어요" })).toHaveCount(0);
+  expect(errors).toEqual([]);
 });

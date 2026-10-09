@@ -1050,7 +1050,7 @@ export default function Home() {
     ?? schedule[0]?.item;
   const highlightEvent = highlight ? eventFor(highlight) : undefined;
   const syncedAt = noticeFreshness?.lastCompletedAt ?? notices.map((notice) => notice.syncedAt).sort().at(-1);
-  const syncedLabel = syncedAt ? new Intl.DateTimeFormat("ko-KR", {
+  const syncedLabel = syncedAt && !Number.isFinite(Date.parse(syncedAt)) ? "시각 미확인" : syncedAt ? new Intl.DateTimeFormat("ko-KR", {
     timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
   }).format(new Date(syncedAt)) : "동기화 전";
   const dataFreshnessMessage = cachedListShownAt
@@ -1828,7 +1828,7 @@ export default function Home() {
                 {savedOnly && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={() => setFavoriteCalendarOpen(true)}><Icon name="calendar" /> 전체 일정 보기</button>}
                 {savedOnly && member && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={downloadFavoriteResults}>내 기록 CSV</button>}
                 <button className="search-share-button" type="button" disabled={searchCopy.busy} onClick={() => void copySearchLink()}><Icon name="arrow" /> 검색 공유</button>
-                <button className="filter-button" type="button" onClick={() => setFilterOpen(true)} disabled={loading} aria-label={`청약 필터 열기${activeFilterCount > 0 ? ` ${activeFilterCount}개 적용됨` : ""}`}><Icon name="filter" /> 지역·유형·예산 필터 {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button>
+                <button className="filter-button" type="button" onClick={() => setFilterOpen(true)} aria-label={`청약 필터 열기${activeFilterCount > 0 ? ` ${activeFilterCount}개 적용됨` : ""}`}><Icon name="filter" /> 지역·유형·예산 필터 {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button>
               </div>
             </div>
             <LinkCopyFeedback state={searchCopy} />
