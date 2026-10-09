@@ -834,8 +834,10 @@ test("동기화 시각: 잘못된 목록·최신성·소스 시각에도 탐색�
   await mockPublicApi(page);
   const searches: string[] = [];
   await page.route("**/api/v1/notices?**", route => {
+    const params = new URL(route.request().url()).searchParams;
     searches.push(new URL(route.request().url()).search);
-    return route.fulfill({ json: { content: [{ ...notice, syncedAt: "bad" }], number: 0, size: 12, totalElements: 1, totalPages: 1 } });
+    const title = params.get("keyword") === "강남" ? "재검색 강남 공고" : notice.title;
+    return route.fulfill({ json: { content: [{ ...notice, title, syncedAt: "bad" }], number: 0, size: 12, totalElements: 1, totalPages: 1 } });
   });
   let freshness: Route | undefined;
   await page.route("**/api/v1/notices/freshness", route => { freshness = route; });
@@ -853,7 +855,8 @@ test("동기화 시각: 잘못된 목록·최신성·소스 시각에도 탐색�
   await expect(page.locator(".data-note")).toContainText("시각 미확인");
   await page.getByLabel("청약 검색어", { exact: true }).fill("강남");
   await expect.poll(() => searches.some(query => new URLSearchParams(query).get("keyword") === "강남")).toBe(true);
-  await expect(page.getByRole("heading", { name: notice.title, exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "재검색 강남 공고", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: notice.title, exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "화면을 표시하지 못했어요" })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
