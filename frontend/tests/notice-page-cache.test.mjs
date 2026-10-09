@@ -147,3 +147,12 @@ test("old summaries, nullable fields and valid zero values remain cache-compatib
     assert.deepEqual(readCachedNoticePage(storage, key(1), 101)?.page, expected);
   }
 });
+
+test("invalid cached synchronization timestamps are discarded before rendering", () => {
+  const storage = storageMock();
+  for (const syncedAt of ["", "bad", "2026-13-01T00:00:00Z"]) {
+    storage.setItem(key(1), JSON.stringify({ cachedAt: 100, page: populatedPage({ ...notice, syncedAt }) }));
+    assert.equal(readCachedNoticePage(storage, key(1), 101), undefined);
+    assert.equal(storage.getItem(key(1)), null);
+  }
+});
