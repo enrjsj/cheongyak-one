@@ -282,11 +282,13 @@ interface CalendarEvent {
 }
 
 function calendarEvents(notice: NoticeSummary): CalendarEvent[] {
+  const reversed = validScheduleDate(notice.applyStartDate) && validScheduleDate(notice.applyEndDate)
+    && notice.applyStartDate > notice.applyEndDate;
   return [
-    notice.applyStartDate && { type: "apply-start" as const, date: notice.applyStartDate, label: "청약 접수 시작" },
-    notice.applyEndDate && { type: "apply-end" as const, date: notice.applyEndDate, label: "청약 접수 마감" },
+    !reversed && notice.applyStartDate && { type: "apply-start" as const, date: notice.applyStartDate, label: "청약 접수 시작" },
+    !reversed && notice.applyEndDate && { type: "apply-end" as const, date: notice.applyEndDate, label: "청약 접수 마감" },
     notice.winnerAnnounceDate && { type: "winner" as const, date: notice.winnerAnnounceDate, label: "당첨자 발표" },
-  ].filter((event): event is CalendarEvent => Boolean(event));
+  ].filter((event): event is CalendarEvent => Boolean(event) && validScheduleDate(event ? event.date : undefined));
 }
 
 /** 선택한 공고의 접수 시작·마감·발표 일정을 표준 iCalendar 파일로 만든다. */
