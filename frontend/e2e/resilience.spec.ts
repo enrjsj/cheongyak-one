@@ -717,6 +717,9 @@ for (const field of ["businessEntityName", "address", "applyStartDate", "syncedA
     await expect.poll(() => page.evaluate(() =>
       Object.keys(sessionStorage).filter(key => key.startsWith("cheongyak-one-notice-page:v2:")).length,
     )).toBeGreaterThan(0);
+    const activeCacheKey = await page.evaluate(() => Object.keys(sessionStorage).find(key =>
+      key.startsWith("cheongyak-one-notice-page:v2:") && JSON.parse(key.slice("cheongyak-one-notice-page:v2:".length)).activeOnly === true));
+    expect(activeCacheKey).toBeTruthy();
     await page.addInitScript(({ field }) => {
       for (const key of Object.keys(sessionStorage)) {
         if (!key.startsWith("cheongyak-one-notice-page:v2:")) continue;
@@ -735,14 +738,20 @@ for (const field of ["businessEntityName", "address", "applyStartDate", "syncedA
     try {
       await page.reload();
       await expect(page.getByRole("status", { name: "청약 공고 불러오는 중" })).toBeVisible();
-      await expect.poll(() => page.evaluate(() =>
-        Object.keys(sessionStorage).filter(key => key.startsWith("cheongyak-one-notice-page:v2:")).length,
-      )).toBe(0);
+      // Only the selected tab is read before the first successful response.
+      await expect.poll(() => page.evaluate(key => sessionStorage.getItem(key!), activeCacheKey)).toBeNull();
       await expect(page.getByRole("heading", { name: "화면을 표시하지 못했어요" })).toHaveCount(0);
     } finally {
       release();
     }
     await expect(page.getByRole("heading", { name: notice.title, exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate(key => JSON.parse(sessionStorage.getItem(key!) ?? "null")?.page.content[0]?.title, activeCacheKey)).toBe(notice.title);
+    // The successful cache write also prunes corrupt inactive tab entries.
+    await expect.poll(() => page.evaluate(field => Object.keys(sessionStorage)
+      .filter(key => key.startsWith("cheongyak-one-notice-page:v2:"))
+      .every(key => JSON.parse(sessionStorage.getItem(key)!).page.content.every((row: Record<string, unknown>) =>
+        field === "syncedAt" ? typeof row[field] === "string" && Number.isFinite(Date.parse(row[field] as string))
+          : row[field] == null || typeof row[field] === "string")), field)).toBe(true);
     expect(new URL(page.url()).searchParams.get("region")).toBe("서울");
     expect(await page.evaluate(() => localStorage.getItem("cache-recovery-unrelated"))).toBe("keep");
     expect(errors).toEqual([]);
