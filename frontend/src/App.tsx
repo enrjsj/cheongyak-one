@@ -432,6 +432,9 @@ export default function Home() {
     sort: sortKey,
   });
 
+  const latestSearchState = useRef(currentSearchState());
+  latestSearchState.current = currentSearchState();
+
   const rememberSearch = (state = currentSearchState()) => {
     setRecentSearches((current) => {
       const next = updateRecentNoticeSearches(current, state);
@@ -586,21 +589,7 @@ export default function Home() {
       const activePageRequest = noticePagePrefetches.get(cacheKey)
         ?? fetchNoticePage({ ...request, page: 0 }, controller.signal);
 
-      // 첫 화면이 표시되는 동안 다른 상태 탭의 첫 페이지도 받아 두어 탭 전환을 즉시 처리한다.
-      if (!savedOnly) {
-        STATUS_KEYS.filter((statusKey) => statusKey !== activeStatus).forEach((statusKey) => {
-          const prefetchRequest = { ...currentSearchRequest(statusKey), page: 0 };
-          const prefetchCacheKey = noticePageCacheKey(prefetchRequest);
-          if (readCachedNoticePage(storage, prefetchCacheKey) || noticePagePrefetches.has(prefetchCacheKey)) return;
-          const prefetch = fetchNoticePage(prefetchRequest);
-          noticePagePrefetches.set(prefetchCacheKey, prefetch);
-          void prefetch
-            .then((page) => cacheNoticePage(storage, prefetchCacheKey, page))
-            // 사전 요청 실패는 현재 탭의 목록 사용을 막지 않는다.
-            .catch(() => undefined)
-            .finally(() => noticePagePrefetches.delete(prefetchCacheKey));
-        });
-      }
+
 
       activePageRequest!
         .then((page) => {
@@ -618,6 +607,22 @@ export default function Home() {
           page.content.forEach((notice) => next.set(notice.id, notice));
           return next;
         });
+
+      // 현재 목록이 성공한 뒤 다른 탭을 미리 읽어 서버 대기 중 요청 경합을 줄인다.
+      if (!savedOnly) {
+        STATUS_KEYS.filter((statusKey) => statusKey !== activeStatus).forEach((statusKey) => {
+          const prefetchRequest = { ...currentSearchRequest(statusKey), page: 0 };
+          const prefetchCacheKey = noticePageCacheKey(prefetchRequest);
+          if (readCachedNoticePage(storage, prefetchCacheKey) || noticePagePrefetches.has(prefetchCacheKey)) return;
+          const prefetch = fetchNoticePage(prefetchRequest);
+          noticePagePrefetches.set(prefetchCacheKey, prefetch);
+          void prefetch
+            .then((page) => cacheNoticePage(storage, prefetchCacheKey, page))
+            // 사전 요청 실패는 현재 탭의 목록 사용을 막지 않는다.
+            .catch(() => undefined)
+            .finally(() => noticePagePrefetches.delete(prefetchCacheKey));
+        });
+      }
 
         if (!freshnessLoaded.current) {
           freshnessLoaded.current = true;
@@ -825,15 +830,26 @@ export default function Home() {
   useEffect(() => {
     const onPopState = () => {
       const restored = noticeSearchStateFromSearch(window.location.search);
+      const searchChanged = noticeSearchUrl(window.location.href, latestSearchState.current)
+        !== noticeSearchUrl(window.location.href, restored);
       setQuery(restored.query);
+      setDebouncedQuery(restored.query);
+      setMinPriceManwon(restored.minPriceManwon ? String(restored.minPriceManwon) : "");
+      setMaxPriceManwon(restored.maxPriceManwon ? String(restored.maxPriceManwon) : "");
+      setMinArea(restored.minArea ? String(restored.minArea) : "");
+      setMaxArea(restored.maxArea ? String(restored.maxArea) : "");
       setActiveStatus(restored.status);
       setIncludeClosed(restored.includeClosed);
       setRegion(restored.region ?? "전체");
       setCategory(restored.category ? CATEGORY_LABELS[restored.category] : "전체");
       setSupplyType(restored.supplyType);
       setSortKey(restored.sort);
-      setSavedOnly(false);
-      setVisibleCount(6);
+      // 상세만 닫거나 다시 열 때 관심 목록과 이미 읽은 페이지를 유지한다.
+      if (searchChanged) {
+        setSavedOnly(false);
+        setVisibleCount(6);
+        setRangeResetVersion(version => version + 1);
+      }
       setDetailRouteVersion((version) => version + 1);
     };
     window.addEventListener("popstate", onPopState);
