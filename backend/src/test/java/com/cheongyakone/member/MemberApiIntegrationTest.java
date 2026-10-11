@@ -556,6 +556,7 @@ class MemberApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(1))
                 .andExpect(jsonPath("$.content[0].businessEntityName").value("테스트 사업주체"))
+                .andExpect(jsonPath("$.content[0].rentType").value("분양주택"))
                 .andExpect(jsonPath("$.content[0].constructionCompanyName").doesNotExist())
                 .andExpect(jsonPath("$.content[0].contactPhone").doesNotExist())
                 .andExpect(jsonPath("$.content[0].unitTypes").doesNotExist());
@@ -570,6 +571,7 @@ class MemberApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(1))
                 .andExpect(jsonPath("$.content[0].sourceSystem").value("REB_APT"))
+                .andExpect(jsonPath("$.content[0].rentType").doesNotExist())
                 .andExpect(jsonPath("$.content[0].businessEntityName").doesNotExist());
     }
 

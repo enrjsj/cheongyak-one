@@ -1,4 +1,5 @@
 import type { NoticeSearchRequest, NoticeUnitType } from "./api";
+import { unitValue } from "./unitTypeTools.ts";
 
 export type UnitRange = Pick<NoticeSearchRequest, "minPrice" | "maxPrice" | "minArea" | "maxArea">;
 
@@ -12,6 +13,6 @@ export function unitMatchesRange(unit: NoticeUnitType, range: UnitRange): boolea
   const within = (value: number | undefined, min?: number, max?: number) =>
     (min === undefined || Number.isFinite(value) && value! >= min)
     && (max === undefined || Number.isFinite(value) && value! <= max);
-  return within(unit.maxPrice, range.minPrice, range.maxPrice)
-    && within(unit.supplyArea, range.minArea, range.maxArea);
+  return within(unitValue(unit, "maxPrice"), range.minPrice, range.maxPrice)
+    && within(unitValue(unit, "supplyArea"), range.minArea, range.maxArea);
 }

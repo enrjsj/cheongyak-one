@@ -1,3 +1,22 @@
+import { dateValue, type Application } from "./noticePresentation.ts";
+
+// Build lossless comparison values from the source, never from rounded card labels.
+export function toComparisonItem(item: Application): ComparisonItem {
+  const date = (value?: string) => dateValue(value) === undefined ? "미확인" : value!;
+  const amount = (value?: number) => value != null && Number.isSafeInteger(value) && value >= 0
+    ? `${value.toLocaleString("ko-KR")}원` : "미확인";
+  const reversedPrice = item.minPrice != null && item.maxPrice != null && item.minPrice > item.maxPrice;
+  const reversedPeriod = dateValue(item.applyStartDate) !== undefined && dateValue(item.applyEndDate) !== undefined
+    && item.applyStartDate! > item.applyEndDate!;
+  return {
+    ...item,
+    period: reversedPeriod ? "접수 일정은 공고문 확인" : `시작 ${date(item.applyStartDate)} — 마감 ${date(item.applyEndDate)}`,
+    winnerDate: date(item.winnerAnnounceDate),
+    price: reversedPrice ? `${item.priceLabel} 범위 확인 필요`
+      : `${item.priceLabel} 최소 ${amount(item.minPrice)} — 최대 ${amount(item.maxPrice)}`,
+  };
+}
+
 export type ComparisonGroup = "ALL" | "BASIC" | "SCHEDULE" | "COST";
 export interface ComparisonItem {
   id: number; title: string; category: string; region: string; location: string;

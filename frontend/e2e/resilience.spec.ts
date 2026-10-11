@@ -715,14 +715,14 @@ for (const field of ["businessEntityName", "address", "applyStartDate", "syncedA
     await page.goto("/?region=서울");
     await expect(page.getByRole("heading", { name: notice.title, exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() =>
-      Object.keys(sessionStorage).filter(key => key.startsWith("cheongyak-one-notice-page:v2:")).length,
+      Object.keys(sessionStorage).filter(key => key.startsWith("cheongyak-one-notice-page:v3:")).length,
     )).toBeGreaterThan(0);
     const activeCacheKey = await page.evaluate(() => Object.keys(sessionStorage).find(key =>
-      key.startsWith("cheongyak-one-notice-page:v2:") && JSON.parse(key.slice("cheongyak-one-notice-page:v2:".length)).activeOnly === true));
+      key.startsWith("cheongyak-one-notice-page:v3:") && JSON.parse(key.slice("cheongyak-one-notice-page:v3:".length)).activeOnly === true));
     expect(activeCacheKey).toBeTruthy();
     await page.addInitScript(({ field }) => {
       for (const key of Object.keys(sessionStorage)) {
-        if (!key.startsWith("cheongyak-one-notice-page:v2:")) continue;
+        if (!key.startsWith("cheongyak-one-notice-page:v3:")) continue;
         const entry = JSON.parse(sessionStorage.getItem(key)!);
         entry.page.content = entry.page.content.map((row: Record<string, unknown>) => ({ ...row, [field]: field === "syncedAt" ? "bad" : { invalid: true } }));
         sessionStorage.setItem(key, JSON.stringify(entry));
@@ -748,7 +748,7 @@ for (const field of ["businessEntityName", "address", "applyStartDate", "syncedA
     await expect.poll(() => page.evaluate(key => JSON.parse(sessionStorage.getItem(key!) ?? "null")?.page.content[0]?.title, activeCacheKey)).toBe(notice.title);
     // The successful cache write also prunes corrupt inactive tab entries.
     await expect.poll(() => page.evaluate(field => Object.keys(sessionStorage)
-      .filter(key => key.startsWith("cheongyak-one-notice-page:v2:"))
+      .filter(key => key.startsWith("cheongyak-one-notice-page:v3:"))
       .every(key => JSON.parse(sessionStorage.getItem(key)!).page.content.every((row: Record<string, unknown>) =>
         field === "syncedAt" ? typeof row[field] === "string" && Number.isFinite(Date.parse(row[field] as string))
           : row[field] == null || typeof row[field] === "string")), field)).toBe(true);
@@ -806,152 +806,638 @@ test("지연된 목록: 모바일에서 기다리지 않고 필터를 열어 새
   const pending: Route[] = [];
   let newConditionRequests = 0;
   await page.route("**/api/v1/notices?**", route => {
-    const params = new URL(route.request().url()).searchParams;
-    if (params.get("region") !== "부산") { pending.push(route); return; }
-    newConditionRequests++;
-    return route.fulfill({ json: { content: [{ ...notice, title: "새 조건 부산 공고", regionCode: "부산", address: "부산 해운대구" }], number: 0, size: 12, totalElements: 1, totalPages: 1 } });
-  });
-  await page.goto("/");
-  await expect.poll(() => pending.length).toBe(1);
-  await expect(page.getByRole("status", { name: "청약 공고 불러오는 중" })).toBeVisible();
-  const filterButton = page.getByRole("button", { name: /청약 필터 열기/ });
-  await expect(filterButton).toBeEnabled();
-  await filterButton.click();
-  const dialog = page.getByRole("dialog", { name: "청약 조건 선택" });
-  await expect(dialog).toBeVisible();
-  const cancelled = page.waitForEvent("requestfailed", request => request === pending[0].request());
-  await dialog.getByRole("button", { name: "부산", exact: true }).click();
-  await cancelled;
-  await expect.poll(() => newConditionRequests).toBeGreaterThan(0);
-  await expect.poll(() => new URL(page.url()).searchParams.get("region")).toBe("부산");
-  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "새 조건 부산 공고", exact: true })).toBeVisible();
-  // A canceled initial request must neither spawn prefetches nor replace the new condition.
-  for (const route of pending) await route.fulfill({ json: { content: [{ ...notice, title: "이전 조건 공고" }], number: 0, size: 12, totalElements: 1, totalPages: 1 } });
-  await expect(page.getByRole("heading", { name: "새 조건 부산 공고", exact: true })).toBeVisible();
-  await expect.poll(() => page.evaluate(() => Object.keys(sessionStorage)
-    .filter(key => key.startsWith("cheongyak-one-notice-page:v2:"))
-    .some(key => sessionStorage.getItem(key)?.includes("이전 조건 공고")))).toBe(false);
-  await expect(page.getByRole("heading", { name: "새 조건 부산 공고", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "이전 조건 공고", exact: true })).toHaveCount(0);
-  await expect(filterButton).toBeFocused();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  expect(errors).toEqual([]);
-});
+    const params = n…5315 tokens truncated…;
+  progress: FavoriteProgress;
+  applicationResult: FavoriteApplicationResult;
+  applicationResultMemo?: string;
+  applicationResultRecordedAt?: string;
+  memo?: string;
+  noticeDocumentChecked: boolean;
+  eligibilityChecked: boolean;
+  scheduleChecked: boolean;
+  fundsChecked: boolean;
+  updatedAt: string;
+}
 
-test("동기화 시각: 잘못된 목록·최신성·소스 시각에도 탐색과 재검색을 유지한다", async ({ page }) => {
-  const errors: string[] = [];
-  page.on("pageerror", error => errors.push(error.message));
-  await mockPublicApi(page);
-  const searches: string[] = [];
-  await page.route("**/api/v1/notices?**", route => {
-    const params = new URL(route.request().url()).searchParams;
-    searches.push(new URL(route.request().url()).search);
-    const title = params.get("keyword") === "강남" ? "재검색 강남 공고" : notice.title;
-    return route.fulfill({ json: { content: [{ ...notice, title, syncedAt: "bad" }], number: 0, size: 12, totalElements: 1, totalPages: 1 } });
-  });
-  let freshness: Route | undefined;
-  await page.route("**/api/v1/notices/freshness", route => { freshness = route; });
-  await page.goto("/");
-  await expect(page.getByRole("heading", { name: notice.title, exact: true })).toBeVisible();
-  await expect(page.locator(".data-note")).toContainText("시각 미확인");
-  await expect.poll(() => Boolean(freshness)).toBe(true);
-  await freshness!.fulfill({ json: {
-    status: "FRESH", generatedAt: "2026-10-09T00:00:00Z", lastCompletedAt: "bad",
-    sources: [{ sourceSystem: "REB_APT", configured: true, status: "FRESH", lastSuccessfulAt: "bad" }],
-  } });
-  const sources = page.locator(".source-freshness");
-  await sources.getByText("유형별 수집 현황", { exact: true }).click();
-  await expect(sources).toContainText("마지막 성공: 시각 미확인");
-  await expect(page.locator(".data-note")).toContainText("시각 미확인");
-  await page.getByLabel("청약 검색어", { exact: true }).fill("강남");
-  await expect.poll(() => searches.some(query => new URLSearchParams(query).get("keyword") === "강남")).toBe(true);
-  await expect(page.getByRole("heading", { name: "재검색 강남 공고", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: notice.title, exact: true })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "화면을 표시하지 못했어요" })).toHaveCount(0);
-  expect(errors).toEqual([]);
-});
+export interface FavoriteTrackerInput {
+  progress: FavoriteProgress;
+  applicationResult?: FavoriteApplicationResult;
+  applicationResultMemo?: string;
+  memo?: string;
+  noticeDocumentChecked: boolean;
+  eligibilityChecked: boolean;
+  scheduleChecked: boolean;
+  fundsChecked: boolean;
+}
 
-test("목록 우선 조회: 실패 중 사전 요청을 막고 성공 후 탭 캐시를 준비한다", async ({ page }) => {
-  await mockPublicApi(page);
-  const requests: Route[] = [];
-  let revalidating: Route | undefined;
-  let holdOpen = false;
-  await page.route("**/api/v1/notices?**", route => {
-    requests.push(route);
-    if (requests.length === 1) return;
-    const isOpen = new URL(route.request().url()).searchParams.get("status") === "OPEN";
-    if (isOpen && holdOpen) { revalidating = route; return; }
-    return route.fulfill({ json: { content: [{ ...notice, title: isOpen ? "미리 읽은 접수중 공고" : notice.title }], number: 0, size: 12, totalElements: 1, totalPages: 1 } });
-  });
-  await page.goto("/");
-  await expect.poll(() => requests.length).toBe(1);
-  await expect(page.getByRole("status", { name: "청약 공고 불러오는 중" })).toBeVisible();
-  await requests[0].fulfill({ status: 503, json: { detail: "temporary unavailable" } });
-  await expect(page.getByText(/서버에 연결하지 못했어요/)).toBeVisible();
-  expect(requests.length).toBe(1);
-  await expect.poll(() => requests.length).toBe(5);
-  await expect.poll(() => page.evaluate(() => Object.keys(sessionStorage).some(key => sessionStorage.getItem(key)?.includes("미리 읽은 접수중 공고")))).toBe(true);
-  holdOpen = true;
-  await page.getByRole("tab", { name: /접수중/ }).click();
-  await expect.poll(() => Boolean(revalidating)).toBe(true);
-  await expect(page.getByRole("heading", { name: "미리 읽은 접수중 공고", exact: true })).toBeVisible();
-  await expect(page.getByRole("status", { name: "청약 공고 불러오는 중" })).toHaveCount(0);
-  await revalidating!.fulfill({ json: { content: [notice], number: 0, size: 12, totalElements: 1, totalPages: 1 } });
-});
+export interface MemberSearchPreference {
+  region?: string;
+  housingCategory?: HousingCategory;
+  supplyType?: SupplyType;
+  status: SearchPreferenceStatus;
+  sort: SearchPreferenceSort;
+  minPriceManwon?: number;
+  maxPriceManwon?: number;
+  minArea?: number;
+  maxArea?: number;
+  updatedAt: string;
+}
 
-test("탐색 복원: 뒤로가기와 앞으로가기에 예산·면적·검색어를 함께 복원한다", async ({ page }) => {
-  const searches = await mockPublicApi(page);
-  await page.goto("/?q=서울&minPriceManwon=30000&maxPriceManwon=60000&minArea=59&maxArea=84");
-  await expect(page.getByRole("heading", { name: notice.title, exact: true })).toBeVisible();
-  await page.evaluate(() => {
-    history.pushState(null, "", "/?q=부산&minPriceManwon=10000&maxPriceManwon=40000&minArea=30&maxArea=60");
-    dispatchEvent(new PopStateEvent("popstate"));
-  });
-  await expect.poll(() => searches.some(q => {
-    const p = new URLSearchParams(q);
-    return p.get("keyword") === "부산" && p.get("minPrice") === "100000000" && p.get("maxArea") === "60";
-  })).toBe(true);
-  await page.goBack();
-  await expect(page.getByLabel("청약 검색어", { exact: true })).toHaveValue("서울");
-  await page.getByRole("button", { name: /청약 필터 열기/ }).click();
-  const dialog = page.getByRole("dialog", { name: "청약 조건 선택" });
-  await expect(dialog.getByLabel("예산 최소 (만원)", { exact: true })).toHaveValue("30000");
-  await expect(dialog.getByLabel("예산 최대 (만원)", { exact: true })).toHaveValue("60000");
-  await expect(dialog.getByLabel("면적 최소 (㎡)", { exact: true })).toHaveValue("59");
-  await expect(dialog.getByLabel("면적 최대 (㎡)", { exact: true })).toHaveValue("84");
-  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
-  await page.goForward();
-  await expect(page.getByLabel("청약 검색어", { exact: true })).toHaveValue("부산");
-  await expect.poll(() => new URL(page.url()).searchParams.get("minPriceManwon")).toBe("10000");
-  await page.getByRole("button", { name: /청약 필터 열기/ }).click();
-  await expect(dialog.getByLabel("면적 최대 (㎡)", { exact: true })).toHaveValue("60");
-});
+export interface SearchPreferenceInput {
+  region?: string;
+  housingCategory?: HousingCategory;
+  supplyType?: SupplyType;
+  status: SearchPreferenceStatus;
+  sort: SearchPreferenceSort;
+  minPriceManwon?: number;
+  maxPriceManwon?: number;
+  minArea?: number;
+  maxArea?: number;
+}
 
-test("탐색 복원: 관심 목록에서 상세 닫기·뒤로가기 후 목록과 초점을 유지한다", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const searches = await mockPublicApi(page);
-  await page.goto("/");
-  const card = page.locator("#notice-card-1");
-  await card.getByLabel(/관심청약 저장/).click();
-  const favorites = page.getByRole("button", { name: "관심청약 1개", exact: true });
-  await favorites.click();
-  await expect(favorites).toHaveAttribute("aria-pressed", "true");
-  await expect.poll(() => searches.some(q => new URLSearchParams(q).has("ids"))).toBe(true);
-  const opener = card.getByRole("button", { name: "공고 핵심만 보기", exact: true });
-  const count = searches.length;
-  await opener.click();
-  const dialog = page.getByRole("dialog", { name: notice.title });
-  await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
-  await expect(dialog).toHaveCount(0);
-  await expect(favorites).toHaveAttribute("aria-pressed", "true");
-  await expect(opener).toBeFocused();
-  await opener.click();
-  await expect(dialog).toBeVisible();
-  await page.goBack();
-  await expect(dialog).toHaveCount(0);
-  await expect(favorites).toHaveAttribute("aria-pressed", "true");
-  await expect(opener).toBeFocused();
-  expect(searches.length).toBe(count);
-});
+export interface SavedSearchProfile extends SearchPreferenceInput {
+  id: number;
+  name: string;
+  defaultProfile: boolean;
+  newNoticeEnabled: boolean;
+  updatedAt: string;
+}
+
+export interface EligibilityProfile {
+  homeless: "YES" | "NO" | "UNKNOWN";
+  subscriptionAccount: "YES" | "NO" | "UNKNOWN";
+  newlywed: "YES" | "NO" | "UNKNOWN";
+  firstHome: "YES" | "NO" | "UNKNOWN";
+  updatedAt: string;
+}
+
+export type EligibilityProfileInput = Omit<EligibilityProfile, "updatedAt">;
+
+interface FavoriteIdsResponse {
+  noticeIds: number[];
+}
+
+interface ComparisonIdsResponse {
+  noticeIds: number[];
+}
+
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+export class ApiRequestTimeoutError extends Error {
+  constructor() {
+    super("서버 응답이 지연되고 있어요. 잠시 후 다시 시도해주세요.");
+    this.name = "ApiRequestTimeoutError";
+  }
+}
+
+const API_REQUEST_TIMEOUT_MS = 12_000;
+const DEMO_MODE = import.meta.env?.VITE_DEMO_MODE === "true";
+// Vercel은 빌드 시 이 값을 주입한다. 비어 있으면 Vite 개발 프록시와 같은 출처 API를 그대로 사용한다.
+const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
+let responseCsrfToken: string | undefined;
+
+function apiUrl(path: string): string {
+  return /^https?:\/\//.test(path) ? path : `${API_BASE_URL}${path}`;
+}
+
+const DEMO_NOTICES: NoticeDetail[] = [
+  { id: 101, sourceSystem: "MYHOME_PUBLIC_RENTAL", housingCategory: "PUBLIC_RENTAL", status: "OPEN", title: "서울 수서 A3블록 행복주택 입주자 모집", regionCode: "서울", address: "서울특별시 강남구 자곡동", noticeDate: "2026-09-02", applyStartDate: "2026-09-07", applyEndDate: "2026-09-12", winnerAnnounceDate: "2026-10-08", totalUnits: 320, housingDetailType: "행복주택", rentType: "공공임대", businessEntityName: "한국토지주택공사", contactPhone: "1600-1004", officialUrl: "https://apply.lh.or.kr", syncedAt: "2026-09-09T08:30:00+09:00" },
+  { id: 102, sourceSystem: "REB_APT", housingCategory: "APARTMENT", status: "OPEN", title: "고덕강일 3단지 공공분양 잔여세대", regionCode: "서울", address: "서울특별시 강동구 강일동", noticeDate: "2026-09-01", applyStartDate: "2026-09-08", applyEndDate: "2026-09-10", winnerAnnounceDate: "2026-09-22", totalUnits: 96, minPrice: 548000000, maxPrice: 612000000, businessEntityName: "서울주택도시공사", officialUrl: "https://www.applyhome.co.kr", syncedAt: "2026-09-09T08:30:00+09:00" },
+  { id: 103, sourceSystem: "REB_APT", housingCategory: "APARTMENT", status: "UPCOMING", title: "과천지식정보타운 S-12 신혼희망타운", regionCode: "경기", address: "경기도 과천시 갈현동", noticeDate: "2026-09-05", applyStartDate: "2026-09-14", applyEndDate: "2026-09-16", winnerAnnounceDate: "2026-10-02", totalUnits: 472, minPrice: 590000000, maxPrice: 680000000, housingDetailType: "신혼희망타운", officialUrl: "https://www.applyhome.co.kr", syncedAt: "2026-09-09T08:30:00+09:00" },
+  { id: 104, sourceSystem: "REB_OFFICETEL", housingCategory: "OFFICETEL", status: "OPEN", title: "마곡 르웨스트 오피스텔 일반공급", regionCode: "서울", address: "서울특별시 강서구 마곡동", noticeDate: "2026-09-03", applyStartDate: "2026-09-09", applyEndDate: "2026-09-11", winnerAnnounceDate: "2026-09-18", totalUnits: 128, minPrice: 390000000, maxPrice: 520000000, officialUrl: "https://www.applyhome.co.kr", syncedAt: "2026-09-09T08:30:00+09:00" },
+  { id: 105, sourceSystem: "MYHOME_PUBLIC_RENTAL", housingCategory: "PUBLIC_RENTAL", status: "UPCOMING", title: "고양창릉 A4블록 국민임대 예비입주자", regionCode: "경기", address: "경기도 고양시 덕양구 원흥동", noticeDate: "2026-09-06", applyStartDate: "2026-09-18", applyEndDate: "2026-09-22", winnerAnnounceDate: "2026-11-04", totalUnits: 580, housingDetailType: "국민임대", rentType: "공공임대", businessEntityName: "한국토지주택공사", officialUrl: "https://apply.lh.or.kr", syncedAt: "2026-09-09T08:30:00+09:00" },
+  { id: 106, sourceSystem: "REB_APT", housingCategory: "APARTMENT", status: "CLOSED", title: "인천검단 AA21블록 공공분양", regionCode: "인천", address: "인천광역시 서구 원당동", noticeDate: "2026-08-25", applyStartDate: "2026-09-01", applyEndDate: "2026-09-04", winnerAnnounceDate: "2026-09-17", totalUnits: 611, minPrice: 430000000, maxPrice: 510000000, officialUrl: "https://www.applyhome.co.kr", syncedAt: "2026-09-09T08:30:00+09:00" },
+];
+
+function demoJson<T>(url: string, init: RequestInit): T {
+  const method = (init.method ?? "GET").toUpperCase();
+  const parsed = new URL(url, "https://preview.local");
+  if (method !== "GET") throw new ApiError(503, "미리보기에서는 화면만 확인할 수 있습니다. 실제 저장은 AWS 백엔드 배포 후 사용할 수 있어요.");
+  if (parsed.pathname === "/api/v1/members/me") throw new ApiError(401, "로그인이 필요합니다.");
+  if (parsed.pathname === "/api/v1/notices/facets") {
+    return { total: DEMO_NOTICES.length, endingToday: DEMO_NOTICES.filter((notice) => notice.applyEndDate === "2026-09-09").length, open: DEMO_NOTICES.filter((notice) => notice.status === "OPEN").length, upcoming: DEMO_NOTICES.filter((notice) => notice.status === "UPCOMING").length } as T;
+  }
+  const detailMatch = parsed.pathname.match(/^\/api\/v1\/notices\/(\d+)$/);
+  if (detailMatch) {
+    const notice = DEMO_NOTICES.find((item) => item.id === Number(detailMatch[1]));
+    if (!notice) throw new ApiError(404, "요청한 공고를 찾지 못했습니다.");
+    return notice as T;
+  }
+  const changesMatch = parsed.pathname.match(/^\/api\/v1\/notices\/(\d+)\/changes$/);
+  if (changesMatch) {
+    return [{ id: 1, summary: "접수 일정과 문의처가 최신 공고문 기준으로 갱신됐습니다.", changedAt: "2026-09-09T08:30:00+09:00" }] as T;
+  }
+  if (parsed.pathname === "/api/v1/notices") {
+    const keyword = parsed.searchParams.get("keyword")?.trim().toLowerCase();
+    const category = parsed.searchParams.get("category");
+    const status = parsed.searchParams.get("status");
+    const region = parsed.searchParams.get("region");
+    const endingToday = parsed.searchParams.get("endingToday") === "true";
+    const ids = parsed.searchParams.getAll("ids").map(Number);
+    const page = Number(parsed.searchParams.get("page") ?? 0);
+    const size = Number(parsed.searchParams.get("size") ?? 24);
+    const filtered = DEMO_NOTICES.filter((notice) =>
+      (!keyword || `${notice.title} ${notice.address ?? ""}`.toLowerCase().includes(keyword)) &&
+      (!category || notice.housingCategory === category) && (!status || notice.status === status) &&
+      (!region || notice.regionCode === region) && (!endingToday || notice.applyEndDate === "2026-09-09") &&
+      (!ids.length || ids.includes(notice.id)));
+    const content = filtered.slice(page * size, (page + 1) * size);
+    return { content, number: page, size, totalElements: filtered.length, totalPages: Math.ceil(filtered.length / size) } as T;
+  }
+  throw new ApiError(503, "이 기능은 AWS 백엔드 배포 후 사용할 수 있습니다.");
+}
+
+function cookieValue(name: string): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const prefix = `${name}=`;
+  return document.cookie
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith(prefix))
+    ?.slice(prefix.length);
+}
+
+function csrfToken(): string | undefined {
+  // 로컬 동일 출처 개발에서는 기존 쿠키 방식을 유지한다. 배포 환경에서는 Render
+  // 응답 헤더로 받은 값을 사용한다. Vercel에서 Render 쿠키는 document.cookie로 읽을 수 없다.
+  return cookieValue("CHEONGYAK_CSRF") ?? responseCsrfToken;
+}
+
+async function requestJson<T>(url: string, init: RequestInit = {}, timeoutMs = API_REQUEST_TIMEOUT_MS): Promise<T> {
+  const requestUrl = apiUrl(url);
+  if (DEMO_MODE) return demoJson<T>(requestUrl, init);
+  const headers = new Headers(init.headers);
+  headers.set("Accept", "application/json");
+  if (init.body) headers.set("Content-Type", "application/json");
+  const method = (init.method ?? "GET").toUpperCase();
+  if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+    const token = csrfToken();
+    if (token) headers.set("X-CSRF-Token", token);
+  }
+  const controller = new AbortController();
+  let timedOut = false;
+  const abortFromCaller = () => controller.abort();
+  if (init.signal?.aborted) controller.abort();
+  else init.signal?.addEventListener("abort", abortFromCaller, { once: true });
+  const timeout = globalThis.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    const response = await fetch(requestUrl, {
+      ...init,
+      headers,
+      signal: controller.signal,
+      // HttpOnly 회원 세션을 동일 출처 API 요청에 자동으로 포함한다.
+      credentials: "include",
+    });
+    const issuedCsrfToken = response.headers.get("X-CSRF-Token");
+    if (issuedCsrfToken) responseCsrfToken = issuedCsrfToken;
+
+    if (!response.ok) {
+      const problem = await response.json().catch((error: unknown) => {
+        if (controller.signal.aborted) throw error;
+        return undefined;
+      }) as { detail?: string } | undefined;
+      throw new ApiError(response.status, problem?.detail ?? (response.status === 404
+        ? "요청한 정보를 찾지 못했습니다."
+        : "요청을 처리하지 못했습니다."));
+    }
+
+    if (response.status === 204) return undefined as T;
+    const body = await response.text();
+    if (!body.trim()) return undefined as T;
+    return JSON.parse(body) as T;
+  } catch (error) {
+    if (timedOut) throw new ApiRequestTimeoutError();
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeout);
+    init.signal?.removeEventListener("abort", abortFromCaller);
+  }
+}
+
+export async function fetchNotices(
+  params: URLSearchParams,
+  signal?: AbortSignal,
+): Promise<PageResponse<NoticeSummary>> {
+  return requestJson<PageResponse<NoticeSummary>>(`/api/v1/notices?${params.toString()}`, { signal });
+}
+
+export function noticeSearchParams(request: NoticeSearchRequest): URLSearchParams {
+  const params = new URLSearchParams({
+    page: String(request.page ?? 0),
+    size: String(request.size ?? 24),
+    sort: request.sort ?? "LATEST",
+  });
+  if (request.category) params.set("category", request.category);
+  if (request.supplyType) params.set("supplyType", request.supplyType);
+  if (request.status) params.set("status", request.status);
+  if (request.keyword?.trim()) params.set("keyword", request.keyword.trim());
+  if (request.region?.trim()) params.set("region", request.region.trim());
+  if (request.minPrice !== undefined) params.set("minPrice", String(request.minPrice));
+  if (request.maxPrice !== undefined) params.set("maxPrice", String(request.maxPrice));
+  if (request.minArea !== undefined) params.set("minArea", String(request.minArea));
+  if (request.maxArea !== undefined) params.set("maxArea", String(request.maxArea));
+  if (request.ids?.length) request.ids.forEach((id) => params.append("ids", String(id)));
+  if (request.endingToday) params.set("endingToday", "true");
+  if (request.activeOnly) params.set("activeOnly", "true");
+  return params;
+}
+
+export function fetchNoticePage(request: NoticeSearchRequest, signal?: AbortSignal): Promise<PageResponse<NoticeSummary>> {
+  return fetchNotices(noticeSearchParams(request), signal);
+}
+
+export function fetchNoticeFacets(request: Pick<NoticeSearchRequest, "category" | "supplyType" | "keyword" | "region" | "minPrice" | "maxPrice" | "minArea" | "maxArea">, signal?: AbortSignal): Promise<NoticeSearchFacets> {
+  const params = noticeSearchParams({ ...request, page: 0, size: 1 });
+  params.delete("page");
+  params.delete("size");
+  params.delete("sort");
+  return requestJson<NoticeSearchFacets>(`/api/v1/notices/facets?${params.toString()}`, { signal });
+}
+
+export function fetchNoticeFreshness(signal?: AbortSignal): Promise<NoticeFreshness> {
+  return requestJson<NoticeFreshness>("/api/v1/notices/freshness", { signal });
+}
+
+export async function fetchNotice(id: number, signal?: AbortSignal): Promise<NoticeDetail> {
+  return requestJson<NoticeDetail>(`/api/v1/notices/${id}`, { signal });
+}
+
+export async function fetchNoticeChanges(id: number, signal?: AbortSignal): Promise<NoticeChange[]> {
+  return requestJson<NoticeChange[]>(`/api/v1/notices/${id}/changes`, { signal });
+}
+
+export async function fetchCurrentMember(): Promise<MemberProfile | undefined> {
+  try {
+    return await requestJson<MemberProfile>("/api/v1/members/me");
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) return undefined;
+    throw error;
+  }
+}
+
+export function signupMember(email: string, password: string, profile: MemberProfileInput): Promise<MemberProfile> {
+  return requestJson<MemberProfile>("/api/v1/auth/signup", {
+    method: "POST",
+    body: JSON.stringify({ email, password, ...profile }),
+  });
+}
+
+export function loginMember(email: string, password: string): Promise<MemberProfile> {
+  return requestJson<MemberProfile>("/api/v1/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function logoutMember(): Promise<void> {
+  await requestJson<void>("/api/v1/auth/logout", { method: "POST" });
+  responseCsrfToken = undefined;
+}
+
+export function requestEmailVerification(email: string): Promise<void> {
+  return requestJson<void>("/api/v1/auth/email-verification/request", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function confirmEmailVerification(token: string): Promise<void> {
+  return requestJson<void>("/api/v1/auth/email-verification/confirm", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
+export function requestPasswordReset(email: string): Promise<void> {
+  return requestJson<void>("/api/v1/auth/password-reset/request", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function resetPasswordWithToken(token: string, newPassword: string): Promise<void> {
+  return requestJson<void>("/api/v1/auth/password-reset/confirm", {
+    method: "POST",
+    body: JSON.stringify({ token, newPassword }),
+  });
+}
+
+export function updateMemberProfile(profile: MemberProfileInput): Promise<MemberProfile> {
+  return requestJson<MemberProfile>("/api/v1/members/me", {
+    method: "PATCH",
+    body: JSON.stringify(profile),
+  });
+}
+
+export function deleteMemberPersonalProfile(): Promise<MemberProfile> {
+  return requestJson<MemberProfile>("/api/v1/members/me/personal-profile", {
+    method: "DELETE",
+  });
+}
+
+export function fetchPolicyConsents(): Promise<PolicyConsent[]> {
+  return requestJson<PolicyConsent[]>("/api/v1/members/me/policy-consents");
+}
+
+export function changeMemberPassword(currentPassword: string, newPassword: string): Promise<void> {
+  return requestJson<void>("/api/v1/members/me/password", {
+    method: "PUT",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
+export function withdrawMember(password: string): Promise<void> {
+  return requestJson<void>("/api/v1/members/me", {
+    method: "DELETE",
+    body: JSON.stringify({ password }),
+  });
+}
+
+export async function fetchFavoriteIds(): Promise<number[]> {
+  return (await requestJson<FavoriteIdsResponse>("/api/v1/members/me/favorites")).noticeIds;
+}
+
+export function fetchFavoriteTrackers(): Promise<FavoriteTracker[]> {
+  return requestJson<FavoriteTracker[]>("/api/v1/members/me/favorites/tracker");
+}
+
+export function updateFavoriteTracker(id: number, input: FavoriteTrackerInput): Promise<FavoriteTracker> {
+  return requestJson<FavoriteTracker>(`/api/v1/members/me/favorites/${id}/tracker`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function mergeFavoriteIds(noticeIds: number[]): Promise<number[]> {
+  if (noticeIds.length === 0) return fetchFavoriteIds();
+  return (await requestJson<FavoriteIdsResponse>("/api/v1/members/me/favorites/merge", {
+    method: "POST",
+    body: JSON.stringify({ noticeIds }),
+  })).noticeIds;
+}
+
+export async function setFavorite(id: number, saved: boolean): Promise<number[]> {
+  return (await requestJson<FavoriteIdsResponse>(`/api/v1/members/me/favorites/${id}`, {
+    method: saved ? "PUT" : "DELETE",
+  })).noticeIds;
+}
+
+export async function fetchComparisonIds(): Promise<number[]> {
+  return (await requestJson<ComparisonIdsResponse>("/api/v1/members/me/comparisons")).noticeIds;
+}
+
+export async function mergeComparisonIds(noticeIds: number[]): Promise<number[]> {
+  if (noticeIds.length === 0) return fetchComparisonIds();
+  return (await requestJson<ComparisonIdsResponse>("/api/v1/members/me/comparisons/merge", {
+    method: "POST",
+    body: JSON.stringify({ noticeIds: noticeIds.slice(0, 3) }),
+  })).noticeIds;
+}
+
+export async function setComparison(id: number, selected: boolean): Promise<number[]> {
+  return (await requestJson<ComparisonIdsResponse>(`/api/v1/members/me/comparisons/${id}`, {
+    method: selected ? "PUT" : "DELETE",
+  })).noticeIds;
+}
+
+export async function clearComparisons(): Promise<number[]> {
+  return (await requestJson<ComparisonIdsResponse>("/api/v1/members/me/comparisons", {
+    method: "DELETE",
+  })).noticeIds;
+}
+
+export function fetchSearchPreference(): Promise<MemberSearchPreference | undefined> {
+  return requestJson<MemberSearchPreference | undefined>("/api/v1/members/me/search-preference");
+}
+
+export function saveSearchPreference(input: SearchPreferenceInput): Promise<MemberSearchPreference> {
+  return requestJson<MemberSearchPreference>("/api/v1/members/me/search-preference", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteSearchPreference(): Promise<void> {
+  return requestJson<void>("/api/v1/members/me/search-preference", { method: "DELETE" });
+}
+
+export function fetchSavedSearchProfiles(): Promise<SavedSearchProfile[]> {
+  return requestJson<SavedSearchProfile[]>("/api/v1/members/me/saved-search-profiles");
+}
+
+export function createSavedSearchProfile(input: SearchPreferenceInput & { name: string }): Promise<SavedSearchProfile> {
+  return requestJson<SavedSearchProfile>("/api/v1/members/me/saved-search-profiles", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function deleteSavedSearchProfile(id: number): Promise<void> {
+  return requestJson<void>(`/api/v1/members/me/saved-search-profiles/${id}`, { method: "DELETE" });
+}
+
+export function updateSavedSearchProfile(id: number, input: SearchPreferenceInput & { name: string }): Promise<SavedSearchProfile> {
+  return requestJson<SavedSearchProfile>(`/api/v1/members/me/saved-search-profiles/${id}`, { method: "PUT", body: JSON.stringify(input) });
+}
+
+export function setDefaultSavedSearchProfile(id: number): Promise<SavedSearchProfile> {
+  return requestJson<SavedSearchProfile>(`/api/v1/members/me/saved-search-profiles/${id}/default`, { method: "PUT" });
+}
+
+export function duplicateSavedSearchProfile(id: number): Promise<SavedSearchProfile> {
+  return requestJson<SavedSearchProfile>(`/api/v1/members/me/saved-search-profiles/${id}/duplicate`, { method: "POST" });
+}
+
+/** 프로필별 신규 공고 알림만 켜거나 끈다. */
+export function setSavedSearchProfileNewNoticeEnabled(id: number, enabled: boolean): Promise<SavedSearchProfile> {
+  return requestJson<SavedSearchProfile>(`/api/v1/members/me/saved-search-profiles/${id}/new-notice-enabled`, { method: "PUT", body: JSON.stringify({ enabled }) });
+}
+
+export function fetchEligibilityProfile(): Promise<EligibilityProfile | undefined> {
+  return requestJson<EligibilityProfile | undefined>("/api/v1/members/me/eligibility-profile");
+}
+
+export function saveEligibilityProfile(input: EligibilityProfileInput): Promise<EligibilityProfile> {
+  return requestJson<EligibilityProfile>("/api/v1/members/me/eligibility-profile", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteEligibilityProfile(): Promise<void> {
+  return requestJson<void>("/api/v1/members/me/eligibility-profile", { method: "DELETE" });
+}
+
+export function fetchMemberSessions(): Promise<MemberSession[]> {
+  return requestJson<MemberSession[]>("/api/v1/members/me/sessions");
+}
+
+export function revokeMemberSession(sessionId: number): Promise<void> {
+  return requestJson<void>(`/api/v1/members/me/sessions/${sessionId}`, { method: "DELETE" });
+}
+
+export function revokeOtherMemberSessions(): Promise<MemberSession[]> {
+  return requestJson<MemberSession[]>("/api/v1/members/me/sessions/others", { method: "DELETE" });
+}
+
+export function fetchNotificationInbox(options?: NotificationInboxQuery): Promise<NotificationInbox> {
+  const params = new URLSearchParams();
+  Object.entries(options ?? {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  });
+  const suffix = params.size ? `?${params}` : "";
+  return requestJson<NotificationInbox>(`/api/v1/members/me/notifications${suffix}`);
+}
+
+export function markNotificationRead(notificationId: number): Promise<MemberNotification> {
+  return requestJson<MemberNotification>(`/api/v1/members/me/notifications/${notificationId}/read`, {
+    method: "PATCH",
+  });
+}
+
+export function markAllNotificationsRead(): Promise<void> {
+  return requestJson<void>("/api/v1/members/me/notifications/read-all", { method: "POST" });
+}
+
+export function fetchNotificationPreference(): Promise<NotificationPreference> {
+  return requestJson<NotificationPreference>("/api/v1/members/me/notifications/preference");
+}
+
+export function saveNotificationPreference(
+  preference: Omit<NotificationPreference, "updatedAt">,
+): Promise<NotificationPreference> {
+  return requestJson<NotificationPreference>("/api/v1/members/me/notifications/preference", {
+    method: "PUT",
+    body: JSON.stringify(preference),
+  });
+}
+
+export type DevicePlatform = "ANDROID" | "IOS";
+
+export interface MemberDeviceToken {
+  id: number;
+  platform: DevicePlatform;
+  createdAt: string;
+  updatedAt: string;
+  lastSeenAt: string;
+}
+
+export function fetchDeviceTokens(): Promise<MemberDeviceToken[]> {
+  return requestJson<MemberDeviceToken[]>("/api/v1/members/me/device-tokens");
+}
+
+export function registerDeviceToken(pushToken: string, platform: DevicePlatform): Promise<MemberDeviceToken> {
+  return requestJson<MemberDeviceToken>("/api/v1/members/me/device-tokens", {
+    method: "PUT",
+    body: JSON.stringify({ pushToken, platform }),
+  });
+}
+
+export function unregisterDeviceToken(pushToken: string): Promise<void> {
+  return requestJson<void>("/api/v1/members/me/device-tokens", {
+    method: "DELETE",
+    body: JSON.stringify({ pushToken }),
+  });
+}
+
+export function fetchMemberRecommendations(): Promise<MemberRecommendationList> {
+  return requestJson<MemberRecommendationList>("/api/v1/members/me/recommendations");
+}
+
+export function dismissMemberRecommendation(noticeId: number): Promise<void> {
+  return requestJson<void>(`/api/v1/members/me/recommendations/${noticeId}/dismiss`, { method: "POST" });
+}
+
+export function resetDismissedRecommendations(): Promise<void> {
+  return requestJson<void>("/api/v1/members/me/recommendations/dismissed", { method: "DELETE" });
+}
+
+export function fetchAdminSyncDashboard(): Promise<AdminSyncDashboard> {
+  return requestJson<AdminSyncDashboard>("/api/v1/admin/sync-executions");
+}
+
+export function requestAdminNoticeSynchronization(source?: SourceSystem): Promise<void> {
+  return requestJson<void>("/api/v1/admin/sync-executions" + (source ? `?source=${source}` : ""), { method: "POST" });
+}
+
+export function requestAdminUnitTypeBackfill(): Promise<void> {
+  return requestJson<void>("/api/v1/admin/sync-executions/unit-types", { method: "POST" });
+}
+
+export function fetchAdminMembers(
+  query: string,
+  status: AdminMemberStatus | "",
+  page: number,
+): Promise<AdminMemberPage> {
+  const parameters = new URLSearchParams({ page: String(page), size: "20" });
+  if (query.trim()) parameters.set("query", query.trim());
+  if (status) parameters.set("status", status);
+  return requestJson<AdminMemberPage>(`/api/v1/admin/members?${parameters}`);
+}
+
+export function fetchAdminMemberStatistics(): Promise<AdminMemberStatistics> {
+  return requestJson<AdminMemberStatistics>("/api/v1/admin/members/statistics");
+}
+
+export function unlockAdminMember(memberId: number): Promise<AdminMember> {
+  return requestJson<AdminMember>(`/api/v1/admin/members/${memberId}/unlock`, { method: "POST" });
+}
+
+export function revokeAdminMemberSessions(memberId: number): Promise<void> {
+  return requestJson<void>(`/api/v1/admin/members/${memberId}/sessions`, { method: "DELETE" });
+}
+
+export function suspendAdminMember(memberId: number, reason: string): Promise<AdminMember> {
+  return requestJson<AdminMember>(`/api/v1/admin/members/${memberId}/suspend`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export function reactivateAdminMember(memberId: number): Promise<AdminMember> {
+  return requestJson<AdminMember>(`/api/v1/admin/members/${memberId}/reactivate`, { method: "POST" });
+}
+
+export interface AdminPushNotificationDashboard {
+  noDevicesLast24Hours?: number;
+  invalidTokensLast24Hours?: number;
+  unknownLast24Hours?: number;
+  registeredDeviceCount: number;
+  pendingCount: number;
+  permanentlyFailedCount: number;
+  sentLast24Hours: number;
+  recentFailures: Array<{ notificationId: number; noticeTitle: string; type: string; attempts: number; error?: string; nextAttemptAt?: string }>;
+  generatedAt: string;
+}
+
+export function fetchAdminPushNotificationDashboard(): Promise<AdminPushNotificationDashboard> {
+  return requestJson<AdminPushNotificationDashboard>("/api/v1/admin/notifications/push");
+}
+
+export interface AdminPushDispatchResult {
+  sentCount: number;
+  acceptedCount?: number;
+  selectedCount?: number;
+  otherCount?: number;
+  errorCount?: number;
+}
+
+export function dispatchAdminPushNotifications(): Promise<AdminPushDispatchResult> {
+  return requestJson<AdminPushDispatchResult>("/api/v1/admin/notifications/push/dispatch", { method: "POST" });
+}
+
+export function retryAdminPushNotification(notificationId: number): Promise<void> {
+  return requestJson<void>(`/api/v1/admin/notifications/push/${notificationId}/retry`, { method: "POST" });
+}
+
+export function fetchAdminAuditLogs(): Promise<AdminAuditLog[]> {
+  return requestJson<AdminAuditLog[]>("/api/v1/admin/audit-logs");
+}

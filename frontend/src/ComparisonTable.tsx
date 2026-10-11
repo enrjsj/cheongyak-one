@@ -32,7 +32,7 @@ export default function ComparisonTable({ items, busy, onRemove }: { items: Comp
       <button type="button" onClick={download}>현재 비교표 CSV 저장</button>
     </div>
     <p role="status">공고 {items.length}개 · 전체 {rows.length}개 항목 중 차이 {rows.filter(row => row.different).length}개 · 현재 {visible.length}개 표시</p>
-    <p id="comparison-scroll-help">표시된 정보의 차이만 비교합니다. 유불리·신청 자격 판단이 아니며, 미제공 정보는 공식 공고에서 확인하세요. 표는 좌우로 이동할 수 있습니다.</p>
+    <p id="comparison-scroll-help">금액은 원 단위, 날짜는 연도까지 비교합니다. 유불리·신청 자격 판단이 아니며, 미제공 정보는 공식 공고에서 확인하세요. 표는 좌우로 이동할 수 있습니다.</p>
     {fileError && <p role="alert">{fileError}</p>}
     {!visible.length && <p role="status">선택한 범위에 서로 다른 항목이 없습니다. 전체 항목으로 바꾸면 모든 정보를 볼 수 있어요.</p>}
     <div ref={tableRegion} className="compare-table-wrap" role="region" aria-label="공고 비교표" aria-describedby="comparison-scroll-help" tabIndex={0} onKeyDown={event => {

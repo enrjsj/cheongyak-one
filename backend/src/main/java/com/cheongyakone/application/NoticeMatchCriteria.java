@@ -18,6 +18,8 @@ public record NoticeMatchCriteria(
         HousingCategory category, SupplyType supplyType, String region,
         BigDecimal minPrice, BigDecimal maxPrice, BigDecimal minArea, BigDecimal maxArea
 ) {
+    private static final BigDecimal MAX_SAFE_PRICE = new BigDecimal("9007199254740991");
+
     public NoticeMatchCriteria {
         region = normalize(region);
         if (region.length() > 20) region = region.substring(0, 20);
@@ -32,8 +34,11 @@ public record NoticeMatchCriteria(
             if (reversedRange()) return cb.disjunction();
             var predicates = new ArrayList<Predicate>();
             if (category != null) predicates.add(cb.equal(root.get("housingCategory"), category));
-            if (supplyType == SupplyType.SALE) predicates.add(root.get("housingCategory").in(HousingCategory.APARTMENT, HousingCategory.OFFICETEL));
-            if (supplyType == SupplyType.PUBLIC_RENTAL) predicates.add(cb.equal(root.get("housingCategory"), HousingCategory.PUBLIC_RENTAL));
+            var rental = cb.or(cb.equal(root.get("housingCategory"), HousingCategory.PUBLIC_RENTAL),
+                    cb.like(cb.coalesce(root.<String>get("rentType"), ""), "%임대%"));
+            if (supplyType == SupplyType.SALE) predicates.add(cb.and(
+                    root.get("housingCategory").in(HousingCategory.APARTMENT, HousingCategory.OFFICETEL), cb.not(rental)));
+            if (supplyType == SupplyType.PUBLIC_RENTAL) predicates.add(rental);
             if (!region.isEmpty()) predicates.add(cb.or(
                     cb.equal(cb.lower(root.get("regionCode")), region),
                     cb.like(cb.lower(root.get("address")), escapeLike(region) + "%", '\\')));
@@ -42,6 +47,12 @@ public record NoticeMatchCriteria(
                 var unit = matching.from(SubscriptionNoticeUnitType.class);
                 var unitPredicates = new ArrayList<Predicate>();
                 unitPredicates.add(cb.equal(unit.get("notice").get("id"), root.get("id")));
+                if (hasPrice()) {
+                    // MAX_PRICE is NUMERIC(18, 0): persisted prices are already integers.
+                    unitPredicates.add(cb.greaterThanOrEqualTo(unit.get("maxPrice"), BigDecimal.ZERO));
+                    unitPredicates.add(cb.lessThanOrEqualTo(unit.get("maxPrice"), MAX_SAFE_PRICE));
+                }
+                if (hasArea()) unitPredicates.add(cb.greaterThan(unit.get("supplyArea"), BigDecimal.ZERO));
                 if (minPrice != null) unitPredicates.add(cb.greaterThanOrEqualTo(unit.get("maxPrice"), minPrice));
                 if (maxPrice != null) unitPredicates.add(cb.lessThanOrEqualTo(unit.get("maxPrice"), maxPrice));
                 if (minArea != null) unitPredicates.add(cb.greaterThanOrEqualTo(unit.get("supplyArea"), minArea));
@@ -69,9 +80,11 @@ public record NoticeMatchCriteria(
     public boolean matches(SubscriptionNotice notice, List<SubscriptionNoticeUnitType> units) {
         if (reversedRange()) return false;
         if (category != null && notice.getHousingCategory() != category) return false;
-        if (supplyType == SupplyType.SALE && notice.getHousingCategory() != HousingCategory.APARTMENT
-                && notice.getHousingCategory() != HousingCategory.OFFICETEL) return false;
-        if (supplyType == SupplyType.PUBLIC_RENTAL && notice.getHousingCategory() != HousingCategory.PUBLIC_RENTAL) return false;
+        boolean rental = notice.getHousingCategory() == HousingCategory.PUBLIC_RENTAL
+                || notice.getRentType() != null && notice.getRentType().contains("임대");
+        if (supplyType == SupplyType.SALE && (rental || notice.getHousingCategory() != HousingCategory.APARTMENT
+                && notice.getHousingCategory() != HousingCategory.OFFICETEL)) return false;
+        if (supplyType == SupplyType.PUBLIC_RENTAL && !rental) return false;
         if (!region.isEmpty() && !region.equals(normalize(notice.getRegionCode()))
                 && !normalize(notice.getAddress()).startsWith(region)) return false;
         if (!hasPrice() && !hasArea()) return true;
@@ -81,7 +94,15 @@ public record NoticeMatchCriteria(
     }
 
     public boolean matchesUnit(SubscriptionNoticeUnitType unit) {
-        return !reversedRange() && inRange(unit.getMaxPrice(), minPrice, maxPrice) && inRange(unit.getSupplyArea(), minArea, maxArea);
+        return !reversedRange()
+                && (!hasPrice() || validPrice(unit.getMaxPrice()) && inRange(unit.getMaxPrice(), minPrice, maxPrice))
+                && (!hasArea() || unit.getSupplyArea() != null && unit.getSupplyArea().signum() > 0
+                    && inRange(unit.getSupplyArea(), minArea, maxArea));
+    }
+
+    private static boolean validPrice(BigDecimal value) {
+        return value != null && value.signum() >= 0 && value.compareTo(MAX_SAFE_PRICE) <= 0
+                && value.stripTrailingZeros().scale() <= 0;
     }
 
     private boolean hasPrice() { return minPrice != null || maxPrice != null; }

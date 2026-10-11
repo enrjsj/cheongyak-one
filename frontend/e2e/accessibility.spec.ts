@@ -138,6 +138,44 @@ async function setup(page: Page) {
   await expect(page.locator('.header-actions').getByRole('button', { name: '로그인', exact: true })).toBeEnabled();
 }
 
+test('공고 정확성: 임대 아파트는 분양가로 오인하지 않고 부분 가격을 보존한다', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await setup(page);
+  const rental = { ...notices[0], rentType: '분양전환 가능임대', minPrice: null, maxPrice: 72000000,
+    unitTypes: [{ modelId: 'A', housingTypeName: '059A', supplyArea: 59, maxPrice: 72000000, totalSupplyCount: 1 }] };
+  await page.route('**/api/v1/notices?**', route => route.fulfill({ json: { content: [rental], number: 0, size: 12, totalElements: 1, totalPages: 1 } }));
+  await page.route('**/api/v1/notices/951', route => route.fulfill({ json: rental }));
+  await page.reload();
+  const card = page.getByRole('article', { name: rental.title });
+  await expect(card).toContainText('공고 금액 최대 7,200만원 · 최소 미확인');
+  await card.getByRole('button', { name: `${rental.title} 공고 상세 보기`, exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: rental.title, exact: true });
+  await expect(dialog.getByRole('columnheader', { name: '최고 공고 금액', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('columnheader', { name: '최고 분양가', exact: true })).toHaveCount(0);
+  await expect(dialog.locator('.cash-plan')).toContainText('이 분양 대금 계산기를 적용하지 않습니다');
+  await expect(dialog.locator('.unit-explorer')).toContainText('임대보증금·월 임대료·분양전환 조건');
+  expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+});
+
+test('공고 정확성: 비교 차이점은 반올림 금액과 연도 생략에 영향을 받지 않는다', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await setup(page);
+  const first = { ...notices[0], minPrice: 601000000, maxPrice: 601000000, applyStartDate: '2026-10-20', applyEndDate: '2026-10-21', winnerAnnounceDate: '2026-11-01' };
+  const second = { ...first, id: 952, title: '비교 두번째 공고', minPrice: 604000000, maxPrice: 604000000, applyStartDate: '2027-10-20', applyEndDate: '2027-10-21', winnerAnnounceDate: '2027-11-01' };
+  await page.route('**/api/v1/notices?**', route => route.fulfill({ json: { content: [first, second], number: 0, size: 12, totalElements: 2, totalPages: 1 } }));
+  await page.route('**/api/v1/notices/951', route => route.fulfill({ json: first }));
+  await page.route('**/api/v1/notices/952', route => route.fulfill({ json: second }));
+  await page.goto('/?compare=951,952');
+  await page.getByRole('button', { name: '비교하기', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '청약 공고 비교' });
+  await dialog.getByRole('button', { name: '차이점만 보기', exact: true }).click();
+  await expect(dialog.getByRole('row', { name: /^가격·보증금/ })).toContainText('601,000,000원');
+  await expect(dialog.getByRole('row', { name: /^가격·보증금/ })).toContainText('604,000,000원');
+  await expect(dialog.getByRole('row', { name: /^접수 일정/ })).toContainText('2027-10-20');
+  await expect(dialog.getByRole('row', { name: /^당첨 발표/ })).toContainText('2027-11-01');
+  expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+});
+
 for (const width of [320, 390, 1440]) test.describe(`접근성 ${width}px`, () => {
   test.beforeEach(async ({ page, isMobile }) => {
     test.skip(isMobile && width === 1440, 'iPhone은 모바일 너비만 검사한다.');
@@ -167,7 +205,7 @@ for (const width of [320, 390, 1440]) test.describe(`접근성 ${width}px`, () =
     const dialog = page.getByRole('dialog', { name: '청약 조건 선택' });
     await expect(dialog).toHaveAttribute('aria-modal', 'true');
     await expect(dialog).toHaveCSS('opacity', '1');
-    for (const [heading, selected, alternative] of [['지역', '서울', '경기'], ['주택 유형', '아파트', '오피스텔'], ['공급 방식', '분양', '공공임대']]) {
+    for (const [heading, selected, alternative] of [['지역', '서울', '경기'], ['주택 유형', '아파트', '오피스텔'], ['공급 방식', '분양', '임대']]) {
       const group = dialog.locator('.filter-group').filter({ has: page.getByRole('heading', { name: heading, exact: true }) });
       await group.getByRole('button', { name: selected, exact: true }).click();
       await expect(group.getByRole('button', { name: selected, exact: true })).toHaveAttribute('aria-pressed', 'true');
