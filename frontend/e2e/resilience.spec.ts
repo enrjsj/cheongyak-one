@@ -715,14 +715,14 @@ for (const field of ["businessEntityName", "address", "applyStartDate", "syncedA
     await page.goto("/?region=서울");
     await expect(page.getByRole("heading", { name: notice.title, exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() =>
-      Object.keys(sessionStorage).filter(key => key.startsWith("cheongyak-one-notice-page:v2:")).length,
+      Object.keys(sessionStorage).filter(key => key.startsWith("cheongyak-one-notice-page:v3:")).length,
     )).toBeGreaterThan(0);
     const activeCacheKey = await page.evaluate(() => Object.keys(sessionStorage).find(key =>
-      key.startsWith("cheongyak-one-notice-page:v2:") && JSON.parse(key.slice("cheongyak-one-notice-page:v2:".length)).activeOnly === true));
+      key.startsWith("cheongyak-one-notice-page:v3:") && JSON.parse(key.slice("cheongyak-one-notice-page:v3:".length)).activeOnly === true));
     expect(activeCacheKey).toBeTruthy();
     await page.addInitScript(({ field }) => {
       for (const key of Object.keys(sessionStorage)) {
-        if (!key.startsWith("cheongyak-one-notice-page:v2:")) continue;
+        if (!key.startsWith("cheongyak-one-notice-page:v3:")) continue;
         const entry = JSON.parse(sessionStorage.getItem(key)!);
         entry.page.content = entry.page.content.map((row: Record<string, unknown>) => ({ ...row, [field]: field === "syncedAt" ? "bad" : { invalid: true } }));
         sessionStorage.setItem(key, JSON.stringify(entry));
@@ -748,7 +748,7 @@ for (const field of ["businessEntityName", "address", "applyStartDate", "syncedA
     await expect.poll(() => page.evaluate(key => JSON.parse(sessionStorage.getItem(key!) ?? "null")?.page.content[0]?.title, activeCacheKey)).toBe(notice.title);
     // The successful cache write also prunes corrupt inactive tab entries.
     await expect.poll(() => page.evaluate(field => Object.keys(sessionStorage)
-      .filter(key => key.startsWith("cheongyak-one-notice-page:v2:"))
+      .filter(key => key.startsWith("cheongyak-one-notice-page:v3:"))
       .every(key => JSON.parse(sessionStorage.getItem(key)!).page.content.every((row: Record<string, unknown>) =>
         field === "syncedAt" ? typeof row[field] === "string" && Number.isFinite(Date.parse(row[field] as string))
           : row[field] == null || typeof row[field] === "string")), field)).toBe(true);
@@ -830,7 +830,7 @@ test("지연된 목록: 모바일에서 기다리지 않고 필터를 열어 새
   for (const route of pending) await route.fulfill({ json: { content: [{ ...notice, title: "이전 조건 공고" }], number: 0, size: 12, totalElements: 1, totalPages: 1 } });
   await expect(page.getByRole("heading", { name: "새 조건 부산 공고", exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => Object.keys(sessionStorage)
-    .filter(key => key.startsWith("cheongyak-one-notice-page:v2:"))
+    .filter(key => key.startsWith("cheongyak-one-notice-page:v3:"))
     .some(key => sessionStorage.getItem(key)?.includes("이전 조건 공고")))).toBe(false);
   await expect(page.getByRole("heading", { name: "새 조건 부산 공고", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "이전 조건 공고", exact: true })).toHaveCount(0);

@@ -3,7 +3,7 @@ import type { NoticeSummary, PageResponse } from "./api";
  * Render Free 인스턴스가 다시 기동되는 동안에도 같은 탭에서 이미 본 목록을 즉시 보여주기 위한
  * 짧은 수명의 세션 캐시다. 로그인 정보나 상세 공고, 서버 오류 정보는 저장하지 않는다.
  */
-export const NOTICE_PAGE_CACHE_PREFIX = "cheongyak-one-notice-page:v2:";
+export const NOTICE_PAGE_CACHE_PREFIX = "cheongyak-one-notice-page:v3:";
 export const NOTICE_PAGE_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 export const NOTICE_PAGE_CACHE_MAX_ENTRIES = 16;
 type StorageReader = Pick<Storage, "getItem"> & Partial<Pick<Storage, "removeItem">>;
@@ -35,7 +35,7 @@ function isNotice(value: unknown): value is NoticeSummary {
     && typeof notice.syncedAt === "string"
     && Number.isFinite(Date.parse(notice.syncedAt))
     && [
-      notice.businessEntityName, notice.regionCode, notice.address,
+      notice.businessEntityName, notice.rentType, notice.regionCode, notice.address,
       notice.noticeDate, notice.applyStartDate, notice.applyEndDate,
       notice.winnerAnnounceDate, notice.officialUrl,
     ].every(value => value == null || typeof value === "string")

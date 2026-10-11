@@ -3,6 +3,13 @@ import test from "node:test";
 import { cacheNoticePage, readCachedNoticePage, noticePageCacheKey, noticePageStorage, NOTICE_PAGE_CACHE_MAX_ENTRIES, NOTICE_PAGE_CACHE_MAX_AGE_MS } from "../src/noticePageCache.ts";
 
 const page = { content: [], number: 0, size: 12, totalElements: 0, totalPages: 0 };
+test("v3 lookups never reuse pre-rental-contract v2 pages", () => {
+  const storage = storageMock();
+  const current = noticePageCacheKey({ page: 1 });
+  assert.ok(current.startsWith('cheongyak-one-notice-page:v3:'));
+  storage.setItem(current.replace(':v3:', ':v2:'), JSON.stringify({ cachedAt: 100, page }));
+  assert.equal(readCachedNoticePage(storage, current, 101), undefined);
+});
 const key = (id) => noticePageCacheKey({ page: id });
 function storageMock() {
   const values = new Map();
@@ -97,7 +104,7 @@ const notice = {
   status: "OPEN", syncedAt: "2026-10-09T00:00:00Z",
 };
 const optionalTextFields = [
-  "businessEntityName", "regionCode", "address", "noticeDate",
+  "businessEntityName", "rentType", "regionCode", "address", "noticeDate",
   "applyStartDate", "applyEndDate", "winnerAnnounceDate", "officialUrl",
 ];
 const optionalNumberFields = ["totalUnits", "minPrice", "maxPrice", "minArea", "maxArea"];
@@ -137,7 +144,7 @@ test("old summaries, nullable fields and valid zero values remain cache-compatib
     { ...notice, ...Object.fromEntries(fields.map(field => [field, null])) },
     { ...notice, ...Object.fromEntries(optionalTextFields.map(field => [field, ""])),
       ...Object.fromEntries(optionalNumberFields.map(field => [field, 0])) },
-    { ...notice, businessEntityName: "공급기관", address: "서울",
+    { ...notice, businessEntityName: "공급기관", rentType: "분양전환 가능임대", address: "서울",
       applyStartDate: "2026-10-09", applyEndDate: "2026-10-10", totalUnits: 12,
       minPrice: 100000000, maxPrice: 200000000, minArea: 59.5, maxArea: 84.9 },
   ];

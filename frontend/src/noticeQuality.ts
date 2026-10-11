@@ -1,4 +1,5 @@
 import type { NoticeDetail } from "./api";
+import { isRentalNotice, noticePriceLabel } from "./noticeSupply.ts";
 
 export type NoticeQualityItem = { code: string; kind: "미제공" | "확인 필요"; message: string };
 
@@ -19,12 +20,12 @@ export function noticeQualityItems(notice: NoticeDetail): NoticeQualityItem[] {
     add("period-invalid", "확인 필요", "접수 날짜 또는 기간의 순서를 공식 공고문과 비교하세요.");
   }
   const prices = [notice.minPrice, notice.maxPrice];
-  const priceName = notice.housingCategory === "PUBLIC_RENTAL" ? "임대보증금" : "분양가";
+  const priceName = noticePriceLabel(notice);
   if (prices.some(value => value == null)) add("price-missing", "미제공", `${priceName} 범위의 일부 또는 전체가 제공되지 않았습니다.`);
-  if (prices.some(value => value != null && (!Number.isFinite(value) || value < 0)) || (notice.minPrice != null && notice.maxPrice != null && notice.minPrice > notice.maxPrice)) {
+  if (prices.some(value => value != null && (!Number.isSafeInteger(value) || value < 0)) || (notice.minPrice != null && notice.maxPrice != null && notice.minPrice > notice.maxPrice)) {
     add("price-invalid", "확인 필요", `${priceName} 금액 또는 범위의 순서를 공식 공고문과 비교하세요.`);
   }
-  if ((notice.housingCategory === "APARTMENT" || notice.housingCategory === "OFFICETEL") && !notice.unitTypes?.length) {
+  if (!isRentalNotice(notice) && (notice.housingCategory === "APARTMENT" || notice.housingCategory === "OFFICETEL") && !notice.unitTypes?.length) {
     add("units", "미제공", "주택형별 면적·공급 세대·분양가는 공식 공고문에서 확인하세요.");
   }
   return items;

@@ -1,9 +1,10 @@
 import type { NoticeDetail } from "./api";
 import { noticeQualityItems } from "./noticeQuality";
 import { unitQualityItems } from "./unitTypeTools";
+import { isRentalNotice } from "./noticeSupply";
 
 export default function NoticeQualityPanel({ notice }: { notice: NoticeDetail }) {
-  const sale = notice.housingCategory === "APARTMENT" || notice.housingCategory === "OFFICETEL";
+  const sale = !isRentalNotice(notice) && (notice.housingCategory === "APARTMENT" || notice.housingCategory === "OFFICETEL");
   const items = [...noticeQualityItems(notice), ...(sale ? unitQualityItems(notice.unitTypes ?? []) : [])];
   if (!items.length) return null;
   return <details className="notice-quality">

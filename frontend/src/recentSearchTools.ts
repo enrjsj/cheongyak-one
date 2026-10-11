@@ -7,7 +7,7 @@ export function recentSearchLabel(state: NoticeSearchState): string {
     state.query && `검색어 ${state.query}`,
     state.region,
     state.category && { APARTMENT: "아파트", PUBLIC_RENTAL: "공공임대", OFFICETEL: "오피스텔" }[state.category],
-    state.supplyType && { SALE: "분양", PUBLIC_RENTAL: "공공임대 공급" }[state.supplyType],
+    state.supplyType && { SALE: "분양", PUBLIC_RENTAL: "임대 공급" }[state.supplyType],
     (state.minPriceManwon || state.maxPriceManwon) && range(state.minPriceManwon, state.maxPriceManwon, "만원"),
     (state.minArea || state.maxArea) && range(state.minArea, state.maxArea, "㎡"),
     state.status !== "all" && { today: "오늘 마감", open: "접수중", upcoming: "오픈 예정" }[state.status],

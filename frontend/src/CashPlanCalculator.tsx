@@ -5,6 +5,7 @@ import { addCashScenario, captureCashPlan, cashPlanReport, emptyCashPlan, source
 import type { CashPlanInput, CashPlanSnapshot, CashPlanScenario } from "./cashPlan";
 import { formatHousingType } from "./noticePresentation";
 import CashPlanComparison from "./CashPlanComparison";
+import { isRentalNotice } from "./noticeSupply";
 import "./cashPlan.css";
 
 const money = (value: number) => `${value.toLocaleString("ko-KR")}원`;
@@ -62,7 +63,7 @@ export default function CashPlanCalculator({ notice }: { notice: NoticeDetail })
       } finally { anchor.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 10000); }
     } catch { setActionError("파일을 만들지 못했습니다. 잠시 후 다시 시도해주세요. 계산과 비교 내용은 유지됩니다."); }
   }
-  if (notice.housingCategory === "PUBLIC_RENTAL" || /임대/.test(notice.rentType ?? "")) return <section className="cash-plan" aria-label="필요 현금 계산기"><h3>필요 현금 계산기</h3><p>임대 공고는 보증금·월 임대료·전환 조건을 확인해야 하므로 이 분양 대금 계산기를 적용하지 않습니다.</p></section>;
+  if (isRentalNotice(notice)) return <section className="cash-plan" aria-label="필요 현금 계산기"><h3>필요 현금 계산기</h3><p>임대 공고는 보증금·월 임대료·전환 조건을 확인해야 하므로 이 분양 대금 계산기를 적용하지 않습니다.</p></section>;
   return <section className="cash-plan" aria-labelledby="cash-plan-title">
     <h3 id="cash-plan-title">주택형별 필요 현금 계산기</h3>
     <p>공고 금액과 직접 입력한 가정으로 납부 단계별 자금을 계획합니다. 대출 승인이나 실제 필요 현금의 확정 결과가 아닙니다.</p>

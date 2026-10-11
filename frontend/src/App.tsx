@@ -76,6 +76,7 @@ import { useHorizontalTabs } from "./useHorizontalTabs";
 import { useLinkCopy } from "./useLinkCopy";
 import LinkCopyFeedback from "./LinkCopyFeedback";
 import ComparisonTable from "./ComparisonTable";
+import { toComparisonItem } from "./comparisonTools";
 import { useOnlineStatus } from "./useOnlineStatus";
 import RangeFilter from "./RangeFilter";
 import { appendUniqueNotices } from "./noticePagination";
@@ -115,7 +116,7 @@ const noticePagePrefetches = new Map<string, ReturnType<typeof fetchNoticePage>>
 
 const SUPPLY_TYPE_LABELS: Record<SupplyType, string> = {
   SALE: "분양",
-  PUBLIC_RENTAL: "공공임대",
+  PUBLIC_RENTAL: "임대",
 };
 
 const STATUS_LABELS: Record<StatusKey, string> = {
@@ -2159,8 +2160,8 @@ export default function Home() {
             <div className="modal-head"><div><span>FILTER</span><h2 id="filter-title">청약 조건 선택</h2></div><button type="button" onClick={() => setFilterOpen(false)} aria-label="닫기"><Icon name="close" /></button></div>
             <div className="filter-group"><h3>지역</h3><div className="choice-grid">{["전체", ...availableRegions].map((item) => <button className={region === item ? "active" : ""} type="button" aria-pressed={region === item} key={item} onClick={() => { setRegion(item); resetVisible(); }}>{item}</button>)}</div></div>
             <div className="filter-group"><h3>주택 유형</h3><div className="choice-grid">{["전체", ...availableCategories].map((item) => <button className={category === item ? "active" : ""} type="button" aria-pressed={category === item} key={item} onClick={() => { setCategory(item); resetVisible(); }}>{item}</button>)}</div></div>
-            <div className="filter-group"><h3>공급 방식</h3><div className="choice-grid">{([undefined, "SALE", "PUBLIC_RENTAL"] as const).map((item) => <button className={supplyType === item ? "active" : ""} type="button" aria-pressed={supplyType === item} key={item ?? "ALL"} onClick={() => { setSupplyType(item); resetVisible(); }}>{item ? SUPPLY_TYPE_LABELS[item] : "전체"}</button>)}</div><p className="price-help">분양은 아파트·오피스텔 청약 공고이며, 일반 부동산 매매 매물은 포함하지 않습니다.</p></div>
-            <div className="filter-group"><h3>분양가 예산 <small>(만원 · 주택형 가격대 기준)</small></h3><RangeFilter presets={[{ label: "3억 이하", min: "", max: "30000" }, { label: "5억 이하", min: "", max: "50000" }, { label: "10억 이하", min: "", max: "100000" }]} key={`price-${rangeResetVersion}`} label="예산" unit="만원" limit={1000000} min={minPriceManwon} max={maxPriceManwon} placeholders={["예: 30000", "예: 60000"]} onInvalid={setPriceInvalid} onChange={(min, max) => { setMinPriceManwon(min); setMaxPriceManwon(max); resetVisible(); }} /><p className="price-help">주택형별 최고 분양가가 예산 안에 있는 공고를 보여줍니다. 주택형 정보가 없으면 공고 가격 범위로 확인하며, 가격 미확인 공고는 제외됩니다.</p></div>
+            <div className="filter-group"><h3>공급 방식</h3><div className="choice-grid">{([undefined, "SALE", "PUBLIC_RENTAL"] as const).map((item) => <button className={supplyType === item ? "active" : ""} type="button" aria-pressed={supplyType === item} key={item ?? "ALL"} onClick={() => { setSupplyType(item); resetVisible(); }}>{item ? SUPPLY_TYPE_LABELS[item] : "전체"}</button>)}</div><p className="price-help">분양은 임대를 제외한 아파트·오피스텔 청약 공고이며, 일반 부동산 매매 매물은 포함하지 않습니다.</p></div>
+            <div className="filter-group"><h3>공고 금액 예산 <small>(만원 · 주택형 가격대 기준)</small></h3><RangeFilter presets={[{ label: "3억 이하", min: "", max: "30000" }, { label: "5억 이하", min: "", max: "50000" }, { label: "10억 이하", min: "", max: "100000" }]} key={`price-${rangeResetVersion}`} label="예산" unit="만원" limit={1000000} min={minPriceManwon} max={maxPriceManwon} placeholders={["예: 30000", "예: 60000"]} onInvalid={setPriceInvalid} onChange={(min, max) => { setMinPriceManwon(min); setMaxPriceManwon(max); resetVisible(); }} /><p className="price-help">주택형별 최고 공고 금액이 예산 안에 있는 공고를 보여줍니다. 임대보증금·월 임대료·분양전환 조건은 공식 공고문을 확인하세요. 주택형 정보가 없으면 공고 가격 범위로 확인하며, 가격 미확인 공고는 제외됩니다.</p></div>
             <div className="filter-group"><h3>공급면적 <small>(㎡ · 주택형 기준)</small></h3><RangeFilter presets={[{ label: "60㎡ 이하", min: "", max: "60" }, { label: "85㎡ 이하", min: "", max: "85" }, { label: "100㎡ 이상", min: "100", max: "" }]} key={`area-${rangeResetVersion}`} label="면적" unit="㎡" limit={1000} min={minArea} max={maxArea} placeholders={["예: 59", "예: 84"]} onInvalid={setAreaInvalid} onChange={(min, max) => { setMinArea(min); setMaxArea(max); resetVisible(); }} /><p className="price-help">예산도 지정하면 같은 주택형이 예산과 면적을 모두 만족해야 합니다. 면적 데이터가 없는 공고는 제외됩니다.</p></div>
             <div className="search-preference-box">
               <div><b>내 맞춤 검색조건</b><span>지역·유형·예산·상태·정렬을 계정에 저장합니다.</span></div>
@@ -2229,7 +2230,7 @@ export default function Home() {
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setComparisonOpen(false); }}>
           <section ref={comparisonDialogRef} tabIndex={-1} className="modal compare-modal" role="dialog" aria-modal="true" aria-labelledby="compare-title">
             <div className="modal-head"><div><span>NOTICE COMPARISON</span><h2 id="compare-title">청약 공고 비교</h2></div><button type="button" onClick={() => setComparisonOpen(false)} aria-label="닫기"><Icon name="close" /></button></div>
-            <ComparisonTable items={comparisonNotices.map(item => ({ ...item, winnerDate: formatShortDate(item.winnerAnnounceDate) }))} busy={comparisonPendingId !== undefined || comparisonResetPending} onRemove={id => void toggleComparison(id)} />
+            <ComparisonTable items={comparisonNotices.map(toComparisonItem)} busy={comparisonPendingId !== undefined || comparisonResetPending} onRemove={id => void toggleComparison(id)} />
             <LinkCopyFeedback state={comparisonCopy} />
             <div className="compare-footer"><p>최종 신청 전 공식 공고문의 자격과 일정을 확인하세요.</p><div><button type="button" disabled={comparisonCopy.busy} onClick={copyComparisonLink}>비교 링크 복사</button><button type="button" onClick={() => downloadCalendar(comparisonNotices, "cheongyak-comparison.ics")}><Icon name="calendar" /> 비교 일정 저장</button></div></div>
           </section>

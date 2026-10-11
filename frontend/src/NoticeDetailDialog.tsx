@@ -13,6 +13,7 @@ import { FAVORITE_APPLICATION_RESULT_LABELS, FAVORITE_CHECKLIST_ITEMS, FAVORITE_
 import type { FavoriteChecklistKey } from "./favoritePresentation";
 import { formatChangedAt, formatShortDate, hasExpandedDetails, formatMoveInMonth, optionalPeriod } from "./noticePresentation";
 import type { Application } from "./noticePresentation";
+import { isRentalNotice, noticePriceLabel } from "./noticeSupply";
 
 type Props = {
   detailApplication: Application | null;
@@ -82,8 +83,8 @@ export default function NoticeDetailDialog({ detailApplication, selectedDetail, 
                 {selectedDetail.homepageUrl && <a className="notice-homepage-link" href={selectedDetail.homepageUrl} target="_blank" rel="noreferrer">분양 홈페이지 열기 <Icon name="arrow" /></a>}
               </section>
             )}
-            {selectedDetail && !detailLoading && !detailError && (selectedDetail.unitTypes?.length ?? 0) > 0 && <NoticeUnitExplorer key={`units-${selectedDetail.id}`} units={selectedDetail.unitTypes!} range={detailUnitRange} />}
-            {selectedDetail && (selectedDetail.housingCategory === "APARTMENT" || selectedDetail.housingCategory === "OFFICETEL") && (selectedDetail.unitTypes?.length ?? 0) === 0 && (
+            {selectedDetail && !detailLoading && !detailError && (selectedDetail.unitTypes?.length ?? 0) > 0 && <NoticeUnitExplorer key={`units-${selectedDetail.id}`} units={selectedDetail.unitTypes!} range={detailUnitRange} priceLabel={noticePriceLabel(selectedDetail)} />}
+            {selectedDetail && !isRentalNotice(selectedDetail) && (selectedDetail.housingCategory === "APARTMENT" || selectedDetail.housingCategory === "OFFICETEL") && (selectedDetail.unitTypes?.length ?? 0) === 0 && (
               <section className="notice-unit-types notice-unit-types-empty" aria-labelledby="notice-unit-types-title">
                 <h3 id="notice-unit-types-title">주택형별 공급·분양가</h3>
                 <p>이 공고는 주택형별 공급·분양가 데이터를 아직 확인하지 못했습니다. 정확한 내용은 공식 공고문을 확인하세요.</p>

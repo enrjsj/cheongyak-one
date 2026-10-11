@@ -1,4 +1,5 @@
 import type { HousingCategory, NoticeSummary, NoticeDetail, NoticeUnitType, NoticeStatus } from "./api";
+import { isRentalNotice, noticePriceLabel } from "./noticeSupply.ts";
 
 export type StatusKey = "all" | "today" | "open" | "upcoming";
 export type StateTone = "mint" | "coral" | "blue" | "purple" | "gray";
@@ -130,7 +131,7 @@ export function regionLabel(regionCode?: string, address?: string): string {
 }
 
 export function formatWon(value?: number): string | undefined {
-  if (value === undefined || value === null || !Number.isFinite(value) || value < 0) return undefined;
+  if (value === undefined || value === null || !Number.isSafeInteger(value) || value < 0) return undefined;
   if (value >= 100_000_000) {
     const eok = value / 100_000_000;
     return `${Number.isInteger(eok) ? eok : eok.toFixed(1)}억`;
@@ -233,11 +234,12 @@ export function toApplication(notice: NoticeSummary): Application {
   const minPrice = reversedPrice ? undefined : formatWon(notice.minPrice);
   const maxPrice = reversedPrice ? undefined : formatWon(notice.maxPrice);
   const publicRental = notice.housingCategory === "PUBLIC_RENTAL";
-  const priceLabel = publicRental ? "임대보증금" : "분양가";
+  const priceLabel = noticePriceLabel(notice);
   const price = minPrice && maxPrice
     ? `${priceLabel} ${minPrice} — ${maxPrice}`
-    : minPrice ? `${publicRental ? "최소 임대보증금" : "분양가"} ${minPrice}부터`
-      : `${priceLabel}${publicRental ? "은" : "는"} 공고문 확인`;
+    : minPrice ? `${publicRental ? "최소 임대보증금" : priceLabel} ${minPrice}부터`
+      : maxPrice ? `${priceLabel} 최대 ${maxPrice} · 최소 미확인`
+        : `${priceLabel}${priceLabel === "분양가" ? "는" : "은"} 공고문 확인`;
   const category = CATEGORY_LABELS[notice.housingCategory];
   const sourceName = notice.sourceSystem === "MYHOME_PUBLIC_RENTAL" ? "마이홈포털" : "청약홈";
 
@@ -256,8 +258,8 @@ export function toApplication(notice: NoticeSummary): Application {
     fit: notice.sourceSystem === "MYHOME_PUBLIC_RENTAL"
       ? "국토교통부 마이홈포털 공식 공고"
       : "한국부동산원 청약홈 공식 공고",
-    deposit: publicRental
-      ? "임대 조건과 신청 자격은 원문 공고에서 확인"
+    deposit: isRentalNotice(notice)
+      ? "임대보증금·월 임대료·분양전환 조건과 신청 자격은 원문 공고에서 확인"
       : "신청 자격과 예치금은 원문 공고에서 확인",
   };
 }
