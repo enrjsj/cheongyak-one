@@ -32,6 +32,12 @@ AWS 운영 배포는 Elastic Beanstalk, RDS PostgreSQL, 비공개 S3, CloudFront
 
 기본 주소는 http://localhost:5173 이며 /api 요청은 http://localhost:8080 으로 전달합니다.
 
+#### 프런트 의존성 보안 점검
+
+잠금파일의 버전을 재현하려면 `npm ci --prefix frontend`를 사용합니다. `npm --prefix frontend run audit:security`는 개발 의존성을 포함해 npm 보안 권고를 조회하고 high 이상이면 실패합니다. 네트워크/레지스트리 오류도 통과로 간주하지 않습니다. 이 명령은 검사용이며 의존성을 수정하지 않습니다.
+
+Vite 8.0.16과 source-map-js 1.2.2 패치를 적용했습니다. 이후에도 새 권고가 나올 수 있으므로 audit 0건은 서비스 전체의 안전성 보장이 아닙니다. `npm audit fix --force`를 일괄 실행하지 말고 권고·영향 범위를 확인한 뒤 패치와 잠금파일을 함께 검증합니다. 개발 서버를 운영 서버로 사용하거나 불필요하게 외부 네트워크에 공개하지 않습니다.
+
 ### 백엔드
 
 PostgreSQL 연결 전에는 PostgreSQL 호환 모드의 H2 기반 local 프로필을 사용할 수 있습니다.
