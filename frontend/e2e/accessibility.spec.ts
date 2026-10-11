@@ -60,6 +60,68 @@ test('모바일 상세 확인 안내·터치 크기·키보드 순환', async ({
   await expect(opener).toBeFocused();
 });
 
+test('주택형 부분 수치 안내는 누락과 오류를 구별하고 정상 0을 보존한다', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await setup(page);
+  const unit = { modelId: 'A', housingTypeName: '059A', supplyArea: 59.9, maxPrice: 0, generalSupplyCount: 0, specialSupplyCount: 0, totalSupplyCount: 0 };
+  let requests = 0;
+  await page.route('**/api/v1/notices/951', route => {
+    requests++;
+    return route.fulfill({ json: { ...notices[0], unitTypes: [unit, { ...unit, modelId: 'B', housingTypeName: '084B', supplyArea: null, maxPrice: -1, totalSupplyCount: null }] } });
+  });
+  await page.getByRole('button', { name: `${notices[0].title} 공고 상세 보기`, exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: notices[0].title, exact: true });
+  const panel = dialog.locator('.notice-quality');
+  await expect(panel.locator('summary')).toHaveText('공고문에서 확인할 정보 3개');
+  await panel.locator('summary').click();
+  await expect(panel).toContainText('미제공 · 주택형 2개 중 1개의 공급면적 정보가 제공되지 않았습니다.');
+  await expect(panel).toContainText('확인 필요 · 주택형 2개 중 1개의 최고 분양가 수치를 공식 공고문에서 확인하세요.');
+  await expect(panel).toContainText('미제공 · 주택형 2개 중 1개의 전체 공급 세대 정보가 제공되지 않았습니다.');
+  await expect(panel.locator('li')).toHaveCount(3);
+  await expect(dialog.getByRole('table', { name: '주택형 공급 목록' })).toBeVisible();
+  expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  expect(requests).toBe(1);
+});
+
+test('상세 확인 안내는 오류·재시도 중 숨기고 정상 응답과 공공임대에 불필요한 경고를 남기지 않는다', async ({ page }) => {
+  await setup(page);
+  let requests = 0;
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const unit = { modelId: 'A', housingTypeName: '059A', supplyArea: 59.9, maxPrice: 0, generalSupplyCount: 0, specialSupplyCount: 0, totalSupplyCount: 0 };
+  await page.route('**/api/v1/notices/951', async route => {
+    requests++;
+    if (requests === 1) return route.fulfill({ json: { ...notices[0], unitTypes: [] } });
+    if (requests === 2) return route.fulfill({ status: 503, json: { detail: '상세 조회 실패' } });
+    await pending;
+    return route.fulfill({ json: { ...notices[0], unitTypes: [unit] } });
+  });
+  const opener = page.getByRole('button', { name: `${notices[0].title} 공고 상세 보기`, exact: true });
+  const dialog = page.getByRole('dialog', { name: notices[0].title, exact: true });
+  await opener.click();
+  await expect(dialog.locator('.notice-quality')).toBeVisible();
+  await dialog.getByRole('button', { name: '닫기', exact: true }).click();
+  await opener.click();
+  await expect(dialog.getByRole('alert')).toContainText('최신 상세 정보를 확인하지 못했습니다.');
+  await expect(dialog.locator('.notice-quality')).toHaveCount(0);
+  await dialog.getByRole('button', { name: '상세 다시 불러오기' }).click();
+  await expect(dialog).toHaveAttribute('aria-busy', 'true');
+  await expect(dialog.locator('.notice-quality')).toHaveCount(0);
+  release();
+  await expect(dialog).toHaveAttribute('aria-busy', 'false');
+  await expect(dialog.getByRole('alert')).toHaveCount(0);
+  await expect(dialog.locator('.unit-explorer')).toBeVisible();
+  await expect(dialog.locator('.notice-quality')).toHaveCount(0);
+  expect(requests).toBe(3);
+  await dialog.getByRole('button', { name: '닫기', exact: true }).click();
+  await expect(opener).toBeFocused();
+  await page.route('**/api/v1/notices/952', route => route.fulfill({ json: { ...notices[0], ...notices[1], businessEntityName: '임대 공급기관', minPrice: 0, maxPrice: 100, unitTypes: [{ modelId: 'rental', housingTypeName: '임대' }] } }));
+  await page.getByRole('button', { name: `${notices[1].title} 공고 상세 보기`, exact: true }).click();
+  const rental = page.getByRole('dialog', { name: notices[1].title, exact: true });
+  await expect(rental).toHaveAttribute('aria-busy', 'false');
+  await expect(rental.locator('.notice-quality')).toHaveCount(0);
+});
+
 async function setup(page: Page) {
   await page.clock.setFixedTime(new Date('2026-10-07T03:00:00Z'));
   await page.route('**/api/v1/**', route => {

@@ -1,8 +1,10 @@
 import type { NoticeDetail } from "./api";
 import { noticeQualityItems } from "./noticeQuality";
+import { unitQualityItems } from "./unitTypeTools";
 
 export default function NoticeQualityPanel({ notice }: { notice: NoticeDetail }) {
-  const items = noticeQualityItems(notice);
+  const sale = notice.housingCategory === "APARTMENT" || notice.housingCategory === "OFFICETEL";
+  const items = [...noticeQualityItems(notice), ...(sale ? unitQualityItems(notice.unitTypes ?? []) : [])];
   if (!items.length) return null;
   return <details className="notice-quality">
     <summary>공고문에서 확인할 정보 {items.length}개</summary>

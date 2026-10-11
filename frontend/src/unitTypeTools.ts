@@ -1,4 +1,5 @@
 import type { NoticeUnitType } from "./api";
+import type { NoticeQualityItem } from "./noticeQuality";
 
 export const UNIT_SORT_LABELS = {
   ORIGINAL: "공고 기본 순서", PRICE_ASC: "낮은 분양가순", PRICE_DESC: "높은 분양가순",
@@ -13,6 +14,23 @@ export function unitValue(unit: NoticeUnitType, field: UnitMetric): number | und
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return undefined;
   if (field === "supplyArea") return value > 0 ? value : undefined;
   return Number.isSafeInteger(value) ? value : undefined;
+}
+
+// Aggregate by field, not by row, so large notices keep a bounded checklist.
+export function unitQualityItems(units: NoticeUnitType[]): NoticeQualityItem[] {
+  const fields: [UnitMetric, string][] = [
+    ["supplyArea", "공급면적"], ["maxPrice", "최고 분양가"],
+    ["generalSupplyCount", "일반 공급 세대"], ["specialSupplyCount", "특별 공급 세대"],
+    ["totalSupplyCount", "전체 공급 세대"],
+  ];
+  const items: NoticeQualityItem[] = [];
+  for (const [field, label] of fields) {
+    const missing = units.filter(unit => unit[field] == null).length;
+    const invalid = units.filter(unit => unit[field] != null && unitValue(unit, field) === undefined).length;
+    if (missing) items.push({ code: `units-${field}-missing`, kind: "미제공", message: `주택형 ${units.length}개 중 ${missing}개의 ${label} 정보가 제공되지 않았습니다.` });
+    if (invalid) items.push({ code: `units-${field}-invalid`, kind: "확인 필요", message: `주택형 ${units.length}개 중 ${invalid}개의 ${label} 수치를 공식 공고문에서 확인하세요.` });
+  }
+  return items;
 }
 
 export function sortUnitTypes(units: NoticeUnitType[], sort: UnitSort): NoticeUnitType[] {

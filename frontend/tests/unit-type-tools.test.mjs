@@ -1,6 +1,36 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sortUnitTypes, unitDifference, unitValue } from "../src/unitTypeTools.ts";
+import { sortUnitTypes, unitDifference, unitValue, unitQualityItems } from "../src/unitTypeTools.ts";
+
+const completeUnit = { supplyArea: 59.9, maxPrice: 0, generalSupplyCount: 0, specialSupplyCount: 0, totalSupplyCount: 0 };
+test("주택형 확인 안내는 정상 소수 면적과 0원·0세대를 보존하고 원본을 바꾸지 않는다", () => {
+  const units = [structuredClone(completeUnit)], before = structuredClone(units);
+  assert.deepEqual(unitQualityItems(units), []);
+  assert.deepEqual(unitQualityItems([]), []);
+  assert.deepEqual(units, before);
+});
+test("주택형 일부 누락은 전체 행 수와 필드별 누락 수를 구분한다", () => {
+  const items = unitQualityItems([completeUnit, { ...completeUnit, maxPrice: null }, { ...completeUnit, maxPrice: undefined, supplyArea: null }]);
+  assert.deepEqual(items.map(item => item.code), ['units-supplyArea-missing', 'units-maxPrice-missing']);
+  assert.match(items[0].message, /3개 중 1개/);
+  assert.match(items[1].message, /3개 중 2개/);
+  assert.ok(items.every(item => item.kind === '미제공'));
+});
+test("잘못된 주택형 수치는 누락과 별도로 집계하고 필드마다 기존 표시 검증을 따른다", () => {
+  for (const field of ['supplyArea', 'maxPrice', 'generalSupplyCount', 'specialSupplyCount', 'totalSupplyCount']) {
+    const invalid = field === 'supplyArea' ? [0, -1, NaN, Infinity, '59'] : [-1, NaN, Infinity, '1', 0.5, Number.MAX_SAFE_INTEGER + 1];
+    for (const value of invalid) {
+      const items = unitQualityItems([{ ...completeUnit, [field]: null }, { ...completeUnit, [field]: value }]);
+      assert.deepEqual(items.map(item => [item.code, item.kind]), [[`units-${field}-missing`, '미제공'], [`units-${field}-invalid`, '확인 필요']]);
+      assert.ok(items.every(item => /2개 중 1개/.test(item.message)));
+    }
+  }
+});
+test("많은 주택형도 행마다 경고를 늘리지 않고 공급 세대를 추정하지 않는다", () => {
+  const items = unitQualityItems(Array.from({ length: 100 }, () => ({ ...completeUnit, totalSupplyCount: undefined })));
+  assert.equal(items.length, 1);
+  assert.match(items[0].message, /100개 중 100개의 전체 공급 세대/);
+});
 
 test("numeric unit sorting preserves ties and the API order, with unknown values last in both directions", () => {
   const units = [{ modelId: "unknown" }, { modelId: "a", maxPrice: 500000000 }, { modelId: "b", maxPrice: 100000000 }, { modelId: "tie", maxPrice: 500000000 }, { modelId: "null", maxPrice: null }];
