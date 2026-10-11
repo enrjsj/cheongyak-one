@@ -13,6 +13,7 @@ import { FAVORITE_APPLICATION_RESULT_LABELS, FAVORITE_CHECKLIST_ITEMS, FAVORITE_
 import type { FavoriteChecklistKey } from "./favoritePresentation";
 import { formatChangedAt, formatShortDate, hasExpandedDetails, formatMoveInMonth, optionalPeriod } from "./noticePresentation";
 import type { Application } from "./noticePresentation";
+import type { ReactNode } from "react";
 import { isRentalNotice, noticePriceLabel } from "./noticeSupply";
 
 type Props = {
@@ -27,17 +28,19 @@ type Props = {
   saved: boolean;
   tracker?: FavoriteTracker;
   trackerBusy: boolean;
+  memoEditor: ReactNode;
+  resultMemoEditor: ReactNode;
   favoriteBusy: boolean;
   noticeCopy: ReturnType<typeof useLinkCopy>;
   closeDetail: () => void;
   onRetry: () => void;
   onToggleSaved: () => void;
   onCopy: () => void;
-  onSaveTracker: (progress: FavoriteProgress, memo: string, checklist?: Partial<Pick<FavoriteTracker, FavoriteChecklistKey>>, result?: FavoriteApplicationResult, resultMemo?: string) => void;
+  onSaveTracker: (progress: FavoriteProgress, checklist?: Partial<Pick<FavoriteTracker, FavoriteChecklistKey>>, result?: FavoriteApplicationResult, resultMemo?: string) => void;
 };
 
 // Parent owns URL navigation, request cancellation and member mutations; this owns the dialog view.
-export default function NoticeDetailDialog({ detailApplication, selectedDetail, selectedChanges, detailLoading, detailError, online, detailUnitRange, signedIn, saved, tracker, trackerBusy, favoriteBusy, noticeCopy, closeDetail, onRetry, onToggleSaved, onCopy, onSaveTracker }: Props) {
+export default function NoticeDetailDialog({ detailApplication, selectedDetail, selectedChanges, detailLoading, detailError, online, detailUnitRange, signedIn, saved, tracker, trackerBusy, memoEditor, resultMemoEditor, favoriteBusy, noticeCopy, closeDetail, onRetry, onToggleSaved, onCopy, onSaveTracker }: Props) {
   const detailDialogRef = useDialogAccessibility<HTMLElement>(Boolean(detailApplication), closeDetail);
   if (!detailApplication) return null;
   return (
@@ -96,13 +99,11 @@ export default function NoticeDetailDialog({ detailApplication, selectedDetail, 
                 <div className="detail-tracker-head"><span>관심청약 준비</span><strong>이 공고의 확인·신청 상태를 바로 기록하세요.</strong></div>
                 <div className="detail-tracker-fields">
                   <label>준비 상태
-                    <select value={tracker?.progress ?? "SAVED"} disabled={trackerBusy} onChange={(event) => void onSaveTracker(event.target.value as FavoriteProgress, tracker?.memo ?? "")}>
+                    <select value={tracker?.progress ?? "SAVED"} disabled={trackerBusy} onChange={(event) => void onSaveTracker(event.target.value as FavoriteProgress)}>
                       {Object.entries(FAVORITE_PROGRESS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                   </label>
-                  <label>내 메모
-                    <input key={`${detailApplication.id}-${tracker?.updatedAt ?? "new"}`} defaultValue={tracker?.memo ?? ""} maxLength={500} placeholder="예: 모집공고문 소득 기준 확인" onBlur={(event) => void onSaveTracker(tracker?.progress ?? "SAVED", event.target.value)} />
-                  </label>
+                  {memoEditor}
                 </div>
                 <div className="favorite-checklist" aria-label="신청 전 확인 항목">
                   <div><span>신청 전 확인</span><strong>{FAVORITE_CHECKLIST_ITEMS.filter(({ key }) => tracker?.[key]).length}/4 완료</strong></div>
@@ -110,7 +111,7 @@ export default function NoticeDetailDialog({ detailApplication, selectedDetail, 
                   <div className="favorite-checklist-options">
                     {FAVORITE_CHECKLIST_ITEMS.map(({ key, label }) => (
                       <label key={key}>
-                        <input type="checkbox" checked={tracker?.[key] ?? false} disabled={trackerBusy} onChange={(event) => void onSaveTracker(tracker?.progress ?? "SAVED", tracker?.memo ?? "", { [key]: event.target.checked })} />
+                        <input type="checkbox" checked={tracker?.[key] ?? false} disabled={trackerBusy} onChange={(event) => void onSaveTracker(tracker?.progress ?? "SAVED", { [key]: event.target.checked })} />
                         {label}
                       </label>
                     ))}
@@ -123,18 +124,18 @@ export default function NoticeDetailDialog({ detailApplication, selectedDetail, 
                 <span><Icon name="check" /> 신청 준비 완료</span>
                 <div>
                   {detailApplication.officialUrl ? <a href={detailApplication.officialUrl} target="_blank" rel="noreferrer">공식 공고 열기 <Icon name="arrow" /></a> : <button type="button" disabled>공식 링크 확인 중</button>}
-                  <button type="button" onClick={() => void onSaveTracker("APPLIED", tracker?.memo ?? "")} disabled={trackerBusy}>신청 완료로 표시</button>
+                  <button type="button" onClick={() => void onSaveTracker("APPLIED")} disabled={trackerBusy}>신청 완료로 표시</button>
                 </div>
               </div>
             )}
             {signedIn && saved && (tracker?.progress ?? "SAVED") === "APPLIED" && (
               <div className="application-result-tracker detail-application-result" aria-label="신청 결과 기록">
                 <div><span>신청 결과</span><strong>{FAVORITE_APPLICATION_RESULT_LABELS[tracker?.applicationResult ?? "PENDING"]}</strong></div>
-                <select value={tracker?.applicationResult ?? "PENDING"} disabled={trackerBusy} onChange={(event) => void onSaveTracker("APPLIED", tracker?.memo ?? "", {}, event.target.value as FavoriteApplicationResult)} aria-label="신청 결과">
+                <select value={tracker?.applicationResult ?? "PENDING"} disabled={trackerBusy} onChange={(event) => void onSaveTracker("APPLIED", {}, event.target.value as FavoriteApplicationResult)} aria-label="신청 결과">
                   {Object.entries(FAVORITE_APPLICATION_RESULT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
                 <small>{(tracker?.applicationResult ?? "PENDING") === "PENDING" ? detailApplication.winnerAnnounceDate ? `당첨 발표일은 ${formatShortDate(detailApplication.winnerAnnounceDate)}입니다.` : "당첨 발표일은 공식 공고문에서 확인하세요." : `${tracker?.applicationResultRecordedAt ? `${formatChangedAt(tracker?.applicationResultRecordedAt ?? "")} 기록` : "공식 당첨자 발표를 기준으로 직접 기록한 결과입니다."}`}</small>
-                {(tracker?.applicationResult ?? "PENDING") !== "PENDING" && <input key={`${detailApplication.id}-${tracker?.applicationResultRecordedAt ?? "result"}`} defaultValue={tracker?.applicationResultMemo ?? ""} maxLength={500} placeholder="결과 메모 (예: 계약 일정 확인)" onBlur={(event) => void onSaveTracker("APPLIED", tracker?.memo ?? "", {}, tracker?.applicationResult ?? "PENDING", event.target.value)} />}
+                {(tracker?.applicationResult ?? "PENDING") !== "PENDING" && resultMemoEditor}
               </div>
             )}
             {selectedDetail && !detailLoading && !detailError && <CashPlanCalculator key={`cash-${selectedDetail.id}`} notice={selectedDetail} />}

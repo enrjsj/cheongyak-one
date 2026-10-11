@@ -1,5 +1,5 @@
 // 가입·로그인·계정관리와 개인정보 동의 입력을 담당하는 모달 집합이다.
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   MemberGender,
   MemberMaritalStatus,
@@ -92,9 +92,14 @@ export default function MemberDialogs({
   const [withdrawPassword, setWithdrawPassword] = useState("");
   const [confirmWithdrawal, setConfirmWithdrawal] = useState(false);
   const [busy, setBusy] = useState(false);
+  // State paints the pending UI; the ref also guards events in the same render.
+  const busyRef = useRef(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const dialogRef = useDialogAccessibility<HTMLElement>(Boolean(mode), () => onModeChange(null));
+  const changeMode = (nextMode: MemberDialogMode) => {
+    if (!busyRef.current) onModeChange(nextMode);
+  };
+  const dialogRef = useDialogAccessibility<HTMLElement>(Boolean(mode), () => changeMode(null));
 
   useEffect(() => {
     setError("");
@@ -133,6 +138,8 @@ export default function MemberDialogs({
   if (!mode) return null;
 
   const execute = async (action: () => Promise<void>, successMessage?: string) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError("");
     setNotice("");
@@ -142,12 +149,14 @@ export default function MemberDialogs({
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "요청을 처리하지 못했습니다.");
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
 
   const submitAuthentication = (event: FormEvent) => {
     event.preventDefault();
+    if (busyRef.current) return;
     if (mode === "signup") {
       if (signupStep === 1) {
         if (password !== passwordConfirmation) {
@@ -202,7 +211,7 @@ export default function MemberDialogs({
 
   return (
     <div className="modal-backdrop member-backdrop" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget && !busy) onModeChange(null);
+      if (event.target === event.currentTarget) changeMode(null);
     }}>
       <section ref={dialogRef} tabIndex={-1} className={`modal member-modal${mode === "signup" || mode === "account" ? " member-modal-wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby="member-dialog-title">
         <div className="modal-head">
@@ -212,8 +221,9 @@ export default function MemberDialogs({
               {title}
             </h2>
           </div>
-          <button type="button" onClick={() => onModeChange(null)} disabled={busy} aria-label="닫기">×</button>
+          <button type="button" onClick={() => changeMode(null)} disabled={busy} aria-label="닫기">×</button>
         </div>
+        {busy && <p className="member-flow-description" role="status">요청을 처리하고 있습니다. 완료 후 다른 메뉴로 이동하거나 창을 닫을 수 있습니다.</p>}
 
         {mode === "verify-email" ? (
           <form className="member-form" onSubmit={(event) => {
@@ -228,7 +238,7 @@ export default function MemberDialogs({
             {notice && <p className="member-message success" role="status">{notice}</p>}
             {error && <p className="member-message error" role="alert">{error}</p>}
             <button className="primary-button member-submit" type="submit" disabled={busy}>{busy ? "요청 중…" : "인증 메일 다시 받기"}</button>
-            <button className="member-flow-link" type="button" onClick={() => onModeChange("login")}>인증을 완료했어요 · 로그인</button>
+            <button className="member-flow-link" type="button" disabled={busy} onClick={() => changeMode("login")}>인증을 완료했어요 · 로그인</button>
           </form>
         ) : mode === "forgot-password" ? (
           <form className="member-form" onSubmit={(event) => {
@@ -243,7 +253,7 @@ export default function MemberDialogs({
             {notice && <p className="member-message success" role="status">{notice}</p>}
             {error && <p className="member-message error" role="alert">{error}</p>}
             <button className="primary-button member-submit" type="submit" disabled={busy}>{busy ? "요청 중…" : "재설정 메일 받기"}</button>
-            <button className="member-flow-link" type="button" onClick={() => onModeChange("login")}>로그인으로 돌아가기</button>
+            <button className="member-flow-link" type="button" disabled={busy} onClick={() => changeMode("login")}>로그인으로 돌아가기</button>
           </form>
         ) : mode === "reset-password" ? (
           <form className="member-form" onSubmit={(event) => {
@@ -263,8 +273,8 @@ export default function MemberDialogs({
         ) : mode !== "account" ? (
           <>
             <div className="member-tabs" role="tablist" aria-label="회원 메뉴">
-              <button className={mode === "login" ? "active" : ""} type="button" role="tab" aria-selected={mode === "login"} onClick={() => onModeChange("login")}>로그인</button>
-              <button className={mode === "signup" ? "active" : ""} type="button" role="tab" aria-selected={mode === "signup"} onClick={() => onModeChange("signup")}>회원가입</button>
+              <button className={mode === "login" ? "active" : ""} type="button" role="tab" aria-selected={mode === "login"} disabled={busy} onClick={() => changeMode("login")}>로그인</button>
+              <button className={mode === "signup" ? "active" : ""} type="button" role="tab" aria-selected={mode === "signup"} disabled={busy} onClick={() => changeMode("signup")}>회원가입</button>
             </div>
             <form className="member-form" onSubmit={submitAuthentication}>
               {mode === "signup" && (
@@ -322,8 +332,8 @@ export default function MemberDialogs({
               {mode === "signup" && signupStep === 2 && <button className="member-skip-button" type="button" disabled={busy || !termsAgreed || !privacyPolicyAgreed} onClick={() => void execute(() => onSignup(email, password, { nickname, termsAgreed, privacyPolicyAgreed }))}>선택정보 없이 가입</button>}
               {mode === "login" && (
                 <div className="member-flow-actions">
-                  <button type="button" onClick={() => onModeChange("forgot-password")}>비밀번호를 잊으셨나요?</button>
-                  <button type="button" onClick={() => onModeChange("verify-email")}>인증 메일 다시 받기</button>
+                  <button type="button" disabled={busy} onClick={() => changeMode("forgot-password")}>비밀번호를 잊으셨나요?</button>
+                  <button type="button" disabled={busy} onClick={() => changeMode("verify-email")}>인증 메일 다시 받기</button>
                 </div>
               )}
             </form>
