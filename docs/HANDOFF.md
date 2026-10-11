@@ -1,5 +1,15 @@
 # 작업 인계
 
+## 프런트 의존성 보안 패치 (2026-10-11)
+
+- 기준 main `ade9d34e16fd346861aa2c314c662ee5a732cab9` (PR #135): 모바일/상세 안내 변경의 PR CI8개 및 동일 SHA 운영 응답 검증 완료.
+- Vite8.0.16/source-map-js1.2.2로 기존 audit high 2개 패키지 경고 해결. 최소 패치 계열 유지, 필요한 rolldown 바인딩/선택적 WASM peer 잠금파일도 함께 갱신. 앱·API·DB·인증·클라우드 설정은 변경하지 않는다.
+- `npm --prefix frontend run audit:security`와 재설치/보안 점검 안내 추가. CI 자동 보안 검사 신설이나 전체 서비스 보안 보장은 아니다.
+- 첫 잠금파일 갱신의 선택적 peer 불일치 수정 후 npm ci 성공/audit 0건 확인. 최종 full extended/필수 CI·배포 결과는 PR에 기록한다. Java21/Maven 미설치 때문에 로컬 백엔드/실제 인증 성공으로 보고하지 않는다.
+- 독립 리뷰로 선택적 WASM peer 배치와 audit 개발 의존성 포함을 보완: npm10.9.4로 루트 peer를 생성하고 재설치, --include=dev 및 production 환경 audit 0건 확인. 최초 통합 검사는 보완을 위해 중단했고 최종 통합본으로 다시 검증한다. 모든 OS/WASM 실행을 검증한 것은 아니다.
+- 보완 후 최종 로컬 빌드/단위165·Chromium252·iPhone61 통과(PC전용3 제외), 하네스 자체 통과. Java/Maven 제약은 유지하며 원격 필수 CI로 확인한다. 최종 보고서는 작업 문서에 기록했다.
+- 상세 범위·근거·검증은 docs/tasks/2026-10-11-frontend-security.md. 다음 후보는 공고 확인 안내의 정상/오류 재시도 경계 및 주택형 부분 수치 안내.
+
 ## 모바일 접근성·공고 확인 정보 (2026-10-11)
 
 - 기준 main `d589ef66e1ab6bdf2d1748d6161abab7a6a330eb`, PR #134 CI/동일 SHA 배포 검증 완료 기준으로 시작.
