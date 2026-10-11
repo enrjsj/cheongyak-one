@@ -130,7 +130,7 @@ export function regionLabel(regionCode?: string, address?: string): string {
 }
 
 export function formatWon(value?: number): string | undefined {
-  if (value === undefined || value === null) return undefined;
+  if (value === undefined || value === null || !Number.isFinite(value) || value < 0) return undefined;
   if (value >= 100_000_000) {
     const eok = value / 100_000_000;
     return `${Number.isInteger(eok) ? eok : eok.toFixed(1)}억`;
@@ -229,14 +229,15 @@ export function toApplication(notice: NoticeSummary): Application {
     : notice.status === "ANNOUNCED" ? notice.winnerAnnounceDate
       : notice.applyEndDate;
   const remaining = daysBetween(today, targetDate);
-  const minPrice = formatWon(notice.minPrice);
-  const maxPrice = formatWon(notice.maxPrice);
+  const reversedPrice = notice.minPrice != null && notice.maxPrice != null && notice.minPrice > notice.maxPrice;
+  const minPrice = reversedPrice ? undefined : formatWon(notice.minPrice);
+  const maxPrice = reversedPrice ? undefined : formatWon(notice.maxPrice);
   const publicRental = notice.housingCategory === "PUBLIC_RENTAL";
   const priceLabel = publicRental ? "임대보증금" : "분양가";
   const price = minPrice && maxPrice
     ? `${priceLabel} ${minPrice} — ${maxPrice}`
     : minPrice ? `${publicRental ? "최소 임대보증금" : "분양가"} ${minPrice}부터`
-      : `${priceLabel}은 공고문 확인`;
+      : `${priceLabel}${publicRental ? "은" : "는"} 공고문 확인`;
   const category = CATEGORY_LABELS[notice.housingCategory];
   const sourceName = notice.sourceSystem === "MYHOME_PUBLIC_RENTAL" ? "마이홈포털" : "청약홈";
 

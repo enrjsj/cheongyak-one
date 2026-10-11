@@ -3,6 +3,7 @@ import { Icon } from "./Icon";
 import { AiConsultationPanel } from "./AiConsultationPanel";
 import CashPlanCalculator from "./CashPlanCalculator";
 import NoticeSchedulePanel from "./NoticeSchedulePanel";
+import NoticeQualityPanel from "./NoticeQualityPanel";
 import NoticeUnitExplorer from "./NoticeUnitExplorer";
 import LinkCopyFeedback from "./LinkCopyFeedback";
 import type { useLinkCopy } from "./useLinkCopy";
@@ -64,6 +65,7 @@ export default function NoticeDetailDialog({ detailApplication, selectedDetail, 
               <div><span>{detailApplication.priceLabel}</span><strong>{detailApplication.price}</strong></div><div><span>당첨 발표</span><strong>{formatShortDate(detailApplication.winnerAnnounceDate)}</strong></div>
             </div>
             {selectedDetail && !detailLoading && !detailError && <NoticeSchedulePanel key={`schedule-${selectedDetail.id}`} notice={selectedDetail} />}
+            {selectedDetail && !detailLoading && !detailError && <NoticeQualityPanel notice={selectedDetail} />}
             {selectedDetail && hasExpandedDetails(selectedDetail) && (
               <section className="notice-detail-extra" aria-labelledby="notice-detail-extra-title">
                 <h3 id="notice-detail-extra-title">공고 상세정보</h3>
@@ -72,7 +74,7 @@ export default function NoticeDetailDialog({ detailApplication, selectedDetail, 
                   <div><dt>입주 예정</dt><dd>{formatMoveInMonth(selectedDetail.moveInPlannedMonth)}</dd></div>
                   <div><dt>특별공급 접수</dt><dd>{optionalPeriod(selectedDetail.specialSupplyStartDate, selectedDetail.specialSupplyEndDate)}</dd></div>
                   <div><dt>계약 기간</dt><dd>{optionalPeriod(selectedDetail.contractStartDate, selectedDetail.contractEndDate)}</dd></div>
-                  <div><dt>사업주체</dt><dd>{selectedDetail.businessEntityName || "공고문 확인"}</dd></div>
+                  <div><dt>사업주체</dt><dd>{selectedDetail.businessEntityName?.trim() || "공고문 확인"}</dd></div>
                   <div><dt>시공사</dt><dd>{selectedDetail.constructionCompanyName || "공고문 확인"}</dd></div>
                   <div><dt>문의처</dt><dd>{selectedDetail.contactPhone ? <a href={`tel:${selectedDetail.contactPhone.replace(/[^0-9+]/g, "")}`}>{selectedDetail.contactPhone}</a> : "공고문 확인"}</dd></div>
                   <div><dt>우편번호</dt><dd>{selectedDetail.postalCode || "공고문 확인"}</dd></div>
