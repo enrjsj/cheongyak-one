@@ -1,5 +1,14 @@
 # 작업 인계
 
+## 회원 기록 저장·비교 복구 묶음 (2026-10-11)
+
+- 기준 main `24bd294ebfe1eaa35768fc84f742ab47d68ee9fb` (PR #138 CI8개 및 동일 SHA 운영 검증 완료), branch `codex/member-recovery-bundle`.
+- 공고별 저장 큐와 편집 revision으로 저장 중 새 입력/ABA 편집 보존. 저장 실패 초안·재저장, 초기 tracker 조회 실패 잠금·재조회, 계정 scope 이탈 후 응답 차단.
+- 실패 비교 ID도 표시하여 재시도·삭제·전체 해제 지원. 모바일 비교 선택 항목을 숨기지 않고 가로 스크롤로 표시.
+- 인증 요청 중 탭·닫기·배경·Escape·중복 제출 차단. 비밀번호 재설정 성공 시 회원 상태를 지우고 로그인 화면으로 복귀.
+- 인증 신규8개/복구 신규16개 관련 검사 통과. 독립 리뷰 발견2건 보완 및 재리뷰 완료. 최종 로컬 하네스14·단위176·빌드·Chromium268·iPhone77 통과(PC전용3 제외). Java/Maven 미설치로 서버/실제 인증은 blocked; 원격 필수 CI 및 배포는 반영 단계에서 확인. 결과 보고서·명령은 작업 문서 참조.
+- 상세: `docs/tasks/2026-10-11-member-recovery.md`. API/DB/운영 설정과 실발송 변경 없음.
+
 ## 공고 정보 정확성 묶음 (2026-10-11)
 
 - 기준 main `233e3dd39c66b4bb7a51cc7673124cd23338f971`, branch `codex/notice-information-accuracy`.

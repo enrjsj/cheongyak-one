@@ -63,7 +63,6 @@ import {
   signupMember,
   deleteMemberPersonalProfile,
   updateMemberProfile,
-  updateFavoriteTracker,
   withdrawMember,
 } from "./api";
 import MemberDialogs, { MemberDialogMode } from "./MemberDialogs";
@@ -76,6 +75,8 @@ import { useHorizontalTabs } from "./useHorizontalTabs";
 import { useLinkCopy } from "./useLinkCopy";
 import LinkCopyFeedback from "./LinkCopyFeedback";
 import ComparisonTable from "./ComparisonTable";
+import FavoriteMemoInput from "./FavoriteMemoInput";
+import { useFavoriteTrackerWrites } from "./useFavoriteTrackerWrites";
 import { toComparisonItem } from "./comparisonTools";
 import { useOnlineStatus } from "./useOnlineStatus";
 import RangeFilter from "./RangeFilter";
@@ -283,7 +284,6 @@ export default function Home() {
   const [maxArea, setMaxArea] = useState(initialSearch.maxArea ? String(initialSearch.maxArea) : "");
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [favoriteTrackers, setFavoriteTrackers] = useState<Map<number, FavoriteTracker>>(new Map());
-  const [favoriteTrackerPendingId, setFavoriteTrackerPendingId] = useState<number>();
   const [favoritePendingId, setFavoritePendingId] = useState<number>();
   const [savedOnly, setSavedOnly] = useState(false);
   const [favoriteProgressFilter, setFavoriteProgressFilter] = useState<FavoriteProgressFilter>("ALL");
@@ -293,6 +293,8 @@ export default function Home() {
   const [comparisonPendingId, setComparisonPendingId] = useState<number>();
   const [comparisonResetPending, setComparisonResetPending] = useState(false);
   const [comparisonOpen, setComparisonOpen] = useState(false);
+  const [noticeRestoreStatus, setNoticeRestoreStatus] = useState<Record<number, "loading" | "error">>({});
+  const [noticeRestoreVersion, setNoticeRestoreVersion] = useState(0);
   const [, setVisibleCount] = useState(6);
   const [filterOpen, setFilterOpen] = useState(false);
   const [priceInvalid, setPriceInvalid] = useState(false);
@@ -315,6 +317,7 @@ export default function Home() {
   const [member, setMember] = useState<MemberProfile>();
   // A new login or completed session exit invalidates every previous account response.
   const memberScope = useRef(0);
+  const trackerWrites = useFavoriteTrackerWrites(member?.id, memberScope, favoriteTrackers, setFavoriteTrackers);
   const [memberDialog, setMemberDialog] = useState<MemberDialogMode>(null);
   const [passwordResetToken, setPasswordResetToken] = useState("");
   const [authLoading, setAuthLoading] = useState(true);
@@ -743,7 +746,7 @@ export default function Home() {
           setSavedIds(new Set(accountIds));
           const trackers = await fetchFavoriteTrackers();
           if (stale()) return;
-          setFavoriteTrackers(new Map(trackers.map((tracker) => [tracker.noticeId, tracker])));
+          trackerWrites.hydrate(trackers);
           // 로그인 계정의 목록이 로그아웃 뒤 다른 사용자에게 보이지 않게 브라우저 복사본을 지운다.
           window.localStorage.removeItem("cheongyak-one-saved");
         } catch (error) {
@@ -903,9 +906,15 @@ export default function Home() {
     const requestedIds = [...new Set([...comparisonIds, ...recentNoticeIds])]
       .filter((id) => !knownNotices.has(id));
     if (requestedIds.length === 0) return () => controller.abort();
+    setNoticeRestoreStatus(current => ({ ...current, ...Object.fromEntries(requestedIds.map(id => [id, "loading" as const])) }));
     Promise.allSettled(requestedIds.map((id) => fetchNotice(id, controller.signal)))
       .then((results) => {
         if (controller.signal.aborted) return;
+        setNoticeRestoreStatus(current => {
+          const next = { ...current };
+          results.forEach((result, index) => { if (result.status === "rejected") next[requestedIds[index]] = "error"; else delete next[requestedIds[index]]; });
+          return next;
+        });
         setKnownNotices((known) => {
           const next = new Map(known);
           results.forEach((result) => {
@@ -915,7 +924,7 @@ export default function Home() {
         });
       });
     return () => controller.abort();
-  }, [comparisonIds.join(","), recentNoticeIds.join(",")]);
+  }, [comparisonIds.join(","), recentNoticeIds.join(","), noticeRestoreVersion]);
 
   useEffect(() => {
     if (!toast) return;
@@ -1125,6 +1134,7 @@ export default function Home() {
 
   const toggleSaved = async (id: number) => {
     const epoch = memberScope.current;
+    if (trackerWrites.pending.has(id)) { setToast("메모와 준비 상태 저장이 끝난 뒤 관심청약을 해제해주세요."); return; }
     if (favoritePendingId !== undefined) return;
     const next = new Set(savedIds);
     const isSaving = !next.has(id);
@@ -1160,36 +1170,29 @@ export default function Home() {
   const saveFavoriteTracker = async (
     noticeId: number,
     progress: FavoriteProgress,
-    memo: string,
     checklist: Partial<Pick<FavoriteTracker, FavoriteChecklistKey>> = {},
     applicationResult?: FavoriteApplicationResult,
     applicationResultMemo?: string,
   ) => {
-    if (!member || favoriteTrackerPendingId !== undefined) return;
-    const current = favoriteTrackers.get(noticeId);
-    setFavoriteTrackerPendingId(noticeId);
     const epoch = memberScope.current;
-    try {
-      const tracker = await updateFavoriteTracker(noticeId, {
-        progress,
-        applicationResult: applicationResult ?? current?.applicationResult ?? "PENDING",
-        applicationResultMemo: applicationResultMemo === undefined ? current?.applicationResultMemo?.trim() || undefined : applicationResultMemo.trim(),
-        memo: memo.trim() || undefined,
-        noticeDocumentChecked: checklist.noticeDocumentChecked ?? current?.noticeDocumentChecked ?? false,
-        eligibilityChecked: checklist.eligibilityChecked ?? current?.eligibilityChecked ?? false,
-        scheduleChecked: checklist.scheduleChecked ?? current?.scheduleChecked ?? false,
-        fundsChecked: checklist.fundsChecked ?? current?.fundsChecked ?? false,
-      });
-      if (epoch !== memberScope.current) return;
-      setFavoriteTrackers((current) => new Map(current).set(noticeId, tracker));
+    const saved = await trackerWrites.write(noticeId, { progress, ...checklist,
+      ...(applicationResult === undefined ? {} : { applicationResult }),
+      ...(applicationResultMemo === undefined ? {} : { applicationResultMemo: applicationResultMemo.trim() }),
+    });
+    if (saved && epoch === memberScope.current) {
       setToast(progress === "APPLIED" && applicationResult ? "신청 결과를 저장했습니다." : "관심청약 준비 상태를 저장했습니다.");
-    } catch (error) {
-      if (epoch !== memberScope.current) return;
-      setToast(error instanceof Error ? error.message : "준비 상태를 저장하지 못했습니다.");
-    } finally {
-      if (epoch === memberScope.current) setFavoriteTrackerPendingId(undefined);
     }
   };
+
+  const favoriteMemoInput = (id: number, field: "memo" | "applicationResultMemo") => !trackerWrites.ready ? <div className="favorite-memo-field">
+    <small role="status">기존 메모와 준비 상태를 확인한 뒤 수정할 수 있습니다.</small>
+    <button type="button" disabled={authLoading || trackerWrites.loading} onClick={() => void trackerWrites.reload()}>메모·준비 상태 다시 불러오기</button>
+  </div> : <FavoriteMemoInput
+    key={`${member?.id}-${id}-${field}`} label={field === "memo" ? "내 메모" : "결과 메모"}
+    placeholder={field === "memo" ? "예: 모집공고문 소득 기준 확인" : "결과 메모 (예: 계약 일정 확인)"}
+    value={trackerWrites.value(id, field)} dirty={trackerWrites.dirty(id, field)} busy={trackerWrites.pending.has(id)}
+    error={trackerWrites.errors[id]} onChange={value => trackerWrites.edit(id, field, value)}
+    onSave={value => trackerWrites.saveMemo(id, field, value)} />;
 
   const synchronizeMemberLists = async (profile: MemberProfile, epoch: number) => {
     setMember(profile);
@@ -1201,7 +1204,7 @@ export default function Home() {
       setSavedIds(new Set(accountIds));
       const trackers = await fetchFavoriteTrackers();
       if (epoch !== memberScope.current) return false;
-      setFavoriteTrackers(new Map(trackers.map((tracker) => [tracker.noticeId, tracker])));
+      trackerWrites.hydrate(trackers);
       window.localStorage.removeItem("cheongyak-one-saved");
     } catch {
       synchronized = false;
@@ -1223,6 +1226,7 @@ export default function Home() {
 
   const handleLogin = async (email: string, password: string) => {
     const epoch = ++memberScope.current;
+    trackerWrites.reset();
     const profile = await loginMember(email, password).finally(() => {
       // Login supersedes bootstrap, including its responsibility to unlock the header.
       if (epoch === memberScope.current) setAuthLoading(false);
@@ -1295,7 +1299,10 @@ export default function Home() {
 
   const handleResetPassword = async (newPassword: string) => {
     if (!passwordResetToken) throw new Error("비밀번호 재설정 링크를 다시 열어주세요.");
+    const epoch = memberScope.current;
     await resetPasswordWithToken(passwordResetToken, newPassword);
+    if (epoch !== memberScope.current) return;
+    clearMemberSession();
     setPasswordResetToken("");
     setMemberDialog("login");
     setToast("비밀번호를 변경했습니다. 새 비밀번호로 로그인해주세요.");
@@ -1307,7 +1314,7 @@ export default function Home() {
     setAuthLoading(false);
     setFavoriteTrackers(new Map());
     setFavoritePendingId(undefined);
-    setFavoriteTrackerPendingId(undefined);
+    trackerWrites.reset();
     setComparisonPendingId(undefined);
     setComparisonResetPending(false);
     setPreferenceBusy(false);
@@ -1979,28 +1986,23 @@ export default function Home() {
                       {savedOnly && member && (
                         <div className="favorite-tracker">
                           <label>준비 상태
-                            <select value={favoriteTrackers.get(item.id)?.progress ?? "SAVED"} disabled={favoriteTrackerPendingId === item.id} onChange={(event) => void saveFavoriteTracker(item.id, event.target.value as FavoriteProgress, favoriteTrackers.get(item.id)?.memo ?? "")}>
+                            <select value={favoriteTrackers.get(item.id)?.progress ?? "SAVED"} disabled={!trackerWrites.ready || trackerWrites.pending.has(item.id)} onChange={(event) => void saveFavoriteTracker(item.id, event.target.value as FavoriteProgress)}>
                               {Object.entries(FAVORITE_PROGRESS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                             </select>
                           </label>
-                          <div className="favorite-memo-field">
-                            <label>내 메모
-                              <input key={`${item.id}-${favoriteTrackers.get(item.id)?.updatedAt ?? "new"}`} defaultValue={favoriteTrackers.get(item.id)?.memo ?? ""} maxLength={500} placeholder="예: 모집공고문 소득 기준 확인" onBlur={(event) => void saveFavoriteTracker(item.id, favoriteTrackers.get(item.id)?.progress ?? "SAVED", event.target.value)} />
-                            </label>
-                            {favoriteTrackers.get(item.id)?.memo && <button type="button" disabled={favoriteTrackerPendingId === item.id} onClick={() => void saveFavoriteTracker(item.id, favoriteTrackers.get(item.id)?.progress ?? "SAVED", "")}>메모 삭제</button>}
-                          </div>
+                          {favoriteMemoInput(item.id, "memo")}
                           <span className="favorite-checklist-progress">사전 확인 {completedChecklistCount(favoriteTrackers.get(item.id))}/4 · {completedChecklistCount(favoriteTrackers.get(item.id)) * 25}%</span>
                           {completedChecklistCount(favoriteTrackers.get(item.id)) < FAVORITE_CHECKLIST_ITEMS.length && <span className="favorite-checklist-missing">남은 확인: {incompleteChecklistLabels(favoriteTrackers.get(item.id))}</span>}
                           <div className="favorite-checklist-options favorite-checklist-quick" aria-label={`${item.title} 신청 전 확인 항목`}>
                             {FAVORITE_CHECKLIST_ITEMS.map(({ key, label }) => (
                               <label key={key}>
-                                <input type="checkbox" checked={favoriteTrackers.get(item.id)?.[key] ?? false} disabled={favoriteTrackerPendingId === item.id} onChange={(event) => void saveFavoriteTracker(item.id, favoriteTrackers.get(item.id)?.progress ?? "SAVED", favoriteTrackers.get(item.id)?.memo ?? "", { [key]: event.target.checked })} />
+                                <input type="checkbox" checked={favoriteTrackers.get(item.id)?.[key] ?? false} disabled={!trackerWrites.ready || trackerWrites.pending.has(item.id)} onChange={(event) => void saveFavoriteTracker(item.id, favoriteTrackers.get(item.id)?.progress ?? "SAVED", { [key]: event.target.checked })} />
                                 {label}
                               </label>
                             ))}
                           </div>
-                          {completedChecklistCount(favoriteTrackers.get(item.id)) > 0 && <button className="favorite-checklist-reset" type="button" disabled={favoriteTrackerPendingId === item.id} onClick={() => void saveFavoriteTracker(item.id, favoriteTrackers.get(item.id)?.progress ?? "SAVED", favoriteTrackers.get(item.id)?.memo ?? "", { noticeDocumentChecked: false, eligibilityChecked: false, scheduleChecked: false, fundsChecked: false })}>체크리스트 모두 해제</button>}
-                          {(favoriteTrackers.get(item.id)?.progress ?? "SAVED") !== "READY" && (favoriteTrackers.get(item.id)?.progress ?? "SAVED") !== "APPLIED" && completedChecklistCount(favoriteTrackers.get(item.id)) === FAVORITE_CHECKLIST_ITEMS.length && <button className="favorite-ready-button" type="button" disabled={favoriteTrackerPendingId === item.id} onClick={() => void saveFavoriteTracker(item.id, "READY", favoriteTrackers.get(item.id)?.memo ?? "")}>체크 완료 · 신청 준비로 변경</button>}
+                          {completedChecklistCount(favoriteTrackers.get(item.id)) > 0 && <button className="favorite-checklist-reset" type="button" disabled={!trackerWrites.ready || trackerWrites.pending.has(item.id)} onClick={() => void saveFavoriteTracker(item.id, favoriteTrackers.get(item.id)?.progress ?? "SAVED", { noticeDocumentChecked: false, eligibilityChecked: false, scheduleChecked: false, fundsChecked: false })}>체크리스트 모두 해제</button>}
+                          {(favoriteTrackers.get(item.id)?.progress ?? "SAVED") !== "READY" && (favoriteTrackers.get(item.id)?.progress ?? "SAVED") !== "APPLIED" && completedChecklistCount(favoriteTrackers.get(item.id)) === FAVORITE_CHECKLIST_ITEMS.length && <button className="favorite-ready-button" type="button" disabled={!trackerWrites.ready || trackerWrites.pending.has(item.id)} onClick={() => void saveFavoriteTracker(item.id, "READY")}>체크 완료 · 신청 준비로 변경</button>}
                         </div>
                       )}
                       {savedOnly && member && item.officialUrl && <a className="favorite-official-link" href={item.officialUrl} target="_blank" rel="noreferrer">공식 공고 바로 열기 <Icon name="arrow" /></a>}
@@ -2009,18 +2011,18 @@ export default function Home() {
                           <span><Icon name="check" /> 신청 준비 완료</span>
                           <div>
                             {item.officialUrl ? <a href={item.officialUrl} target="_blank" rel="noreferrer">공식 공고 열기 <Icon name="arrow" /></a> : <button type="button" disabled>공식 링크 확인 중</button>}
-                            <button type="button" onClick={() => void saveFavoriteTracker(item.id, "APPLIED", favoriteTrackers.get(item.id)?.memo ?? "")} disabled={favoriteTrackerPendingId === item.id}>신청 완료로 표시</button>
+                            <button type="button" onClick={() => void saveFavoriteTracker(item.id, "APPLIED")} disabled={!trackerWrites.ready || trackerWrites.pending.has(item.id)}>신청 완료로 표시</button>
                           </div>
                         </div>
                       )}
                       {savedOnly && member && (favoriteTrackers.get(item.id)?.progress ?? "SAVED") === "APPLIED" && (
                         <div className="application-result-tracker">
                           <span>신청 결과</span>
-                          <select value={favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING"} disabled={favoriteTrackerPendingId === item.id} onChange={(event) => void saveFavoriteTracker(item.id, "APPLIED", favoriteTrackers.get(item.id)?.memo ?? "", {}, event.target.value as FavoriteApplicationResult)} aria-label={`${item.title} 신청 결과`}>
+                          <select value={favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING"} disabled={!trackerWrites.ready || trackerWrites.pending.has(item.id)} onChange={(event) => void saveFavoriteTracker(item.id, "APPLIED", {}, event.target.value as FavoriteApplicationResult)} aria-label={`${item.title} 신청 결과`}>
                             {Object.entries(FAVORITE_APPLICATION_RESULT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                           </select>
                           <small>{(favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING") === "PENDING" ? item.winnerAnnounceDate ? `당첨 발표일 ${formatShortDate(item.winnerAnnounceDate)}에 결과를 확인하세요.` : "당첨 발표일은 공식 공고문에서 확인하세요." : `${favoriteTrackers.get(item.id)?.applicationResultRecordedAt ? `${formatChangedAt(favoriteTrackers.get(item.id)?.applicationResultRecordedAt ?? "")}에 기록` : "공식 당첨자 발표를 기준으로 직접 기록한 결과입니다."}`}</small>
-                          {(favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING") !== "PENDING" && <input key={`${item.id}-${favoriteTrackers.get(item.id)?.applicationResultRecordedAt ?? "result"}`} defaultValue={favoriteTrackers.get(item.id)?.applicationResultMemo ?? ""} maxLength={500} placeholder="결과 메모 (예: 계약 일정 확인)" onBlur={(event) => void saveFavoriteTracker(item.id, "APPLIED", favoriteTrackers.get(item.id)?.memo ?? "", {}, favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING", event.target.value)} />}
+                          {(favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING") !== "PENDING" && favoriteMemoInput(item.id, "applicationResultMemo")}
                         </div>
                       )}
                       {savedOnly && member && (favoriteTrackers.get(item.id)?.progress ?? "SAVED") === "APPLIED" && <span className={`application-result-badge result-${favoriteTrackers.get(item.id)?.applicationResult?.toLowerCase() ?? "pending"}`}>{FAVORITE_APPLICATION_RESULT_LABELS[favoriteTrackers.get(item.id)?.applicationResult ?? "PENDING"]}</span>}
@@ -2143,14 +2145,19 @@ export default function Home() {
         <button type="button" onClick={() => setMemberDialog(member ? "account" : "login")} disabled={authLoading}><Icon name="user" /><span>{member ? "내 정보" : "로그인"}</span></button>
       </nav>
 
-      {comparisonNotices.length > 0 && (
+      {comparisonIds.length > 0 && (
         <section className="compare-tray" aria-label="청약 공고 비교 목록">
-          <div className="compare-summary"><b>공고 비교</b><span>{comparisonNotices.length}/3개 선택</span></div>
+          <div className="compare-summary"><b>공고 비교</b><span>{comparisonIds.length}/3개 선택 · 조회 완료 {comparisonNotices.length}개</span></div>
           <div className="compare-items">
-            {comparisonNotices.map((item) => <span key={item.id}><b>{item.title}</b><button type="button" onClick={() => void toggleComparison(item.id)} disabled={comparisonPendingId !== undefined || comparisonResetPending} aria-label={`${item.title} 비교 목록에서 삭제`}><Icon name="close" /></button></span>)}
+            {comparisonIds.map(id => {
+              const item = comparisonNotices.find(item => item.id === id);
+              const title = item?.title ?? `공고 #${id}`;
+              return <span key={id}><b>{title}{!item && (noticeRestoreStatus[id] === "error" ? " · 불러오지 못함" : " · 불러오는 중")}</b><button type="button" onClick={() => void toggleComparison(id)} disabled={comparisonPendingId !== undefined || comparisonResetPending} aria-label={`${title} 비교 목록에서 삭제`}><Icon name="close" /></button></span>;
+            })}
           </div>
+          {comparisonIds.some(id => !knownNotices.has(id) && noticeRestoreStatus[id] === "error") && <button type="button" className="compare-reset" disabled={!online || comparisonIds.some(id => !knownNotices.has(id) && noticeRestoreStatus[id] === "loading")} onClick={() => setNoticeRestoreVersion(value => value + 1)}>비교 공고 다시 불러오기</button>}
           <button className="compare-reset" type="button" onClick={() => void resetComparisons()} disabled={comparisonResetPending || comparisonPendingId !== undefined}>전체 해제</button>
-          <button className="compare-open" type="button" onClick={openComparison} disabled={comparisonNotices.length < 2}>{comparisonNotices.length < 2 ? "1개 더 선택" : "비교하기"}</button>
+          <button className="compare-open" type="button" onClick={openComparison} disabled={comparisonNotices.length < 2}>{comparisonNotices.length < 2 ? comparisonIds.length < 2 ? "1개 더 선택" : "조회 후 비교" : "비교하기"}</button>
         </section>
       )}
 
@@ -2218,7 +2225,9 @@ export default function Home() {
         detailLoading={detailLoading} detailError={detailError} online={online} detailUnitRange={detailUnitRange}
         signedIn={Boolean(member)} saved={Boolean(detailApplication && savedIds.has(detailApplication.id))}
         tracker={detailApplication ? favoriteTrackers.get(detailApplication.id) : undefined}
-        trackerBusy={favoriteTrackerPendingId === detailApplication?.id && favoriteTrackerPendingId !== undefined}
+        trackerBusy={!trackerWrites.ready || (detailApplication ? trackerWrites.pending.has(detailApplication.id) : false)}
+        memoEditor={detailApplication ? favoriteMemoInput(detailApplication.id, "memo") : null}
+        resultMemoEditor={detailApplication ? favoriteMemoInput(detailApplication.id, "applicationResultMemo") : null}
         favoriteBusy={favoritePendingId === detailApplication?.id && favoritePendingId !== undefined}
         noticeCopy={noticeCopy} closeDetail={closeDetail}
         onRetry={() => { if (selected && !detailLoading) void openDetail(selected); }}
