@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { formatWon } from "../src/noticePresentation.ts";
+
+test('invalid prices do not display as real amounts; zero remains valid', () => {
+  for (const value of [-1, NaN, Infinity]) assert.equal(formatWon(value), undefined);
+  assert.equal(formatWon(0), '0만원');
+  assert.equal(toApplication({ housingCategory: 'APARTMENT', minPrice: 200, maxPrice: 100 }).price, '분양가는 공고문 확인');
+});
 import { dateValue, daysBetween, formatShortDate, formatPeriod, optionalPeriod, formatChangedAt, weekday, statusPresentation, toApplication } from "../src/noticePresentation.ts";
 
 test("calendar dates reject impossible or non-canonical input without NaN", () => {

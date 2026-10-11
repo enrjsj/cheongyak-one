@@ -2,6 +2,7 @@
 import { RefObject, useEffect, useRef } from "react";
 
 const FOCUSABLE_SELECTOR = [
+  "summary",
   "a[href]",
   "button:not([disabled])",
   "input:not([disabled])",
@@ -9,6 +10,12 @@ const FOCUSABLE_SELECTOR = [
   "textarea:not([disabled])",
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
+
+function focusableElements(dialog: HTMLElement): HTMLElement[] {
+  return [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(element =>
+    element.tabIndex >= 0 && !element.matches(":disabled") && !element.closest("[inert], [hidden]") &&
+    element.getClientRects().length > 0 && getComputedStyle(element).visibility === "visible");
+}
 
 const dialogStack: HTMLElement[] = [];
 let unlockedOverflow = "";
@@ -35,7 +42,7 @@ export function useDialogAccessibility<T extends HTMLElement>(open: boolean, onC
       if (dialogStack.at(-1) !== dialog) return;
       // Do not overwrite focus already placed by the user or a nested form.
       if (dialog.contains(document.activeElement)) return;
-      const first = dialog.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+      const first = focusableElements(dialog)[0];
       (first ?? dialog)?.focus();
     });
 
@@ -47,8 +54,7 @@ export function useDialogAccessibility<T extends HTMLElement>(open: boolean, onC
         return;
       }
       if (event.key !== "Tab" || !dialog) return;
-      const focusable = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)]
-        .filter((element) => element.getClientRects().length > 0);
+      const focusable = focusableElements(dialog);
       if (focusable.length === 0) {
         event.preventDefault();
         dialog.focus();
@@ -56,7 +62,10 @@ export function useDialogAccessibility<T extends HTMLElement>(open: boolean, onC
       }
       const first = focusable[0];
       const last = focusable.at(-1)!;
-      if (event.shiftKey && document.activeElement === first) {
+      if (document.activeElement === dialog || !dialog.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {

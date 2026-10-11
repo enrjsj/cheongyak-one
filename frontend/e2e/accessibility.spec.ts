@@ -18,6 +18,48 @@ const notices = [
   { id: 952, title: '경기 공공임대 모집', housingCategory: 'PUBLIC_RENTAL', sourceSystem: 'MYHOME_PUBLIC_RENTAL', regionCode: '경기', status: 'UPCOMING', applyStartDate: '2026-10-12', applyEndDate: '2026-10-16', syncedAt: '2026-10-07T00:00:00Z' },
   { id: 953, title: '일정 미확인 오피스텔 공고', housingCategory: 'OFFICETEL', sourceSystem: 'REB_OFFICETEL', status: 'CLOSED', syncedAt: '2026-10-07T00:00:00Z' },
 ];
+
+test('모바일 상세 확인 안내·터치 크기·키보드 순환', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await setup(page);
+  await expect(page.locator('.search-field input')).toHaveCSS('font-size', '16px');
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  let requests = 0;
+  await page.route('**/api/v1/notices/951', async route => {
+    requests++;
+    await pending;
+    await route.fulfill({ json: { ...notices[0], businessEntityName: '   ', maxPrice: null, unitTypes: [], officialUrl: 'https://example.com/notice' } });
+  });
+  const opener = page.getByRole('button', { name: `${notices[0].title} 공고 상세 보기`, exact: true });
+  await opener.click();
+  const dialog = page.getByRole('dialog', { name: notices[0].title, exact: true });
+  await expect(dialog.getByRole('status')).toContainText('최신 상세');
+  await expect(dialog.locator('.notice-quality')).toHaveCount(0);
+  release();
+  const panel = dialog.locator('.notice-quality');
+  await expect(panel.locator('summary')).toHaveText('공고문에서 확인할 정보 3개');
+  await panel.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(panel).toHaveAttribute('open', '');
+  await expect(panel).toContainText('자료 미제공이 수집 실패를 뜻하지는 않습니다.');
+  await expect(panel.locator('li')).toHaveCount(3);
+  await expectTextContrast(dialog);
+  const close = dialog.getByRole('button', { name: '닫기', exact: true });
+  const box = await close.boundingBox();
+  expect(box!.width).toBeGreaterThanOrEqual(44);
+  expect(box!.height).toBeGreaterThanOrEqual(44);
+  expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await dialog.focus();
+  await page.keyboard.press('Shift+Tab');
+  await expect(dialog.getByRole('link', { name: '공식 공고 보기' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(close).toBeFocused();
+  expect(requests).toBe(1);
+  await close.click();
+  await expect(opener).toBeFocused();
+});
+
 async function setup(page: Page) {
   await page.clock.setFixedTime(new Date('2026-10-07T03:00:00Z'));
   await page.route('**/api/v1/**', route => {
