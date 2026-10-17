@@ -1232,7 +1232,7 @@ test("닫힌 알림창의 늦은 새로고침이 새 창의 읽지 않은 개수
   await expect(page.getByRole("button", { name: "알림 3개", exact: true })).toBeVisible();
 });
 
-test("이전 알림창의 저장 실패가 다시 연 창에 만료 오류를 표시하지 않는다", async ({ page }) => {
+test("알림 설정 저장 중 Escape를 막고 실패 후 재열면 만료 상태를 새로 조회한다", async ({ page }) => {
   await mockApi(page);
   let release!: () => void;
   let held = false;
@@ -1249,11 +1249,15 @@ test("이전 알림창의 저장 실패가 다시 연 창에 만료 오류를 �
   await page.getByRole("button", { name: "알림 설정 저장" }).click();
   await expect.poll(() => held).toBe(true);
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "알림 0개", exact: true }).click();
-  await expect(page.getByRole("button", { name: "알림 설정 저장" })).toBeEnabled();
+  await expect(page.getByRole("dialog", { name: "맞춤 청약 알림" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "저장 중…", exact: true })).toBeDisabled();
   const completed = page.waitForResponse(response => response.url().endsWith("/preference") && response.status() === 401);
   release();
   await completed;
+  await expect(page.getByText(/다시 로그인한 뒤 알림 창/)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "알림 0개", exact: true }).click();
+  await expect(page.getByRole("button", { name: "알림 설정 저장" })).toBeEnabled();
   await page.getByRole("checkbox", { name: "마감 7일 전", exact: true }).check();
   await expect(page.getByRole("button", { name: "알림 설정 저장" })).toBeEnabled();
   await expect(page.getByText(/다시 로그인한 뒤 알림 창/)).toHaveCount(0);
