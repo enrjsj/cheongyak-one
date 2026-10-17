@@ -1,4 +1,5 @@
 import { dateValue, type Application } from "./noticePresentation.ts";
+import { csvCell } from "./fileExport.ts";
 
 // Build lossless comparison values from the source, never from rounded card labels.
 export function toComparisonItem(item: Application): ComparisonItem {
@@ -45,12 +46,7 @@ export function safeOfficialUrl(value?: string): string | undefined {
   try { const url = new URL(value ?? ""); return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password ? url.toString() : undefined; } catch { return undefined; }
 }
 export function comparisonCsv(items: ComparisonItem[], rows: ComparisonRow[]): string {
-  const cell = (value: string) => {
-    // Spreadsheet programs may evaluate formula-like cells even when quoted.
-    const safe = /^[\s\uFEFF]*[=+\-@]/u.test(value) ? "'" + value : value;
-    return '"' + safe.replaceAll('"', '""') + '"';
-  };
   const data = [["비교 항목", ...items.map(item => item.title)], ...rows.map(row => [row.label, ...row.values]),
     ["공식 공고", ...items.map(item => safeOfficialUrl(item.officialUrl) ?? "링크 미제공")]];
-  return "\uFEFF" + data.map(row => row.map(cell).join(",")).join("\r\n");
+  return "\uFEFF" + data.map(row => row.map(csvCell).join(",")).join("\r\n");
 }

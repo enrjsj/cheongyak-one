@@ -78,6 +78,7 @@ import ComparisonTable from "./ComparisonTable";
 import FavoriteMemoInput from "./FavoriteMemoInput";
 import { useFavoriteTrackerWrites } from "./useFavoriteTrackerWrites";
 import { toComparisonItem } from "./comparisonTools";
+import { csvCell, downloadTextFile } from "./fileExport";
 import { useOnlineStatus } from "./useOnlineStatus";
 import RangeFilter from "./RangeFilter";
 import { appendUniqueNotices } from "./noticePagination";
@@ -94,6 +95,7 @@ import {
 import { useDialogAccessibility } from "./useDialogAccessibility";
 import {
   buildNoticeCalendar,
+  hasNoticeCalendarEvents,
   noticeIdFromSearch,
   noticeSearchStateFromSearch,
   noticeSearchUrl,
@@ -357,12 +359,22 @@ export default function Home() {
     });
   };
 
+  const removeRecentNotice = (noticeId: number) => {
+    const nextIds = recentNoticeIds.filter((id) => id !== noticeId);
+    setRecentNoticeIds(nextIds);
+    try {
+      window.localStorage.setItem(RECENT_NOTICE_STORAGE_KEY, JSON.stringify(nextIds));
+    } catch {
+      setToast("현재 화면에서만 삭제했어요. 브라우저 저장소를 사용할 수 없습니다.");
+    }
+  };
+
   const clearRecentNotices = () => {
     setRecentNoticeIds([]);
     try {
       window.localStorage.removeItem(RECENT_NOTICE_STORAGE_KEY);
     } catch {
-      // 브라우저 저장소가 차단된 경우 현재 화면 상태만 비운다.
+      setToast("현재 화면에서만 삭제했어요. 브라우저 저장소를 사용할 수 없습니다.");
     }
   };
 
@@ -905,7 +917,7 @@ export default function Home() {
     const controller = new AbortController();
     const requestedIds = [...new Set([...comparisonIds, ...recentNoticeIds])]
       .filter((id) => !knownNotices.has(id));
-    if (requestedIds.length === 0) return () => controller.abort();
+    if (!online || requestedIds.length === 0) return () => controller.abort();
     setNoticeRestoreStatus(current => ({ ...current, ...Object.fromEntries(requestedIds.map(id => [id, "loading" as const])) }));
     Promise.allSettled(requestedIds.map((id) => fetchNotice(id, controller.signal)))
       .then((results) => {
@@ -924,7 +936,7 @@ export default function Home() {
         });
       });
     return () => controller.abort();
-  }, [comparisonIds.join(","), recentNoticeIds.join(","), noticeRestoreVersion]);
+  }, [comparisonIds.join(","), recentNoticeIds.join(","), noticeRestoreVersion, online]);
 
   useEffect(() => {
     if (!toast) return;
@@ -1509,33 +1521,32 @@ export default function Home() {
   };
 
   const downloadCalendar = (items: NoticeSummary[], filename: string) => {
-    const hasSchedule = items.some((item) => item.applyStartDate || item.applyEndDate || item.winnerAnnounceDate);
-    if (!hasSchedule) {
+    if (!hasNoticeCalendarEvents(items)) {
       setToast("저장할 청약 일정이 아직 없어요.");
       return;
     }
 
     // 브라우저에서 표준 ICS 파일을 생성해 별도 개인정보 전송 없이 저장한다.
-    const url = URL.createObjectURL(new Blob([buildNoticeCalendar(items)], { type: "text/calendar;charset=utf-8" }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-    setToast("캘린더 파일을 저장했어요.");
+    try {
+      downloadTextFile(buildNoticeCalendar(items), filename, "text/calendar;charset=utf-8");
+      setToast("캘린더 파일 다운로드를 요청했어요.");
+    } catch {
+      setToast("캘린더 파일을 만들지 못했어요. 다시 시도해 주세요.");
+    }
   };
 
   const downloadFavoriteResults = () => {
-    const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
     const rows = savedNotices.map((item) => {
       const tracker = favoriteTrackers.get(item.id);
       return [item.title, item.region, item.applyEndDate ?? "", item.winnerAnnounceDate ?? "", FAVORITE_PROGRESS_LABELS[tracker?.progress ?? "SAVED"], `${completedChecklistCount(tracker)}/4`, tracker?.memo ?? "", tracker?.progress === "APPLIED" ? FAVORITE_APPLICATION_RESULT_LABELS[tracker.applicationResult ?? "PENDING"] : "", tracker?.applicationResultRecordedAt ?? "", tracker?.applicationResultMemo ?? "", item.officialUrl ?? ""];
     });
-    const content = ["공고명,지역,접수마감일,당첨발표일,준비상태,체크리스트,관심메모,신청결과,결과기록시각,결과메모,공식공고URL", ...rows.map((row) => row.map(escape).join(","))].join("\n");
-    const url = URL.createObjectURL(new Blob([`\uFEFF${content}`], { type: "text/csv;charset=utf-8" }));
-    const anchor = document.createElement("a"); anchor.href = url; anchor.download = "cheongyak-favorite-results.csv"; anchor.click(); URL.revokeObjectURL(url);
+    const content = ["공고명,지역,접수마감일,당첨발표일,준비상태,체크리스트,관심메모,신청결과,결과기록시각,결과메모,공식공고URL", ...rows.map((row) => row.map(csvCell).join(","))].join("\r\n");
+    try {
+      downloadTextFile(`\uFEFF${content}`, "cheongyak-favorite-results.csv", "text/csv;charset=utf-8");
+      setToast("저장된 기록의 CSV 다운로드를 요청했어요.");
+    } catch {
+      setToast("CSV 파일을 만들지 못했어요. 다시 시도해 주세요.");
+    }
   };
 
   const searchShareScope = JSON.stringify([query, activeStatus, includeClosed, region, category, supplyType, minPriceManwon, maxPriceManwon, minArea, maxArea, sortKey, savedOnly, member?.id]);
@@ -1825,7 +1836,7 @@ export default function Home() {
               <div>
                 <span className="section-kicker">{savedOnly ? "나의 청약 보관함" : "FIND YOUR NEXT HOME"}</span>
                 <h2>{savedOnly ? "관심 청약" : "지금 확인할 청약"}</h2>
-                <p className="result-summary" aria-live="polite">{loading ? "실제 공고를 불러오는 중" : `${includeClosed && activeStatus === "all" ? "마감 공고를 포함한" : "조건에 맞는"} 공고 ${savedOnly && favoriteProgressFilter !== "ALL" ? visible.length : noticeTotal}건`}</p>
+                <p className="result-summary" aria-live="polite">{loading ? "실제 공고를 불러오는 중" : savedOnly && (favoriteKeyword.trim() || favoriteProgressFilter !== "ALL") ? `불러온 ${notices.length}건 중 조건에 맞는 공고 ${visible.length}건` : `${includeClosed && activeStatus === "all" ? "마감 공고를 포함한" : "조건에 맞는"} 공고 ${noticeTotal}건`}</p>
               </div>
               <div className="section-actions">
                 <label className="sort-control">
@@ -1850,7 +1861,7 @@ export default function Home() {
                 {!savedOnly && <button className={`closed-notice-toggle ${includeClosed ? "selected" : ""}`} type="button" onClick={() => { setIncludeClosed((value) => !value); setActiveStatus("all"); resetVisible(); }} aria-pressed={includeClosed}>마감 공고 포함</button>}
                 {savedOnly && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={() => downloadCalendar(savedNotices, "cheongyak-saved.ics")}><Icon name="calendar" /> 관심 일정 저장</button>}
                 {savedOnly && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={() => setFavoriteCalendarOpen(true)}><Icon name="calendar" /> 전체 일정 보기</button>}
-                {savedOnly && member && savedNotices.length > 0 && <button className="calendar-button" type="button" onClick={downloadFavoriteResults}>내 기록 CSV</button>}
+                {savedOnly && member && savedNotices.length > 0 && <button className="calendar-button" type="button" disabled={!trackerWrites.ready || trackerWrites.pending.size > 0} title="서버에 저장된 기록을 내려받습니다" onClick={downloadFavoriteResults}>내 기록 CSV</button>}
                 <button className="search-share-button" type="button" disabled={searchCopy.busy} onClick={() => void copySearchLink()}><Icon name="arrow" /> 검색 공유</button>
                 <button className="filter-button" type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setFilterOpen(true); }} aria-label={`청약 필터 열기${activeFilterCount > 0 ? ` ${activeFilterCount}개 적용됨` : ""}`}><Icon name="filter" /> 지역·유형·예산 필터 {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button>
               </div>
@@ -1899,6 +1910,63 @@ export default function Home() {
                 <button type="button" onClick={retryNoticeLoad} disabled={!online}>다시 불러오기</button>
               </div>
             )}
+            {savedOnly && member && (
+              <section className="favorite-preparation-summary" aria-label="관심청약 준비 현황">
+                <div className="favorite-summary-heading">
+                  <span>준비 현황</span>
+                  <strong>신청 완료 건은 아래로, 마감이 가까운 공고는 먼저 확인하세요.</strong>
+                </div>
+                <div className="favorite-summary-stats">
+                  <span><b>{favoritePreparation.counts.CHECKING}</b> 조건 확인 중</span>
+                  <span><b>{favoritePreparation.counts.READY}</b> 신청 준비 완료</span>
+                  <span><b>{favoritePreparation.counts.APPLIED}</b> 신청 완료</span>
+                  {favoritePreparation.counts.APPLIED > 0 && <em>당첨 {favoritePreparation.applicationResults.SELECTED} · 예비 {favoritePreparation.applicationResults.WAITLISTED} · 발표 대기 {favoritePreparation.applicationResults.PENDING}</em>}
+                  {favoritePreparation.resultDue > 0 && <em className="result-due-stat">발표 확인 필요 {favoritePreparation.resultDue}건</em>}
+                  {favoritePreparation.recordedResults > 0 && <em>결과 기록 완료 {favoritePreparation.recordedResults}건</em>}
+                  {favoritePreparation.checklistIncomplete > 0 && <em>확인 항목 남음 {favoritePreparation.checklistIncomplete}건</em>}
+                  {favoritePreparation.urgent > 0 && <em>마감 3일 이내 {favoritePreparation.urgent}건</em>}
+                </div>
+                <div className="favorite-eligibility-status">
+                  <div>
+                    <span>내 청약 조건 사전점검</span>
+                    <strong>{eligibilityProfile ? "저장된 내 조건을 기준으로 공고문을 확인하세요" : "사전점검을 저장하면 준비 항목을 더 빠르게 확인할 수 있어요"}</strong>
+                  </div>
+                  <button type="button" onClick={() => openQualification(Boolean(eligibilityProfile))}>{eligibilityProfile ? "조회·수정" : "사전점검 시작"}</button>
+                </div>
+                <div className="favorite-progress-filters" role="group" aria-label="관심청약 준비 상태 필터">
+                  {(["ALL", "INCOMPLETE", "CHECKING", "READY", "APPLIED"] as const).map((progress) => (
+                    <button className={favoriteProgressFilter === progress ? "active" : ""} type="button" key={progress} onClick={() => setFavoriteProgressFilter(progress)}>
+                      {progress === "ALL" ? `전체 ${savedIds.size}` : progress === "INCOMPLETE" ? `확인 필요 ${favoritePreparation.checklistIncomplete}` : `${FAVORITE_PROGRESS_LABELS[progress]} ${favoritePreparation.counts[progress]}`}
+                    </button>
+                  ))}
+                  <button className={favoriteProgressFilter === "URGENT" ? "active urgent-filter" : "urgent-filter"} type="button" onClick={() => setFavoriteProgressFilter("URGENT")} disabled={favoritePreparation.urgent === 0}>마감 임박 {favoritePreparation.urgent}</button>
+                  <button className={favoriteProgressFilter === "RESULT_DUE" ? "active result-due-filter" : "result-due-filter"} type="button" onClick={() => setFavoriteProgressFilter("RESULT_DUE")} disabled={favoritePreparation.resultDue === 0}>발표 확인 {favoritePreparation.resultDue}</button>
+                  {(["PENDING", "SELECTED", "WAITLISTED", "NOT_SELECTED"] as FavoriteApplicationResult[]).map((result) => {
+                    const filter = `RESULT_${result}` as FavoriteProgressFilter;
+                    return <button className={favoriteProgressFilter === filter ? "active result-filter" : "result-filter"} type="button" key={filter} onClick={() => setFavoriteProgressFilter(filter)} disabled={favoritePreparation.applicationResults[result] === 0}>
+                      {FAVORITE_APPLICATION_RESULT_LABELS[result]} {favoritePreparation.applicationResults[result]}
+                    </button>;
+                  })}
+                </div>
+                <label className="favorite-search-control">
+                  <span>관심청약·메모 검색</span>
+                  <input value={favoriteKeyword} maxLength={100} onChange={(event) => setFavoriteKeyword(event.target.value)} placeholder="공고명, 지역, 내 메모" />
+                  {favoriteKeyword && <button type="button" onClick={() => setFavoriteKeyword("")}>지우기</button>}
+                </label>
+                {upcomingFavoriteEvents.length > 0 && (
+                  <div className="favorite-upcoming-events" aria-label="다가오는 관심청약 일정">
+                    <div><span>다가오는 내 일정</span><small>관심청약의 접수·당첨 발표 일정입니다.</small></div>
+                    <ol>{upcomingFavoriteEvents.map((event) => <li key={`${event.item.id}-${event.label}-${event.date}`}><time>{formatShortDate(event.date)}</time><span>{event.label}</span><button type="button" onClick={(click) => { click.currentTarget.focus({ preventScroll: true }); void openDetail(event.item); }}>{event.item.title}</button></li>)}</ol>
+                  </div>
+                )}
+                {resultDueFavoriteEvents.length > 0 && (
+                  <div className="favorite-result-due-events" aria-label="확인이 필요한 당첨 발표">
+                    <div><span>당첨 발표 확인</span><small>신청 결과가 아직 기록되지 않은 공고입니다.</small></div>
+                    <ol>{resultDueFavoriteEvents.map(({ item, date }) => <li key={item.id}><time>{formatShortDate(date)}</time><span>{resultDueLabel(date)}</span><button type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); void openDetail(item); }}>{item.title}</button></li>)}</ol>
+                  </div>
+                )}
+              </section>
+            )}
             {!online && visible.length === 0 ? (
               <div className="notice-load-status" role="status"><p>연결 후 현재 검색조건의 공고를 확인할 수 있습니다.</p></div>
             ) : (loading || loadRetryPending) && !cachedListShownAt ? (
@@ -1912,63 +1980,6 @@ export default function Home() {
               </div>
             ) : visible.length > 0 ? (
               <>
-                {savedOnly && member && (
-                  <section className="favorite-preparation-summary" aria-label="관심청약 준비 현황">
-                    <div className="favorite-summary-heading">
-                      <span>준비 현황</span>
-                      <strong>신청 완료 건은 아래로, 마감이 가까운 공고는 먼저 확인하세요.</strong>
-                    </div>
-                    <div className="favorite-summary-stats">
-                      <span><b>{favoritePreparation.counts.CHECKING}</b> 조건 확인 중</span>
-                      <span><b>{favoritePreparation.counts.READY}</b> 신청 준비 완료</span>
-                      <span><b>{favoritePreparation.counts.APPLIED}</b> 신청 완료</span>
-                      {favoritePreparation.counts.APPLIED > 0 && <em>당첨 {favoritePreparation.applicationResults.SELECTED} · 예비 {favoritePreparation.applicationResults.WAITLISTED} · 발표 대기 {favoritePreparation.applicationResults.PENDING}</em>}
-                      {favoritePreparation.resultDue > 0 && <em className="result-due-stat">발표 확인 필요 {favoritePreparation.resultDue}건</em>}
-                      {favoritePreparation.recordedResults > 0 && <em>결과 기록 완료 {favoritePreparation.recordedResults}건</em>}
-                      {favoritePreparation.checklistIncomplete > 0 && <em>확인 항목 남음 {favoritePreparation.checklistIncomplete}건</em>}
-                      {favoritePreparation.urgent > 0 && <em>마감 3일 이내 {favoritePreparation.urgent}건</em>}
-                    </div>
-                    <div className="favorite-eligibility-status">
-                      <div>
-                        <span>내 청약 조건 사전점검</span>
-                        <strong>{eligibilityProfile ? "저장된 내 조건을 기준으로 공고문을 확인하세요" : "사전점검을 저장하면 준비 항목을 더 빠르게 확인할 수 있어요"}</strong>
-                      </div>
-                      <button type="button" onClick={() => openQualification(Boolean(eligibilityProfile))}>{eligibilityProfile ? "조회·수정" : "사전점검 시작"}</button>
-                    </div>
-                    <div className="favorite-progress-filters" role="group" aria-label="관심청약 준비 상태 필터">
-                      {(["ALL", "INCOMPLETE", "CHECKING", "READY", "APPLIED"] as const).map((progress) => (
-                        <button className={favoriteProgressFilter === progress ? "active" : ""} type="button" key={progress} onClick={() => setFavoriteProgressFilter(progress)}>
-                          {progress === "ALL" ? `전체 ${savedIds.size}` : progress === "INCOMPLETE" ? `확인 필요 ${favoritePreparation.checklistIncomplete}` : `${FAVORITE_PROGRESS_LABELS[progress]} ${favoritePreparation.counts[progress]}`}
-                        </button>
-                      ))}
-                      <button className={favoriteProgressFilter === "URGENT" ? "active urgent-filter" : "urgent-filter"} type="button" onClick={() => setFavoriteProgressFilter("URGENT")} disabled={favoritePreparation.urgent === 0}>마감 임박 {favoritePreparation.urgent}</button>
-                      <button className={favoriteProgressFilter === "RESULT_DUE" ? "active result-due-filter" : "result-due-filter"} type="button" onClick={() => setFavoriteProgressFilter("RESULT_DUE")} disabled={favoritePreparation.resultDue === 0}>발표 확인 {favoritePreparation.resultDue}</button>
-                      {(["PENDING", "SELECTED", "WAITLISTED", "NOT_SELECTED"] as FavoriteApplicationResult[]).map((result) => {
-                        const filter = `RESULT_${result}` as FavoriteProgressFilter;
-                        return <button className={favoriteProgressFilter === filter ? "active result-filter" : "result-filter"} type="button" key={filter} onClick={() => setFavoriteProgressFilter(filter)} disabled={favoritePreparation.applicationResults[result] === 0}>
-                          {FAVORITE_APPLICATION_RESULT_LABELS[result]} {favoritePreparation.applicationResults[result]}
-                        </button>;
-                      })}
-                    </div>
-                    <label className="favorite-search-control">
-                      <span>관심청약·메모 검색</span>
-                      <input value={favoriteKeyword} maxLength={100} onChange={(event) => setFavoriteKeyword(event.target.value)} placeholder="공고명, 지역, 내 메모" />
-                      {favoriteKeyword && <button type="button" onClick={() => setFavoriteKeyword("")}>지우기</button>}
-                    </label>
-                    {upcomingFavoriteEvents.length > 0 && (
-                      <div className="favorite-upcoming-events" aria-label="다가오는 관심청약 일정">
-                        <div><span>다가오는 내 일정</span><small>관심청약의 접수·당첨 발표 일정입니다.</small></div>
-                        <ol>{upcomingFavoriteEvents.map((event) => <li key={`${event.item.id}-${event.label}-${event.date}`}><time>{formatShortDate(event.date)}</time><span>{event.label}</span><button type="button" onClick={(click) => { click.currentTarget.focus({ preventScroll: true }); void openDetail(event.item); }}>{event.item.title}</button></li>)}</ol>
-                      </div>
-                    )}
-                    {resultDueFavoriteEvents.length > 0 && (
-                      <div className="favorite-result-due-events" aria-label="확인이 필요한 당첨 발표">
-                        <div><span>당첨 발표 확인</span><small>신청 결과가 아직 기록되지 않은 공고입니다.</small></div>
-                        <ol>{resultDueFavoriteEvents.map(({ item, date }) => <li key={item.id}><time>{formatShortDate(date)}</time><span>{resultDueLabel(date)}</span><button type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); void openDetail(item); }}>{item.title}</button></li>)}</ol>
-                      </div>
-                    )}
-                  </section>
-                )}
                 <div className="application-list">
                   {visible.map((item) => {
                     const attention = noticeAttention(item, today);
@@ -2033,20 +2044,22 @@ export default function Home() {
                     </article>;
                   })}
                 </div>
-                <div className="pagination-feedback">
-                  {moreError && <p role="alert">다음 공고를 불러오지 못했습니다. 현재 목록은 유지됩니다. {moreError}</p>}
-                  <p role="status" aria-live="polite" aria-atomic="true">{loadingMore ? "다음 공고를 불러오는 중입니다." : moreMessage}</p>
-                  {firstAddedNoticeId && visible.some(item => item.id === firstAddedNoticeId) && <button type="button" onClick={() => document.getElementById(`notice-card-${firstAddedNoticeId}`)?.focus()}>새로 불러온 공고로 이동</button>}
-                  {moreEnded && <button type="button" disabled={!online || loading} onClick={retryNoticeLoad}>목록 새로고침</button>}
-                  {(notices.length < noticeTotal || moreMessage) && <button className="more-button" type="button" onClick={() => void loadMoreNotices()} disabled={loadingMore || loading || !online || moreEnded || notices.length >= noticeTotal}>{loadingMore ? "불러오는 중" : moreEnded || notices.length >= noticeTotal ? "추가 조회 완료" : moreError ? "다음 공고 다시 불러오기" : `다음 ${Math.min(NOTICE_PAGE_SIZE, noticeTotal - notices.length)}건 더보기`} <Icon name="arrow" /></button>}
-                </div>
               </>
             ) : (
               <div className="empty-state">
                 <span className="empty-icon"><Icon name={savedOnly ? "bookmark" : "search"} /></span>
-                <h3>{savedOnly ? favoriteKeyword ? "검색 조건에 맞는 관심청약이 없어요" : favoriteProgressFilter === "ALL" ? "저장한 관심청약이 없어요" : favoriteProgressFilter === "INCOMPLETE" ? "확인 항목이 남은 관심청약이 없어요" : favoriteProgressFilter === "URGENT" ? "마감이 임박한 관심청약이 없어요" : favoriteProgressFilter === "RESULT_DUE" ? "확인이 필요한 당첨 발표가 없어요" : applicationResultFromFilter(favoriteProgressFilter) ? "선택한 신청 결과의 관심청약이 없어요" : "선택한 준비 상태의 관심청약이 없어요" : "조건에 맞는 공고가 없어요"}</h3>
-                <p>{savedOnly ? favoriteKeyword ? "공고명·지역 또는 작성한 메모를 바꿔 검색해 보세요." : favoriteProgressFilter === "ALL" ? "관심 있는 공고의 북마크를 눌러 모아보세요." : favoriteProgressFilter === "INCOMPLETE" ? "현재 보이는 관심청약의 체크리스트를 모두 완료했어요." : favoriteProgressFilter === "URGENT" ? "현재 접수 마감 3일 이내인 관심청약이 없습니다." : favoriteProgressFilter === "RESULT_DUE" ? "당첨 발표일이 지난 신청 건의 결과를 모두 기록했어요." : applicationResultFromFilter(favoriteProgressFilter) ? "신청 결과를 기록한 뒤 다시 확인해 보세요." : "다른 준비 상태를 선택하거나 전체 관심청약을 확인해 보세요." : "검색어나 지역·유형 필터를 조금 넓혀보세요."}</p>
+                <h3>{savedOnly && notices.length < noticeTotal && !moreEnded ? "불러온 공고에서는 일치 항목이 없어요" : savedOnly ? favoriteKeyword ? "검색 조건에 맞는 관심청약이 없어요" : favoriteProgressFilter === "ALL" ? "저장한 관심청약이 없어요" : favoriteProgressFilter === "INCOMPLETE" ? "확인 항목이 남은 관심청약이 없어요" : favoriteProgressFilter === "URGENT" ? "마감이 임박한 관심청약이 없어요" : favoriteProgressFilter === "RESULT_DUE" ? "확인이 필요한 당첨 발표가 없어요" : applicationResultFromFilter(favoriteProgressFilter) ? "선택한 신청 결과의 관심청약이 없어요" : "선택한 준비 상태의 관심청약이 없어요" : "조건에 맞는 공고가 없어요"}</h3>
+                <p>{savedOnly && notices.length < noticeTotal && !moreEnded ? "아래 더보기로 나머지 관심 공고를 확인하거나 검색·준비 상태를 바꿔보세요." : savedOnly ? favoriteKeyword ? "공고명·지역 또는 작성한 메모를 바꿔 검색해 보세요." : favoriteProgressFilter === "ALL" ? "관심 있는 공고의 북마크를 눌러 모아보세요." : favoriteProgressFilter === "INCOMPLETE" ? "현재 보이는 관심청약의 체크리스트를 모두 완료했어요." : favoriteProgressFilter === "URGENT" ? "현재 접수 마감 3일 이내인 관심청약이 없습니다." : favoriteProgressFilter === "RESULT_DUE" ? "당첨 발표일이 지난 신청 건의 결과를 모두 기록했어요." : applicationResultFromFilter(favoriteProgressFilter) ? "신청 결과를 기록한 뒤 다시 확인해 보세요." : "다른 준비 상태를 선택하거나 전체 관심청약을 확인해 보세요." : "검색어나 지역·유형 필터를 조금 넓혀보세요."}</p>
                 <button type="button" onClick={() => { document.getElementById("applications")?.focus({ preventScroll: true }); if (savedOnly && (favoriteProgressFilter !== "ALL" || favoriteKeyword)) { setFavoriteProgressFilter("ALL"); setFavoriteKeyword(""); return; } resetSearchConditions(); }}>{savedOnly && (favoriteProgressFilter !== "ALL" || favoriteKeyword) ? "전체 관심청약 보기" : "전체 청약 보기"}</button>
+              </div>
+            )}
+            {(!loading && !loadRetryPending && (!loadError || cachedListShownAt)) && (
+              <div className="pagination-feedback">
+                {moreError && <p role="alert">다음 공고를 불러오지 못했습니다. 현재 목록은 유지됩니다. {moreError}</p>}
+                <p role="status" aria-live="polite" aria-atomic="true">{loadingMore ? "다음 공고를 불러오는 중입니다." : moreMessage}</p>
+                {firstAddedNoticeId && visible.some(item => item.id === firstAddedNoticeId) && <button type="button" onClick={() => document.getElementById(`notice-card-${firstAddedNoticeId}`)?.focus()}>새로 불러온 공고로 이동</button>}
+                {moreEnded && <button type="button" disabled={!online || loading} onClick={retryNoticeLoad}>목록 새로고침</button>}
+                {(notices.length < noticeTotal || moreMessage) && <button className="more-button" type="button" onClick={() => void loadMoreNotices()} disabled={loadingMore || loading || !online || moreEnded || notices.length >= noticeTotal}>{loadingMore ? "불러오는 중" : moreEnded || notices.length >= noticeTotal ? "추가 조회 완료" : moreError ? "다음 공고 다시 불러오기" : `다음 ${Math.min(NOTICE_PAGE_SIZE, noticeTotal - notices.length)}건 더보기`} <Icon name="arrow" /></button>}
               </div>
             )}
           </div>
@@ -2100,11 +2113,19 @@ export default function Home() {
               </button>
             </section>
 
-            {recentNotices.length > 0 && (
+            {recentNoticeIds.length > 0 && (
               <section className="recent-card" aria-labelledby="recent-notice-title">
                 <div className="side-title"><div><span>RECENT</span><h2 id="recent-notice-title">최근 본 공고</h2></div><button type="button" onClick={clearRecentNotices}>전체 삭제</button></div>
                 <ol>
-                  {recentNotices.map((item) => (
+                  {recentNoticeIds.map((id) => {
+                    const item = recentNotices.find((notice) => notice.id === id);
+                    if (!item) return <li key={id}>
+                      <p role="status">공고 #{id} · {!online ? "연결 후 확인할 수 있어요" : noticeRestoreStatus[id] === "error" ? "불러오지 못했어요" : "불러오는 중"}</p>
+                      <div className="recent-actions">
+                        <button type="button" onClick={() => removeRecentNotice(id)} aria-label={`공고 #${id} 최근 본 공고에서 삭제`}>삭제</button>
+                      </div>
+                    </li>;
+                    return (
                     <li key={item.id}>
                       <button type="button" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); void openDetail(item); }}>
                         <span className={`state ${item.stateTone}`}>{item.state}</span>
@@ -2114,11 +2135,12 @@ export default function Home() {
                       <div className="recent-actions">
                         <button type="button" onClick={() => void toggleSaved(item.id)} aria-label={`${item.title} 관심청약 ${savedIds.has(item.id) ? "해제" : "저장"}`}><Icon name="bookmark" /> {savedIds.has(item.id) ? "저장됨" : "관심"}</button>
                         <button type="button" onClick={() => void toggleComparison(item.id)} disabled={comparisonPendingId !== undefined || comparisonResetPending} aria-label={`${item.title} ${comparisonIds.includes(item.id) ? "비교 해제" : "비교 담기"}`}><Icon name="grid" /> {comparisonIds.includes(item.id) ? "비교 해제" : "비교"}</button>
-                        <button type="button" onClick={() => setRecentNoticeIds((ids) => ids.filter((id) => id !== item.id))} aria-label={`${item.title} 최근 본 공고에서 삭제`}><Icon name="close" /></button>
+                        <button type="button" onClick={() => removeRecentNotice(item.id)} aria-label={`${item.title} 최근 본 공고에서 삭제`}><Icon name="close" /></button>
                       </div>
                     </li>
-                  ))}
+                  ); })}
                 </ol>
+                {recentNoticeIds.some((id) => !knownNotices.has(id)) && <button type="button" disabled={!online || recentNoticeIds.some((id) => !knownNotices.has(id) && noticeRestoreStatus[id] === "loading")} onClick={() => setNoticeRestoreVersion((version) => version + 1)}>최근 공고 다시 불러오기</button>}
               </section>
             )}
 
