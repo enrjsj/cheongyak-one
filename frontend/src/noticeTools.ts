@@ -291,6 +291,10 @@ function calendarEvents(notice: NoticeSummary): CalendarEvent[] {
   ].filter((event): event is CalendarEvent => Boolean(event) && validScheduleDate(event ? event.date : undefined));
 }
 
+export function hasNoticeCalendarEvents(notices: NoticeSummary[]): boolean {
+  return notices.some((notice) => calendarEvents(notice).length > 0);
+}
+
 /** 선택한 공고의 접수 시작·마감·발표 일정을 표준 iCalendar 파일로 만든다. */
 export function buildNoticeCalendar(notices: NoticeSummary[], generatedAt = new Date()): string {
   const lines = [
