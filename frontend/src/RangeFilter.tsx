@@ -9,15 +9,16 @@ interface Props {
 }
 export default function RangeFilter({ label, unit, limit, min, max, placeholders, onChange, onInvalid, presets = [] }: Props) {
   const [draft, setDraft] = useState([min, max]);
+  const decimals = unit === "㎡";
   const errorId = useId();
   useEffect(() => {
     setDraft([min, max]);
-    onInvalid(Boolean(rangeFilterError(min, max, limit)));
-  }, [min, max, limit, onInvalid]);
-  const error = rangeFilterError(draft[0], draft[1], limit);
+    onInvalid(Boolean(rangeFilterError(min, max, limit, decimals)));
+  }, [min, max, limit, decimals, onInvalid]);
+  const error = rangeFilterError(draft[0], draft[1], limit, decimals);
   const update = (index: number, value: string) => {
     const next = [...draft]; next[index] = value;
-    setDraft(next); onInvalid(Boolean(rangeFilterError(next[0], next[1], limit)));
+    setDraft(next); onInvalid(Boolean(rangeFilterError(next[0], next[1], limit, decimals)));
   };
   const commit = () => {
     if (!error && (draft[0] !== min || draft[1] !== max)) onChange(draft[0], draft[1]);
@@ -35,7 +36,7 @@ export default function RangeFilter({ label, unit, limit, min, max, placeholders
         onClick={() => replace(preset.min, preset.max)}>{preset.label}</button>)}
     </div>}
     <div className="price-range">{["최소", "최대"].map((name, index) => <label key={name}>{name}
-      <input type="text" inputMode="numeric" maxLength={12} value={draft[index]}
+      <input type="text" inputMode={decimals ? "decimal" : "numeric"} maxLength={12} value={draft[index]}
         aria-label={`${label} ${name} (${unit})`} aria-invalid={Boolean(error)} aria-describedby={errorId}
         placeholder={placeholders[index]} onChange={event => update(index, event.target.value)}
         onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); commit(); } }} />

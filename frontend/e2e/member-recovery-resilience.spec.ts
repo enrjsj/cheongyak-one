@@ -122,6 +122,7 @@ test("메모 실패: 초안을 유지하고 명시적으로 재저장하며 작�
 });
 
 test("메모 지연: 로그아웃 뒤 이전 저장 응답이 회원 상태를 되살리지 않는다", async ({ page }) => {
+  page.on("dialog", async dialog => { expect(dialog.type()).toBe("confirm"); await dialog.accept(); });
   await mockApi(page);
   let pending: Route | undefined;
   await page.route("**/favorites/*/tracker", route => { pending = route; });
@@ -138,6 +139,120 @@ test("메모 지연: 로그아웃 뒤 이전 저장 응답이 회원 상태를 �
   await expect(page.locator(".header-actions").getByRole("button", { name: "로그인", exact: true })).toBeEnabled();
   await expect(page.getByLabel("내 메모", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "관심청약 0개", exact: true })).toBeVisible();
+});
+
+test("메모 이탈 경고는 미저장·저장 중·실패에 유지되고 저장 성공 뒤 해제된다", async ({ page }) => {
+  await mockApi(page);
+  const pending: Route[] = [];
+  await page.route("**/favorites/*/tracker", route => { pending.push(route); });
+  const [a] = await openFavorites(page);
+  const blocked = () => page.evaluate(() => { const event = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(event); return event.defaultPrevented; });
+  expect(await blocked()).toBe(false);
+  const input = a.getByLabel("내 메모", { exact: true });
+  await input.click(); await input.fill("화면 한정 초안");
+  await expect.poll(blocked).toBe(true);
+  await input.blur(); await expect.poll(() => pending.length).toBe(1);
+  expect(await blocked()).toBe(true);
+  await pending[0].fulfill({ status: 503 });
+  await expect(a.getByRole("alert")).toContainText("입력한 메모는 유지됩니다");
+  expect(await blocked()).toBe(true);
+  await a.getByRole("button", { name: "메모 저장", exact: true }).click();
+  await expect.poll(() => pending.length).toBe(2); await complete(pending[1]);
+  await expect.poll(blocked).toBe(false);
+});
+
+test("미저장 메모 로그아웃 취소는 API를 호출하지 않고 실패 초안을 보존한다", async ({ page }) => {
+  await mockApi(page);
+  await page.route("**/favorites/*/tracker", route => route.fulfill({ status: 503 }));
+  let logouts = 0;
+  await page.route("**/auth/logout", route => { logouts++; return route.fulfill({ status: 204 }); });
+  const [a] = await openFavorites(page);
+  const input = a.getByLabel("내 메모", { exact: true });
+  await input.click(); await input.fill("취소 후 남길 메모"); await input.blur();
+  await expect(a.getByRole("alert")).toContainText("입력한 메모는 유지됩니다");
+  await page.getByRole("button", { name: profile.nickname, exact: true }).click();
+  page.once("dialog", async dialog => { expect(dialog.type()).toBe("confirm"); await dialog.dismiss(); });
+  await page.getByRole("button", { name: "로그아웃", exact: true }).click();
+  await expect(page.getByText("메모를 먼저 저장해주세요. 요청을 취소했습니다.", { exact: true })).toBeVisible();
+  expect(logouts).toBe(0);
+  await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).click();
+  await expect(input).toHaveValue("취소 후 남길 메모");
+});
+
+for (const action of ["비밀번호 변경", "회원 탈퇴"]) test(`미저장 확인 취소 시 ${action} API는 호출되지 않는다`, async ({ page }) => {
+  await mockApi(page);
+  await page.route("**/favorites/*/tracker", route => route.fulfill({ status: 503 }));
+  let destructiveCalls = 0;
+  page.on("request", request => { if (request.method() === "PUT" && request.url().endsWith("/members/me/password") || request.method() === "DELETE" && request.url().endsWith("/members/me")) destructiveCalls++; });
+  const [a] = await openFavorites(page);
+  const input = a.getByLabel("내 메모", { exact: true });
+  await input.click(); await input.fill("보호할 초안"); await input.blur();
+  await expect(a.getByRole("alert")).toContainText("입력한 메모는 유지됩니다");
+  await page.getByRole("button", { name: profile.nickname, exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  if (action === "비밀번호 변경") {
+    await dialog.getByLabel("현재 비밀번호", { exact: true }).fill("Test-only-old-42!");
+    await dialog.getByLabel("새 비밀번호", { exact: true }).fill("Test-only-new-42!");
+    await dialog.getByLabel("새 비밀번호 확인", { exact: true }).fill("Test-only-new-42!");
+  } else {
+    await dialog.getByRole("button", { name: "회원 탈퇴", exact: true }).click();
+    await dialog.getByLabel("확인을 위해 비밀번호 입력").fill("Test-only-old-42!");
+  }
+  page.once("dialog", prompt => prompt.dismiss());
+  await dialog.getByRole("button", { name: action === "비밀번호 변경" ? action : "회원 탈퇴 확정", exact: true }).click();
+  await expect(dialog.getByRole("alert").filter({ hasText: "메모를 먼저 저장해주세요" })).toHaveText("메모를 먼저 저장해주세요. 요청을 취소했습니다.");
+  expect(destructiveCalls).toBe(0);
+  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+  await expect(input).toHaveValue("보호할 초안");
+});
+
+test("상세에서 관심 해제 지연 중에는 메모를 다시 저장할 수 없고 실패하면 복원한다", async ({ page }) => {
+  await mockApi(page); let deletion: Route | undefined; let patches = 0;
+  await page.route("**/favorites/*/tracker", route => { patches++; return complete(route); });
+  await page.route("**/members/me/favorites/1", route => { deletion = route; });
+  const [a] = await openFavorites(page);
+  await a.getByRole("button", { name: /공고 핵심만 보기/ }).click();
+  const detail = page.getByRole("dialog", { name: notices[0].title, exact: true });
+  await expect(detail.getByLabel("내 메모", { exact: true })).toHaveValue("기존 메모 1");
+  await detail.getByRole("button", { name: "관심 해제", exact: true }).click();
+  await expect.poll(() => Boolean(deletion)).toBe(true);
+  await expect(detail.getByLabel("내 메모", { exact: true })).toHaveCount(0);
+  await expect(detail.getByRole("button", { name: "관심 저장", exact: true })).toBeDisabled();
+  expect(patches).toBe(0);
+  await deletion!.fulfill({ status: 503 });
+  await expect(detail.getByLabel("내 메모", { exact: true })).toHaveValue("기존 메모 1");
+});
+
+test("관심 해제 취소·실패는 초안을 보존하고 성공 뒤 재등록은 초안을 복원하지 않는다", async ({ page }) => {
+  await mockApi(page);
+  await page.route("**/favorites/*/tracker", route => route.fulfill({ status: 503 }));
+  let ids = [1, 2], fail = true, writes = 0;
+  await page.route("**/members/me/favorites", route => route.fulfill({ json: { noticeIds: ids } }));
+  await page.route("**/members/me/favorites/1", route => {
+    writes++; if (fail) return route.fulfill({ status: 503 });
+    ids = route.request().method() === "DELETE" ? [2] : [1, 2];
+    return route.fulfill({ json: { noticeIds: ids } });
+  });
+  const [a, b] = await openFavorites(page);
+  for (const [card, text] of [[a, "삭제 대상 초안"], [b, "다른 공고 초안"]] as const) {
+    const input = card.getByLabel("내 메모", { exact: true });
+    await input.click(); await input.fill(text); await input.blur();
+    await expect(card.getByRole("alert")).toContainText("입력한 메모는 유지됩니다");
+  }
+  const remove = a.getByRole("button", { name: /관심청약 해제/ });
+  page.once("dialog", dialog => dialog.dismiss()); await remove.click();
+  expect(writes).toBe(0); await expect(a.getByLabel("내 메모", { exact: true })).toHaveValue("삭제 대상 초안");
+  page.once("dialog", dialog => dialog.accept()); await remove.click();
+  await expect.poll(() => writes).toBe(1);
+  await expect(a.getByLabel("내 메모", { exact: true })).toHaveValue("삭제 대상 초안");
+  fail = false; page.once("dialog", dialog => dialog.accept()); await remove.click();
+  await expect(page.getByRole("button", { name: "관심청약 1개", exact: true })).toBeVisible();
+  await expect(b.getByLabel("내 메모", { exact: true })).toHaveValue("다른 공고 초안");
+  await page.getByRole("button", { name: "관심청약 1개", exact: true }).click();
+  await page.getByRole("article", { name: notices[0].title, exact: true }).getByRole("button", { name: /관심청약 저장/ }).click();
+  await page.getByRole("button", { name: "관심청약 2개", exact: true }).click();
+  await expect(a.getByLabel("내 메모", { exact: true })).toHaveValue("");
+  await expect(a.getByRole("alert")).toHaveCount(0);
 });
 
 test("비교 복구: 조회 실패한 세 공고도 삭제·재시도·전체 해제할 수 있다", async ({ page }) => {

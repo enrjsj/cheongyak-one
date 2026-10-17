@@ -1,5 +1,6 @@
 // URL과 브라우저 저장소에만 존재하는 공고 탐색 상태를 정규화하는 순수 함수 모음이다.
 import type { NoticeSummary, NoticeDetail } from "./api";
+import { areaSearchValue } from "./rangeFilterTools.ts";
 
 export type NoticeSortKey = "LATEST" | "DEADLINE" | "APPLY_START" | "WINNER_ANNOUNCEMENT" | "PRICE_ASC" | "SUPPLY_DESC";
 export type NoticeFilterStatus = "all" | "today" | "open" | "upcoming";
@@ -60,8 +61,8 @@ export function noticeSearchStateFromSearch(search: string): NoticeSearchState {
   const supplyTypeValue = params.get("supplyType");
   const minPriceManwon = positiveInteger(params.get("minPriceManwon"));
   const maxPriceManwon = positiveInteger(params.get("maxPriceManwon"));
-  const minArea = positiveInteger(params.get("minArea"));
-  const maxArea = positiveInteger(params.get("maxArea"));
+  const minArea = areaSearchValue(params.get("minArea") ?? "");
+  const maxArea = areaSearchValue(params.get("maxArea") ?? "");
   return {
     query: (params.get("q") ?? "").trim().slice(0, 100),
     status: (["today", "open", "upcoming"] as const).includes(statusValue as "today" | "open" | "upcoming")
@@ -119,8 +120,8 @@ function normalizeNoticeSearchState(value: unknown): NoticeSearchState | undefin
   const supplyType = ["SALE", "PUBLIC_RENTAL"].includes(state.supplyType ?? "") ? state.supplyType as NoticeFilterSupplyType : undefined;
   const minPriceManwon = typeof state.minPriceManwon === "number" && Number.isSafeInteger(state.minPriceManwon) && state.minPriceManwon > 0 ? state.minPriceManwon : undefined;
   const maxPriceManwon = typeof state.maxPriceManwon === "number" && Number.isSafeInteger(state.maxPriceManwon) && state.maxPriceManwon > 0 ? state.maxPriceManwon : undefined;
-  const minArea = typeof state.minArea === "number" && Number.isSafeInteger(state.minArea) && state.minArea > 0 ? state.minArea : undefined;
-  const maxArea = typeof state.maxArea === "number" && Number.isSafeInteger(state.maxArea) && state.maxArea > 0 ? state.maxArea : undefined;
+  const minArea = typeof state.minArea === "number" ? areaSearchValue(String(state.minArea)) : undefined;
+  const maxArea = typeof state.maxArea === "number" ? areaSearchValue(String(state.maxArea)) : undefined;
   return {
     query: typeof state.query === "string" ? state.query.trim().slice(0, 100) : "",
     status,
