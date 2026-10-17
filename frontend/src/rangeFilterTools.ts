@@ -1,6 +1,17 @@
-export function rangeFilterError(min: string, max: string, limit: number): string {
-  if ([min, max].some(value => value !== "" && (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) > limit))) {
-    return `0부터 ${limit.toLocaleString("ko-KR")}까지의 정수를 입력하세요.`;
+export function areaValue(value: string): number | undefined {
+  if (!/^\d+(?:\.\d{1,2})?$/.test(value)) return undefined;
+  const area = Number(value);
+  return Number.isFinite(area) && area >= 0 && area <= 1000 ? area : undefined;
+}
+
+/** A zero lower bound means no area constraint, consistently with URL/history. */
+export function areaSearchValue(value: string): number | undefined {
+  return areaValue(value) || undefined;
+}
+
+export function rangeFilterError(min: string, max: string, limit: number, decimals = false): string {
+  if ([min, max].some(value => value !== "" && (decimals ? areaValue(value) === undefined : !/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) > limit))) {
+    return decimals ? "0부터 1,000까지 소수 둘째 자리 이내로 입력하세요." : `0부터 ${limit.toLocaleString("ko-KR")}까지의 정수를 입력하세요.`;
   }
   if (max !== "" && Number(max) === 0) return "최대값은 0보다 커야 합니다. 제한이 없으면 비워두세요.";
   if (min !== "" && max !== "" && Number(min) > Number(max)) return "최소값은 최대값보다 클 수 없습니다.";

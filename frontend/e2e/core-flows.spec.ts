@@ -2317,7 +2317,7 @@ test("저장 조건 관리 수정의 역전 범위는 전송 전에 막고 입�
   const editor = page.getByRole("dialog", { name: "저장 조건 수정" });
   await editor.getByLabel("최소 면적 (㎡)").fill("90"); await editor.getByLabel("최대 면적 (㎡)").fill("60");
   await editor.getByRole("button", { name: "저장", exact: true }).click();
-  await expect(editor.getByRole("alert")).toContainText("최솟값");
+  await expect(editor.getByRole("alert")).toHaveText("최소값은 최대값보다 클 수 없습니다.");
   await expect(editor.getByLabel("최소 면적 (㎡)")).toHaveValue("90"); expect(writes).toBe(0);
 });
 

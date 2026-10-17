@@ -81,6 +81,7 @@ import { toComparisonItem } from "./comparisonTools";
 import { csvCell, downloadTextFile } from "./fileExport";
 import { useOnlineStatus } from "./useOnlineStatus";
 import RangeFilter from "./RangeFilter";
+import { areaSearchValue, rangeFilterError } from "./rangeFilterTools";
 import { appendUniqueNotices } from "./noticePagination";
 import { recentSearchLabel, removeRecentSearch } from "./recentSearchTools";
 import { publicShareUrl } from "./shareLinkTools";
@@ -332,6 +333,7 @@ export default function Home() {
   const [editingSavedSearchProfile, setEditingSavedSearchProfile] = useState<SavedSearchProfile>();
   const [savedSearchProfileName, setSavedSearchProfileName] = useState("");
   const [savedSearchProfileDraft, setSavedSearchProfileDraft] = useState<SearchPreferenceInput>({ status: "ALL", sort: "LATEST" });
+  const [profileAreaDraft, setProfileAreaDraft] = useState<[string, string]>(["", ""]);
   const [eligibilityProfile, setEligibilityProfile] = useState<EligibilityProfile>();
   const [eligibilityBusy, setEligibilityBusy] = useState(false);
   const [preferenceBusy, setPreferenceBusy] = useState(false);
@@ -425,8 +427,8 @@ export default function Home() {
     region: region === "전체" ? undefined : region,
     minPrice: priceInWon(minPriceManwon),
     maxPrice: priceInWon(maxPriceManwon),
-    minArea: priceInManwon(minArea),
-    maxArea: priceInManwon(maxArea),
+    minArea: areaSearchValue(minArea),
+    maxArea: areaSearchValue(maxArea),
     ids: savedOnly ? [...savedIds] : undefined,
     endingToday: statusKey === "today",
     activeOnly: statusKey === "all" && !includeClosed,
@@ -442,8 +444,8 @@ export default function Home() {
     supplyType,
     minPriceManwon: priceInManwon(minPriceManwon),
     maxPriceManwon: priceInManwon(maxPriceManwon),
-    minArea: priceInManwon(minArea),
-    maxArea: priceInManwon(maxArea),
+    minArea: areaSearchValue(minArea),
+    maxArea: areaSearchValue(maxArea),
     includeClosed,
     sort: sortKey,
   });
@@ -961,8 +963,8 @@ export default function Home() {
       supplyType,
       minPriceManwon: priceInManwon(minPriceManwon),
       maxPriceManwon: priceInManwon(maxPriceManwon),
-      minArea: priceInManwon(minArea),
-      maxArea: priceInManwon(maxArea),
+      minArea: areaSearchValue(minArea),
+      maxArea: areaSearchValue(maxArea),
       sort: sortKey,
     });
     const targetUrl = new URL(searchUrl);
@@ -1146,10 +1148,11 @@ export default function Home() {
 
   const toggleSaved = async (id: number) => {
     const epoch = memberScope.current;
-    if (trackerWrites.pending.has(id)) { setToast("메모와 준비 상태 저장이 끝난 뒤 관심청약을 해제해주세요."); return; }
+    if (trackerWrites.isPending(id)) { setToast("메모와 준비 상태 저장이 끝난 뒤 관심청약을 해제해주세요."); return; }
     if (favoritePendingId !== undefined) return;
     const next = new Set(savedIds);
     const isSaving = !next.has(id);
+    if (!isSaving && trackerWrites.hasDraft(id) && !window.confirm("저장하지 않은 메모가 있어요. 초안을 버리고 관심청약을 해제할까요? 취소하면 메모를 먼저 저장할 수 있습니다.")) return;
     if (isSaving) next.add(id); else next.delete(id);
     setSavedIds(next);
     if (!member) {
@@ -1164,6 +1167,7 @@ export default function Home() {
       const ids = await setFavorite(id, isSaving);
       if (epoch !== memberScope.current) return;
       setSavedIds(new Set(ids));
+      if (!isSaving) trackerWrites.discard(id);
       if (!isSaving) setFavoriteTrackers((current) => {
         const nextTrackers = new Map(current);
         nextTrackers.delete(id);
@@ -1186,6 +1190,7 @@ export default function Home() {
     applicationResult?: FavoriteApplicationResult,
     applicationResultMemo?: string,
   ) => {
+    if (favoritePendingId === noticeId) return;
     const epoch = memberScope.current;
     const saved = await trackerWrites.write(noticeId, { progress, ...checklist,
       ...(applicationResult === undefined ? {} : { applicationResult }),
@@ -1202,9 +1207,9 @@ export default function Home() {
   </div> : <FavoriteMemoInput
     key={`${member?.id}-${id}-${field}`} label={field === "memo" ? "내 메모" : "결과 메모"}
     placeholder={field === "memo" ? "예: 모집공고문 소득 기준 확인" : "결과 메모 (예: 계약 일정 확인)"}
-    value={trackerWrites.value(id, field)} dirty={trackerWrites.dirty(id, field)} busy={trackerWrites.pending.has(id)}
+    value={trackerWrites.value(id, field)} dirty={trackerWrites.dirty(id, field)} busy={trackerWrites.pending.has(id)} disabled={favoritePendingId === id}
     error={trackerWrites.errors[id]} onChange={value => trackerWrites.edit(id, field, value)}
-    onSave={value => trackerWrites.saveMemo(id, field, value)} />;
+    onSave={value => favoritePendingId === id ? Promise.resolve(false) : trackerWrites.saveMemo(id, field, value)} />;
 
   const synchronizeMemberLists = async (profile: MemberProfile, epoch: number) => {
     setMember(profile);
@@ -1236,7 +1241,14 @@ export default function Home() {
     return synchronized;
   };
 
+  const confirmMemoLeave = () => {
+    if (trackerWrites.needsLeaveConfirmation() && !window.confirm("저장하지 않았거나 저장 중인 메모가 있어요. 현재 화면의 초안을 버리고 계속할까요? 이미 보낸 저장 요청은 취소되지 않습니다.")) {
+      throw new Error("메모를 먼저 저장해주세요. 요청을 취소했습니다.");
+    }
+  };
+
   const handleLogin = async (email: string, password: string) => {
+    confirmMemoLeave();
     const epoch = ++memberScope.current;
     trackerWrites.reset();
     const profile = await loginMember(email, password).finally(() => {
@@ -1310,6 +1322,7 @@ export default function Home() {
   };
 
   const handleResetPassword = async (newPassword: string) => {
+    confirmMemoLeave();
     if (!passwordResetToken) throw new Error("비밀번호 재설정 링크를 다시 열어주세요.");
     const epoch = memberScope.current;
     await resetPasswordWithToken(passwordResetToken, newPassword);
@@ -1346,6 +1359,7 @@ export default function Home() {
   };
 
   const handleLogout = async () => {
+    confirmMemoLeave();
     const epoch = memberScope.current;
     await logoutMember();
     if (epoch !== memberScope.current) return;
@@ -1366,6 +1380,7 @@ export default function Home() {
   };
 
   const handleChangePassword = async (currentPassword: string, newPassword: string) => {
+    confirmMemoLeave();
     const epoch = memberScope.current;
     await changeMemberPassword(currentPassword, newPassword);
     if (epoch !== memberScope.current) return;
@@ -1374,6 +1389,7 @@ export default function Home() {
   };
 
   const handleWithdraw = async (password: string) => {
+    confirmMemoLeave();
     const epoch = memberScope.current;
     await withdrawMember(password);
     if (epoch !== memberScope.current) return;
@@ -1399,8 +1415,8 @@ export default function Home() {
         sort: sortKey,
         minPriceManwon: priceInManwon(minPriceManwon),
         maxPriceManwon: priceInManwon(maxPriceManwon),
-        minArea: priceInManwon(minArea),
-        maxArea: priceInManwon(maxArea),
+        minArea: areaSearchValue(minArea),
+        maxArea: areaSearchValue(maxArea),
       });
       if (epoch !== memberScope.current) return;
       setSearchPreference(preference);
@@ -1437,14 +1453,15 @@ export default function Home() {
     sort: sortKey,
     minPriceManwon: priceInManwon(minPriceManwon),
     maxPriceManwon: priceInManwon(maxPriceManwon),
-    minArea: priceInManwon(minArea),
-    maxArea: priceInManwon(maxArea),
+    minArea: areaSearchValue(minArea),
+    maxArea: areaSearchValue(maxArea),
   });
 
   const openSavedSearchProfileEditor = (profile: SavedSearchProfile) => {
     if (preferenceBusy || profilesState.locked) return;
     ++profileEditorEpoch.current; setProfileEditorError("");
     setSavedSearchProfileName(profile.name);
+    setProfileAreaDraft([profile.minArea == null ? "" : String(profile.minArea), profile.maxArea == null ? "" : String(profile.maxArea)]);
     setSavedSearchProfileDraft({ region: profile.region, housingCategory: profile.housingCategory, supplyType: profile.supplyType, status: profile.status, sort: profile.sort, minPriceManwon: profile.minPriceManwon, maxPriceManwon: profile.maxPriceManwon, minArea: profile.minArea, maxArea: profile.maxArea });
     setEditingSavedSearchProfile(profile);
   };
@@ -1453,11 +1470,12 @@ export default function Home() {
     event.preventDefault();
     const profile = editingSavedSearchProfile;
     const name = savedSearchProfileName.trim();
-    const validation = savedProfileInputError(name, savedSearchProfileDraft);
+    const input = { ...savedSearchProfileDraft, minArea: areaSearchValue(profileAreaDraft[0]), maxArea: areaSearchValue(profileAreaDraft[1]) };
+    const validation = rangeFilterError(profileAreaDraft[0], profileAreaDraft[1], 1000, true) || savedProfileInputError(name, input);
     setProfileEditorError(validation);
     if (!profile || validation || preferenceBusy) return;
     const epoch = profileEditorEpoch.current;
-    const updated = await profilesState.mutate(() => updateSavedSearchProfile(profile.id, { name, ...savedSearchProfileDraft }), "저장 조건을 수정했습니다.");
+    const updated = await profilesState.mutate(() => updateSavedSearchProfile(profile.id, { name, ...input }), "저장 조건을 수정했습니다.");
     if (updated && epoch === profileEditorEpoch.current) {
       setEditingSavedSearchProfile(undefined);
     }
@@ -1558,7 +1576,7 @@ export default function Home() {
   const copySearchLink = () => searchCopy.copy(publicShareUrl(noticeSearchUrl(window.location.href, {
     query, status: activeStatus, includeClosed, region: region === "전체" ? undefined : region,
     category: categoryValue(category), supplyType, minPriceManwon: priceInManwon(minPriceManwon),
-    maxPriceManwon: priceInManwon(maxPriceManwon), minArea: priceInManwon(minArea), maxArea: priceInManwon(maxArea), sort: sortKey,
+    maxPriceManwon: priceInManwon(maxPriceManwon), minArea: areaSearchValue(minArea), maxArea: areaSearchValue(maxArea), sort: sortKey,
   }), "search"), "현재 검색조건 링크를 복사했어요.");
 
   const applyQuickFilter = (value: string) => {
@@ -1718,10 +1736,10 @@ export default function Home() {
   const detailApplication = selected ? (selectedDetail ? toApplication(selectedDetail) : selected) : null;
   const detailUnitRange = {
     minPrice: priceInWon(minPriceManwon), maxPrice: priceInWon(maxPriceManwon),
-    minArea: priceInManwon(minArea), maxArea: priceInManwon(maxArea),
+    minArea: areaSearchValue(minArea), maxArea: areaSearchValue(maxArea),
   };
   const filterDialogRef = useDialogAccessibility<HTMLElement>(filterOpen, () => setFilterOpen(false));
-  const closeProfileEditor = () => { ++profileEditorEpoch.current; setEditingSavedSearchProfile(undefined); setProfileEditorError(""); };
+  const closeProfileEditor = () => { if (profilesState.busy) return; ++profileEditorEpoch.current; setEditingSavedSearchProfile(undefined); setProfileEditorError(""); };
   const savedSearchProfileEditorRef = useDialogAccessibility<HTMLElement>(Boolean(editingSavedSearchProfile), closeProfileEditor);
   const comparisonDialogRef = useDialogAccessibility<HTMLElement>(comparisonOpen, () => setComparisonOpen(false));
   const qualificationDialogRef = useDialogAccessibility<HTMLElement>(qualOpen, closeQualification);
@@ -2221,8 +2239,9 @@ export default function Home() {
       {editingSavedSearchProfile && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeProfileEditor(); }}>
           <section ref={savedSearchProfileEditorRef} tabIndex={-1} className="modal profile-editor-modal" role="dialog" aria-modal="true" aria-labelledby="saved-search-profile-editor-title">
-            <div className="modal-head"><div><span>SAVED FILTER</span><h2 id="saved-search-profile-editor-title">저장 조건 수정</h2></div><button type="button" onClick={() => closeProfileEditor()} aria-label="닫기"><Icon name="close" /></button></div>
+            <div className="modal-head"><div><span>SAVED FILTER</span><h2 id="saved-search-profile-editor-title">저장 조건 수정</h2></div><button type="button" disabled={profilesState.busy} onClick={() => closeProfileEditor()} aria-label="닫기"><Icon name="close" /></button></div>
             <form onSubmit={(event) => void handleUpdateSavedSearchProfile(event)}>
+              <fieldset disabled={profilesState.busy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
               <label className="profile-editor-field">조건 이름<input autoFocus value={savedSearchProfileName} maxLength={40} onChange={(event) => setSavedSearchProfileName(event.target.value)} placeholder="예: 서울 신혼부부" /></label>
               <div className="profile-editor-fields">
                 <label>지역<select value={savedSearchProfileDraft.region ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, region: event.target.value || undefined }))}><option value="">전국</option>{availableRegions.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
@@ -2232,12 +2251,14 @@ export default function Home() {
                 <label>정렬<select value={savedSearchProfileDraft.sort} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, sort: event.target.value as SearchPreferenceInput["sort"] }))}><option value="LATEST">최신 공고순</option><option value="DEADLINE">마감 임박순</option><option value="APPLY_START">접수 시작일순</option><option value="WINNER_ANNOUNCEMENT">당첨 발표일순</option><option value="PRICE_ASC">낮은 분양가순</option><option value="SUPPLY_DESC">공급 세대 많은순</option></select></label>
                 <label>최소 예산 (만원)<input type="number" min="0" max="1000000" inputMode="numeric" value={savedSearchProfileDraft.minPriceManwon ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, minPriceManwon: priceInManwon(event.target.value) }))} placeholder="예: 30000" /></label>
                 <label>최대 예산 (만원)<input type="number" min="0" max="1000000" inputMode="numeric" value={savedSearchProfileDraft.maxPriceManwon ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, maxPriceManwon: priceInManwon(event.target.value) }))} placeholder="예: 60000" /></label>
-                <label>최소 면적 (㎡)<input type="number" min="0" max="1000" inputMode="decimal" value={savedSearchProfileDraft.minArea ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, minArea: priceInManwon(event.target.value) }))} placeholder="예: 59" /></label>
-                <label>최대 면적 (㎡)<input type="number" min="0" max="1000" inputMode="decimal" value={savedSearchProfileDraft.maxArea ?? ""} onChange={(event) => setSavedSearchProfileDraft((draft) => ({ ...draft, maxArea: priceInManwon(event.target.value) }))} placeholder="예: 84" /></label>
+                <label>최소 면적 (㎡)<input type="text" maxLength={12} inputMode="decimal" value={profileAreaDraft[0]} onChange={(event) => setProfileAreaDraft((draft) => [event.target.value, draft[1]])} placeholder="예: 59.5" /></label>
+                <label>최대 면적 (㎡)<input type="text" maxLength={12} inputMode="decimal" value={profileAreaDraft[1]} onChange={(event) => setProfileAreaDraft((draft) => [draft[0], event.target.value])} placeholder="예: 84.99" /></label>
               </div>
+              </fieldset>
+              {profilesState.busy && <p role="status">저장 중에는 입력과 닫기가 잠시 잠깁니다. 실패하면 입력을 유지합니다.</p>}
               {profileEditorError && <p role="alert" className="member-message error">{profileEditorError}</p>}
               {profilesState.error && <div role="alert"><p>{profilesState.error}</p><button type="button" disabled={profilesState.loading || profilesState.busy || profilesState.blocked} onClick={profilesState.refresh}>저장 목록 다시 확인</button></div>}
-              <div className="modal-actions"><button className="reset-button" type="button" onClick={() => closeProfileEditor()}>취소</button><button className="primary-button" type="submit" disabled={preferenceBusy || profilesState.locked}>{profilesState.busy ? "저장 중…" : "저장"}</button></div>
+              <div className="modal-actions"><button className="reset-button" type="button" disabled={profilesState.busy} onClick={() => closeProfileEditor()}>취소</button><button className="primary-button" type="submit" disabled={preferenceBusy || profilesState.locked}>{profilesState.busy ? "저장 중…" : "저장"}</button></div>
             </form>
           </section>
         </div>
@@ -2247,7 +2268,7 @@ export default function Home() {
         detailLoading={detailLoading} detailError={detailError} online={online} detailUnitRange={detailUnitRange}
         signedIn={Boolean(member)} saved={Boolean(detailApplication && savedIds.has(detailApplication.id))}
         tracker={detailApplication ? favoriteTrackers.get(detailApplication.id) : undefined}
-        trackerBusy={!trackerWrites.ready || (detailApplication ? trackerWrites.pending.has(detailApplication.id) : false)}
+        trackerBusy={!trackerWrites.ready || (detailApplication ? trackerWrites.pending.has(detailApplication.id) || favoritePendingId === detailApplication.id : false)}
         memoEditor={detailApplication ? favoriteMemoInput(detailApplication.id, "memo") : null}
         resultMemoEditor={detailApplication ? favoriteMemoInput(detailApplication.id, "applicationResultMemo") : null}
         favoriteBusy={favoritePendingId === detailApplication?.id && favoritePendingId !== undefined}
