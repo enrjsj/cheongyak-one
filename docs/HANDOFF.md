@@ -1,5 +1,14 @@
 # 작업 인계
 
+## 알림 설정 이탈·메모 원복 보호 (2026-10-17)
+
+- 기준 main `ae838c282dbe2c67fb22d54a1fa09ccfe070202c` (PR #141 CI8/동일 SHA 배포 완료), branch `codex/unsaved-settings-bundle`.
+- 알림 설정 dirty 비교·닫기/공고 이동 확인·페이지 이탈 경고, 저장 중 Escape 잠금. 탭 전환은 초안 유지. 저장 실패 보존 및 성공 후 재편집 안내 개선.
+- 읽음 이동 대기 중 설정 입력 잠금으로 늦은 응답의 새 초안 유실 차단. 독립 리뷰 발견 경계 보완 및 재리뷰 완료.
+- 메모 idle 원복 시 해당 초안/불필요 요청 제거. 저장 중·실패 불확실 상태는 기존 초안/revision/ABA 보호 유지.
+- 관련38·리뷰 보완10·기존 알림20 브라우저 통과. 최종 하네스14·빌드·단위182·Chromium293·iPhone102 최초 통과(PC전용3 제외). Java/Maven 부재로 로컬 서버/실제 인증 blocked이며 최종 head CI/배포는 원격 반영 단계에서 확인한다. API/DB/운영 설정/실발송 변경 없음.
+- 상세: `docs/tasks/2026-10-17-unsaved-settings.md`. beforeunload는 실제 iPhone 강제 종료 보호가 아니며 Java/Maven 부재 로컬 제약은 원격 CI와 구분한다.
+
 ## 소수 면적·미저장 입력 보호 묶음 (2026-10-17)
 
 - 기준 main `c65b823c17c7ef306874d44895c6d48a39992b3a` (PR #140 CI8 및 Vercel READY/Render live·동일 SHA 공개 응답 확인), branch `codex/input-preservation-bundle`.

@@ -88,6 +88,8 @@ export default function NotificationsDialog({
   const [refreshWarning, setRefreshWarning] = useState("");
   const [inbox, setInbox] = useState<NotificationInbox>({ notifications: [], unreadCount: 0 });
   const [preference, setPreference] = useState<NotificationPreference>(DEFAULT_PREFERENCE);
+  const [savedPreference, setSavedPreference] = useState<NotificationPreference>(DEFAULT_PREFERENCE);
+  const preferenceSaving = useRef(false);
   const [channels, setChannels] = useState<NotificationChannelAvailability[]>(DEFAULT_OUTBOUND_CHANNELS);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<number>();
@@ -105,7 +107,17 @@ export default function NotificationsDialog({
   const refreshBusy = useRef(false);
   const accessBlocked = useRef(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date>();
-  const dialogRef = useDialogAccessibility<HTMLElement>(open, onClose);
+  const preferenceDirty = preferenceLoaded && (Object.keys(DEFAULT_PREFERENCE) as Array<keyof NotificationPreference>)
+    .some(key => preference[key] !== savedPreference[key]);
+  const canLeave = () => !preferenceSaving.current && (!preferenceDirty || window.confirm("저장하지 않은 알림 설정이 있어요. 변경을 버리고 나갈까요?"));
+  const closeDialog = () => { if (canLeave()) onClose(); };
+  const dialogRef = useDialogAccessibility<HTMLElement>(open, closeDialog);
+  useEffect(() => {
+    if (!open || (!preferenceDirty && !saving)) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [open, preferenceDirty, saving]);
 
   const blockOnAuthError = (value: unknown) => {
     if (value instanceof ApiError && (value.status === 401 || value.status === 403)) {
@@ -175,6 +187,7 @@ export default function NotificationsDialog({
     ++refreshSequence.current;
     if (!open) return;
     mutationBusy.current = false;
+    preferenceSaving.current = false;
     refreshBusy.current = false;
     accessBlocked.current = false;
     let cancelled = false;
@@ -217,6 +230,7 @@ export default function NotificationsDialog({
         if (preferenceResult.status === "fulfilled") {
           // 순차 배포 중 이전 백엔드 응답에 신규 설정값이 없어도 체크박스를 안정적으로 유지한다.
           setPreference({ ...DEFAULT_PREFERENCE, ...preferenceResult.value });
+          setSavedPreference({ ...DEFAULT_PREFERENCE, ...preferenceResult.value });
           setPreferenceLoaded(true);
         } else {
           setPreferenceError("기존 알림 설정을 확인하지 못했습니다. 설정을 다시 불러온 뒤 저장해주세요.");
@@ -265,6 +279,7 @@ export default function NotificationsDialog({
 
   const openNotification = async (notification: MemberNotification) => {
     if (accessBlocked.current || mutationBusy.current || loading || historyPending || !inboxLoaded) return;
+    if (!canLeave()) return;
     mutationBusy.current = true;
     const scope = requestScope.current;
     ++refreshSequence.current;
@@ -342,6 +357,7 @@ export default function NotificationsDialog({
     event.preventDefault();
     if (!preferenceLoaded || accessBlocked.current || mutationBusy.current || loading) return;
     mutationBusy.current = true;
+    preferenceSaving.current = true;
     const scope = requestScope.current;
     setSaving(true);
     setError("");
@@ -359,25 +375,26 @@ export default function NotificationsDialog({
         appPushEnabled: preference.appPushEnabled,
       });
       if (scope !== requestScope.current) return;
-      setPreference(updated);
+      setPreference({ ...DEFAULT_PREFERENCE, ...updated });
+      setSavedPreference({ ...DEFAULT_PREFERENCE, ...updated });
       setNotice("알림 설정을 저장했습니다.");
     } catch (requestError) {
       if (scope !== requestScope.current) return;
       setError(requestError instanceof Error ? requestError.message : "알림 설정을 저장하지 못했습니다.");
       blockOnAuthError(requestError);
     } finally {
-      if (scope === requestScope.current) { mutationBusy.current = false; setSaving(false); }
+      if (scope === requestScope.current) { mutationBusy.current = false; preferenceSaving.current = false; setSaving(false); }
     }
   };
 
   return (
     <div className="modal-backdrop notification-backdrop" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget && !saving) onClose();
+      if (event.target === event.currentTarget && !saving) closeDialog();
     }}>
       <section ref={dialogRef} tabIndex={-1} className="modal notification-modal" role="dialog" aria-modal="true" aria-labelledby="notification-title">
         <div className="modal-head">
           <div><span>MY NOTIFICATIONS</span><h2 id="notification-title">맞춤 청약 알림</h2></div>
-          <button type="button" onClick={onClose} disabled={saving} aria-label="닫기">×</button>
+          <button type="button" onClick={closeDialog} disabled={saving} aria-label="닫기">×</button>
         </div>
         <div className="notification-tabs" role="tablist" aria-label="알림 메뉴">
           <button type="button" role="tab" aria-selected={tab === "inbox"} className={tab === "inbox" ? "active" : ""} onClick={() => setTab("inbox")}>알림함 {inbox.unreadCount > 0 && <b>{inbox.unreadCount}</b>}</button>
@@ -431,16 +448,16 @@ export default function NotificationsDialog({
             {PREFERENCE_OPTIONS.map((option) => (
               <label key={option.key}>
                 <span>{option.label}</span>
-                <input type="checkbox" disabled={!preferenceLoaded || saving || sessionExpired} checked={preference[option.key]} onChange={(event) => setPreference((current) => ({ ...current, [option.key]: event.target.checked }))} />
+                <input type="checkbox" disabled={!preferenceLoaded || saving || busyId !== undefined || sessionExpired} checked={preference[option.key]} onChange={(event) => setPreference((current) => ({ ...current, [option.key]: event.target.checked }))} />
               </label>
             ))}
             <label className="email-notification-option">
               <span><b>이메일로도 받기</b><small>인증한 회원 이메일로 선택한 일정을 보내드려요.</small></span>
-              <input type="checkbox" disabled={!preferenceLoaded || saving || sessionExpired} checked={preference.emailEnabled} onChange={(event) => setPreference((current) => ({ ...current, emailEnabled: event.target.checked }))} />
+              <input type="checkbox" disabled={!preferenceLoaded || saving || busyId !== undefined || sessionExpired} checked={preference.emailEnabled} onChange={(event) => setPreference((current) => ({ ...current, emailEnabled: event.target.checked }))} />
             </label>
             <label className="email-notification-option">
               <span><b>앱 푸시로 받기</b><small>하이브리드 앱에서 알림 권한과 기기를 등록한 경우에만 발송돼요.</small></span>
-              <input type="checkbox" disabled={!preferenceLoaded || saving || sessionExpired} checked={preference.appPushEnabled} onChange={(event) => setPreference((current) => ({ ...current, appPushEnabled: event.target.checked }))} />
+              <input type="checkbox" disabled={!preferenceLoaded || saving || busyId !== undefined || sessionExpired} checked={preference.appPushEnabled} onChange={(event) => setPreference((current) => ({ ...current, appPushEnabled: event.target.checked }))} />
             </label>
             <div className="notification-channel-status" aria-label="외부 알림 채널 상태">
               <b>알림 채널 연결 상태</b>
@@ -455,7 +472,8 @@ export default function NotificationsDialog({
             <button className="primary-button" type="submit" disabled={saving || busyId !== undefined || !preferenceLoaded || sessionExpired}>{saving ? "저장 중…" : "알림 설정 저장"}</button>
           </form>
         )}
-        {notice && <p className="member-message success" role="status">{notice}</p>}
+        {preferenceDirty && <p role="status">저장하지 않은 알림 설정이 있어요. 알림 설정 탭에서 저장해주세요.</p>}
+        {notice && !preferenceDirty && <p className="member-message success" role="status">{notice}</p>}
         {error && <p className="member-message error" role="alert">{error}</p>}
         {sessionExpired && <p className="member-message error" role="alert">로그인이 만료되었거나 접근 권한이 없습니다. 다시 로그인한 뒤 알림 창을 열어주세요.</p>}
       </section>

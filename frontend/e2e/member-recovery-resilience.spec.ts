@@ -31,6 +31,39 @@ async function complete(route: Route) {
   await route.fulfill({ json: { noticeId: id, ...route.request().postDataJSON(), updatedAt: "2026-10-11T00:00:00Z" } });
 }
 
+test("메모 원복: 저장 대기와 오류가 없으면 초안 경고와 불필요한 요청을 없앤다", async ({ page }) => {
+  await mockApi(page);
+  let writes = 0;
+  await page.route("**/favorites/*/tracker", async route => { writes++; await complete(route); });
+  const [a] = await openFavorites(page);
+  const input = a.getByLabel("내 메모", { exact: true });
+  await input.click(); await input.fill("수정 초안");
+  await expect(a.getByText("저장하지 않은 메모", { exact: true })).toBeVisible();
+  await input.fill("기존 메모 1");
+  await expect(a.getByText("저장하지 않은 메모", { exact: true })).toHaveCount(0);
+  await input.blur();
+  expect(writes).toBe(0);
+  expect(await page.evaluate(() => { const event = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(event); return event.defaultPrevented; })).toBe(false);
+});
+
+test("메모 원복: 실패한 요청의 반영 여부가 불명확하면 원래 값도 다시 저장한다", async ({ page }) => {
+  await mockApi(page);
+  const pending: Route[] = [];
+  await page.route("**/favorites/*/tracker", route => { pending.push(route); });
+  const [a] = await openFavorites(page);
+  const input = a.getByLabel("내 메모", { exact: true });
+  await input.click(); await input.fill("실패할 수정"); await input.blur();
+  await expect.poll(() => pending.length).toBe(1);
+  await pending[0].fulfill({ status: 503 });
+  await expect(a.getByRole("alert")).toBeVisible();
+  await input.click(); await input.fill("기존 메모 1");
+  await expect(a.getByText("미저장 메모는 현재 화면에서만 유지됩니다. 나가기 전에 저장해주세요.")).toBeVisible();
+  await input.blur(); await expect.poll(() => pending.length).toBe(2);
+  expect(pending[1].request().postDataJSON().memo).toBe("기존 메모 1");
+  await complete(pending[1]);
+  await expect(a.getByText("저장된 메모", { exact: true })).toBeVisible();
+});
+
 test("메모 지연: 공고별 동시 저장과 같은 공고의 순서를 보장하고 새 입력을 보존한다", async ({ page }) => {
   await mockApi(page);
   const pending: Route[] = [];

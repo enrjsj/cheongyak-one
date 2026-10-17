@@ -8,6 +8,7 @@ export function useFavoriteTrackerWrites(memberId: number | undefined, scope: { 
   latest.current = trackers;
   const queues = useRef(new Map<number, Promise<boolean>>());
   const revisions = useRef(new Map<string, number>());
+  const uncertain = useRef(new Set<number>());
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const loadingRef = useRef(false);
@@ -34,7 +35,12 @@ export function useFavoriteTrackerWrites(memberId: number | undefined, scope: { 
   const edit = (id: number, field: MemoField, value: string) => {
     const name = key(id, field);
     revisions.current.set(name, (revisions.current.get(name) ?? 0) + 1);
-    updateDrafts(current => ({ ...current, [name]: value }));
+    updateDrafts(current => {
+      if (ready && !queues.current.has(id) && !uncertain.current.has(id) && value === (latest.current.get(id)?.[field] ?? "")) {
+        const next = { ...current }; delete next[name]; return next;
+      }
+      return { ...current, [name]: value };
+    });
   };
   function hydrate(items: FavoriteTracker[]) {
     latest.current = new Map(items.map(item => [item.noticeId, item]));
@@ -71,9 +77,11 @@ export function useFavoriteTrackerWrites(memberId: number | undefined, scope: { 
         });
         if (epoch !== scope.current) return false;
         latest.current = new Map(latest.current).set(id, tracker);
+        uncertain.current.delete(id);
         setTrackers(current => new Map(current).set(id, tracker));
         return true;
       } catch (error) {
+        if (epoch === scope.current) uncertain.current.add(id);
         if (epoch === scope.current) setErrors(current => ({ ...current, [id]: error instanceof Error ? error.message : "저장하지 못했습니다. 다시 저장해주세요." }));
         return false;
       }
@@ -87,6 +95,10 @@ export function useFavoriteTrackerWrites(memberId: number | undefined, scope: { 
     return task;
   }
   async function saveMemo(id: number, field: MemoField, value: string) {
+    if (ready && !queues.current.has(id) && !uncertain.current.has(id) && value === (latest.current.get(id)?.[field] ?? "")) {
+      edit(id, field, value);
+      return true;
+    }
     const epoch = scope.current;
     edit(id, field, value);
     const revision = revisions.current.get(key(id, field));
@@ -98,10 +110,11 @@ export function useFavoriteTrackerWrites(memberId: number | undefined, scope: { 
     return saved;
   }
   function reset() {
-    queues.current.clear(); revisions.current.clear(); latest.current = new Map(); setPending(new Set()); setErrors({}); updateDrafts(() => ({}));
+    queues.current.clear(); revisions.current.clear(); uncertain.current.clear(); latest.current = new Map(); setPending(new Set()); setErrors({}); updateDrafts(() => ({}));
     setReady(false); loadingRef.current = false; setLoading(false);
   }
   function discard(id: number) {
+    uncertain.current.delete(id);
     updateDrafts(current => { const next = { ...current }; delete next[key(id, "memo")]; delete next[key(id, "applicationResultMemo")]; return next; });
     revisions.current.delete(key(id, "memo")); revisions.current.delete(key(id, "applicationResultMemo"));
     setErrors(current => { const next = { ...current }; delete next[id]; return next; });
