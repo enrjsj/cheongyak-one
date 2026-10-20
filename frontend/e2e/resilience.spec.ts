@@ -340,7 +340,7 @@ test("범위 필터: 잘못된 초안은 초기화 또는 닫기로 폐기하고
   const min = dialog.getByLabel("예산 최소 (만원)", { exact: true });
   await min.fill("-1"); await min.press("Enter");
   await expect(min).toHaveAttribute("aria-invalid", "true");
-  await dialog.getByRole("button", { name: "초기화", exact: true }).click();
+  await dialog.getByRole("button", { name: "필터 초기화", exact: true }).click();
   await expect(min).toHaveValue("");
   await expect(dialog.getByRole("alert")).toHaveCount(0);
   await min.fill("1000001");
@@ -415,7 +415,7 @@ test("조건 되돌리기: 전체 초기화 후 URL과 모든 조건을 복원�
 test("조건 되돌리기: 연속 해제는 직전 단계만 복원하고 새 입력은 복원을 만료시킨다", async ({ page }) => {
   await mockPublicApi(page);
   await page.goto("/?q=강남&region=서울&minPriceManwon=100&maxPriceManwon=200");
-  await page.getByRole("button", { name: "예산 조건 해제", exact: true }).click();
+  await page.getByRole("button", { name: /^예산: .* 조건 해제$/ }).click();
   await page.getByRole("button", { name: "지역: 서울 조건 해제", exact: true }).click();
   await page.getByRole("button", { name: "검색 조건 되돌리기", exact: true }).click();
   await expect.poll(() => new URL(page.url()).searchParams.get("region")).toBe("서울");
@@ -463,7 +463,7 @@ test("검색 복구: 모바일에서 개별 조건만 해제하고 나머지 조
   await mockPublicApi(page);
   await page.goto("/?q=강남&region=서울&minPriceManwon=100&maxPriceManwon=200&minArea=20&maxArea=30");
   const controls = page.getByRole("group", { name: "검색 조건 해제" });
-  await controls.getByRole("button", { name: "예산 조건 해제", exact: true }).click();
+  await controls.getByRole("button", { name: /^예산: .* 조건 해제$/ }).click();
   await expect.poll(() => new URL(page.url()).searchParams.has("minPriceManwon")).toBe(false);
   expect(new URL(page.url()).searchParams.has("maxPriceManwon")).toBe(false);
   expect(new URL(page.url()).searchParams.get("minArea")).toBe("20");

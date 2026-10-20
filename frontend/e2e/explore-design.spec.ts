@@ -51,21 +51,21 @@ for (const width of [320, 390, 768, 1440]) test(`탐색 개편 ${width}px: 사�
 test('탐색 개편: 상단 검색과 PC 필터는 같은 조건을 API·URL·상세 필터에 반영한다', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   const { searches } = await setup(page);
-  await page.getByLabel('빠른 지역 선택', { exact: true }).selectOption('서울');
+  await page.getByLabel('목록 지역 필터', { exact: true }).selectOption('서울');
   await expect(page.getByLabel('목록 지역 필터')).toHaveValue('서울');
   await expect.poll(() => searches.at(-1)?.searchParams.get('region')).toBe('서울');
   await page.getByLabel('목록 주택 유형 필터').selectOption('아파트');
-  await expect(page.getByLabel('빠른 주택 유형 선택')).toHaveValue('아파트');
+  await expect(page.getByLabel('목록 주택 유형 필터')).toHaveValue('아파트');
   await expect.poll(() => searches.at(-1)?.searchParams.get('category')).toBe('APARTMENT');
   await page.getByLabel('목록 공급 방식 필터').selectOption('SALE');
   await expect.poll(() => new URL(page.url()).searchParams.get('supplyType')).toBe('SALE');
-  await page.getByRole('button', { name: /상세 조건 설정/ }).click();
+  await page.getByRole('button', { name: /청약 필터 열기/ }).click();
   const dialog = page.getByRole('dialog', { name: '청약 조건 선택' });
   await expect(dialog.getByRole('button', { name: '서울', exact: true })).toHaveClass('active');
   await expect(dialog.getByRole('button', { name: '분양', exact: true })).toHaveClass('active');
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: '조건 초기화', exact: true }).click();
-  await expect(page.getByLabel('빠른 지역 선택')).toHaveValue('전체');
-  await expect(page.getByLabel('빠른 주택 유형 선택')).toHaveValue('전체');
+  await page.getByRole('button', { name: '검색 조건 전체 초기화', exact: true }).click();
+  await expect(page.getByLabel('목록 지역 필터')).toHaveValue('전체');
+  await expect(page.getByLabel('목록 주택 유형 필터')).toHaveValue('전체');
   await expect(page.getByLabel('목록 공급 방식 필터')).toHaveValue('');
 });

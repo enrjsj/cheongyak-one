@@ -44,15 +44,8 @@ button:disabled { cursor: not-allowed; }
 .search-field { flex: 1.6; gap: 10px; padding: 0 16px; }
 .search-field input { height: 54px; font-size: 14px; }
 .search-field .icon { color: var(--blue); }
-.search-select { display: flex; flex: .65; min-width: 0; flex-direction: column; justify-content: center; padding: 0 22px; border-left: 1px solid var(--line); }
-.search-select > span { font-size: 10px; color: #808080; margin-bottom: 5px; }
-.search-select select { max-width: 100%; width: 100%; min-height: 26px; border: 0; background: white; color: #444444; font-size: 13px; font-weight: 650; }
 .search-submit { height: 54px; flex: none; padding: 0 23px; border-radius: 10px; background: var(--blue); font-size: 14px; box-shadow: none; }
 .search-submit:hover { background: #2d53bd; }
-.quick-filters { justify-content: center; margin-top: 15px; gap: 9px; }
-.quick-filters > span { font-size: 11px; color: #808080; }
-.quick-filters button { min-height: 36px; padding: 5px 12px; border: 1px solid #e5e5e5; border-radius: 6px; background: #fafafa; color: #666666; font-size: 11px; }
-.quick-filters button:hover { border-color: #c5d5f7; background: var(--blue-soft); color: var(--blue); }
 .recent-searches { justify-content: center; text-align: left; }
 .dashboard { padding: 0 40px 72px; border-top: 0; background: var(--canvas); scroll-margin-top: 80px; }
 .status-tabs { max-width: 1248px; top: 80px; display: flex; gap: 32px; border-bottom: 1px solid var(--line); background: #fafbfcf5; }
@@ -81,8 +74,16 @@ button:disabled { cursor: not-allowed; }
 .closed-notice-toggle { background: white; color: #666666; }
 .closed-notice-toggle.selected { background: var(--blue-soft); color: var(--primary); border-color: #d2dffc; }
 .search-share-button { color: #737373; background: white; }
-.active-filter-summary { color: #737373; font-size: 12px; }
-.filter-removal-controls button { background: #f0f0f0; border-color: #e5e5e5; color: #666666; }
+
+/* Each breakpoint has one filter entry; selected values are shown once, as removable chips. */
+.section-actions .mobile-filter-entry { display: none; }
+.filter-removal-controls { flex-wrap: wrap; align-items: center; overflow: visible; margin-bottom: 16px; }
+.filter-removal-controls button { max-width: 100%; background: white; border-color: var(--line); color: #444; text-align: left; }
+.filter-selection-label { width: 100%; font-size: 12px; color: var(--muted); }
+.filter-live-help { margin: 0 0 20px; font-size: 13px; color: var(--muted); line-height: 1.7; }
+.favorite-view-context { margin-bottom: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.favorite-view-context p { flex: 1 1 240px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.favorite-view-context button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--blue); background: white; cursor: pointer; }
 .explore-filters { padding: 21px 18px; border: 1px solid var(--line); border-radius: 12px; background: white; }
 .explore-filter-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 21px; gap: 6px; }
 .explore-filter-head h2 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 15px; }
@@ -185,7 +186,7 @@ footer { border-top: 1px solid var(--line); background: #f5f5f5; }
 .connection-banner { background: #f8f8f8; }
 /* Secondary text still carries required notice information: keep it readable. */
 .notice-provider > span, .location, .card-facts dt, .deadline span,
-.result-summary, .active-filter-summary, .search-select > span, .quick-filters > span,
+.result-summary,
 .week-card .data-note, .week-stats span, .recommendation-disclaimer { color: #737373; }
 /* AA contrast on the light surfaces, including text inherited from the dark theme. */
 .search-field input::placeholder, .filter-modal input::placeholder { color: #737373; opacity: 1; }
@@ -197,15 +198,14 @@ footer { border-top: 1px solid var(--line); background: #f5f5f5; }
 .notice-unit-types td small, .eligibility-box > div > span, .eligibility-box p { color: #666666; }
 .week-card h2, .week-card .next-event { color: var(--ink); }
 /* Keep filter controls readable and consistent with native Korean UI fonts. */
-.explore-filters, .filter-modal, .search-select, .quick-filters,
-.section-actions, .filter-removal-controls, .active-filter-summary {
+.explore-filters, .filter-modal,
+.section-actions, .filter-removal-controls {
   font-family: "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
   letter-spacing: -.02em;
   line-height: 1.5;
 }
 .filter-modal :is(button, input, select), .explore-filters :is(button, select),
-.search-select select, .quick-filters button, .section-actions :is(button, select),
-.filter-removal-controls button { font-family: inherit; letter-spacing: inherit; }
+.section-actions :is(button, select), .filter-removal-controls button { font-family: inherit; letter-spacing: inherit; }
 .explore-filter-head h2 { font-size: 16px; font-weight: 700; }
 .explore-filter-head button { font-size: 12px; color: var(--muted); }
 .explore-filters > label { font-size: 14px; font-weight: 600; gap: 8px; }
@@ -213,15 +213,12 @@ footer { border-top: 1px solid var(--line); background: #f5f5f5; }
 .explore-filter-more > span { font-size: 14px; font-weight: 600; }
 .explore-filter-more p { font-size: 12px; color: var(--muted); }
 .explore-filter-more button { font-size: 14px; font-weight: 600; }
-.search-select > span { font-size: 12px; }
-.search-select select { font-size: 16px; font-weight: 600; }
-.quick-filters > span { font-size: 12px; }
-.quick-filters button { min-height: 40px; font-size: 13px; font-weight: 500; }
 .section-actions :is(button, select) { font-size: 13px; font-weight: 500; }
 .section-actions .filter-button { font-weight: 600; }
-.active-filter-summary { font-size: 13px; }
+
 .filter-removal-controls button { font-size: 13px; font-weight: 500; }
-.filter-modal { width: min(100%, 560px); }
+.filter-modal { width: min(100%, 560px); scroll-padding-bottom: 100px; }
+.filter-modal > .modal-actions { position: sticky; bottom: 0; z-index: 2; background: #fff; padding-block: 12px; border-top: 1px solid var(--line); }
 .filter-modal .modal-head h2 { font-size: 24px; font-weight: 700; }
 .filter-modal .filter-group h3 { font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 12px; }
 .filter-modal .filter-group h3 small { font-size: 12px; }
@@ -277,10 +274,10 @@ footer { border-top: 1px solid var(--line); background: #f5f5f5; }
   .list-panel { grid-column: auto; grid-row: auto; }
   .side-column { grid-column: auto; grid-row: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
   .explore-filters { display: none; }
+  .section-actions .mobile-filter-entry { display: flex; }
   .section-head { flex-direction: row; }
   .card-facts { grid-template-columns: 1fr 1.4fr 1fr; }
   .card-facts > div:last-child { grid-column: auto; }
-  .search-select { padding: 0 14px; }
 }
 @media (max-width: 760px) {
   .site-header { height: 66px; }
@@ -307,16 +304,10 @@ footer { border-top: 1px solid var(--line); background: #f5f5f5; }
   .hero h1 em { display: block; }
   .hero-copy > p { font-size: 12px; line-height: 1.9; max-width: 350px; }
   .search-box { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; margin-top: 23px; padding: 7px; border-radius: 12px; }
-  .search-field { grid-column: 1 / -1; padding: 0 9px; border-bottom: 1px solid var(--line); margin-bottom: 7px; }
+  .search-field { grid-column: 1 / -1; padding: 0 9px; border-bottom: 0; margin-bottom: 0; }
   .search-field input { height: 48px; font-size: 16px; }
   .search-field > .icon { width: 17px; }
-  .search-select { min-height: 54px; padding: 4px 10px; }
-  .search-select:nth-child(2) { border-left: 0; }
-  .search-select select { min-height: 32px; font-size: 16px; }
-  .search-select > span { font-size: 12px; }
   .search-submit { grid-column: 1 / -1; width: 100%; margin-top: 7px; min-height: 44px; height: 44px; justify-content: center; border-radius: 8px; font-size: 13px; }
-  .quick-filters { justify-content: flex-start; gap: 7px; flex-wrap: wrap; }
-  .quick-filters button { min-height: 40px; font-size: 13px; padding: 5px 10px; }
   .recent-searches { justify-content: flex-start; }
   .dashboard { padding: 0 20px 38px; scroll-margin-top: 66px; }
   .status-tabs { top: 66px; margin: 0 -20px; padding: 0 20px; gap: 20px; overflow-x: auto; scrollbar-width: none; }
@@ -333,7 +324,8 @@ footer { border-top: 1px solid var(--line); background: #f5f5f5; }
   .section-actions .sort-control { flex: 1 1 140px; margin-right: 0; }
   .section-actions .sort-control select { width: 100%; min-width: 0; }
   .section-actions :is(button, select) { min-height: 42px; }
-  .section-actions .filter-button { flex: 1 1 155px; justify-content: center; }
+  .section-actions .filter-button { flex: 0 0 auto; min-width: 104px; white-space: nowrap; order: -1; padding: 0 12px; font-size: 13px; justify-content: center; }
+  .section-actions .filter-button span { display: inline-grid; }
   .section-actions .search-share-button { width: auto; padding: 0 10px; white-space: nowrap; flex: 0 0 auto; }
   .application-list { gap: 14px; }
   .application-card { padding: 17px 16px 12px; border-radius: 11px; }
