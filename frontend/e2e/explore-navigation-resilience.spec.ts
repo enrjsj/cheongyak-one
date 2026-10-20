@@ -63,10 +63,18 @@ test("탐색 이동: 연속 키보드 선택과 모션 줄이기를 유지한다
     }) as typeof window.scrollTo;
   });
   const tabs = page.getByRole("tablist", { name: "청약 상태" });
+  const scrollCount = () => page.evaluate(() => (window as Window & { resultScrolls: ScrollToOptions[] }).resultScrolls.length);
   await tabs.getByRole("tab", { name: /모집 중·예정/ }).click();
+  await expect.poll(scrollCount).toBeGreaterThanOrEqual(1);
   for (const [key, name] of [["ArrowRight", "오늘 마감"], ["ArrowRight", "접수중"], ["End", "오픈 예정"], ["Home", "모집 중·예정"]]) {
+    const before = await scrollCount();
     await page.keyboard.press(key);
-    await expect(tabs.getByRole("tab", { name: new RegExp(name) })).toBeFocused();
+    const selected = tabs.getByRole("tab", { name: new RegExp(name) });
+    await expect(selected).toBeFocused();
+    await expect(selected).toHaveAttribute("aria-selected", "true");
+    // The previous scroll position can already match. Wait for this key's frame
+    // before issuing another key that would intentionally cancel its pending rAF.
+    await expect.poll(scrollCount).toBeGreaterThan(before);
     await expectResultsVisible(page);
   }
   const calls = await page.evaluate(() => (window as Window & { resultScrolls: ScrollToOptions[] }).resultScrolls);

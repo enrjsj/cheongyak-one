@@ -23,7 +23,20 @@ async function mockApi(page: Page, invalidDates = false) {
 async function favorites(page: Page) {
   await page.goto("/");
   await expect(page.getByRole("button", { name: member.nickname, exact: true })).toBeEnabled();
+  const loaded = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.pathname === "/api/v1/notices" && url.searchParams.getAll("ids").join(",") === "1,2" && response.ok();
+  });
   await page.getByRole("button", { name: "관심청약 2개", exact: true }).click();
+  await loaded;
+  await expect(page.locator(".application-list article")).toHaveCount(2);
+  // Entering favorites scrolls to the results. Finish that transition before
+  // clicking toolbar actions that would otherwise race the moving sticky tabs.
+  await expect.poll(() => page.evaluate(() => {
+    const results = document.getElementById("notice-results")!.getBoundingClientRect();
+    const tabs = document.querySelector(".status-tabs")!.getBoundingClientRect();
+    return results.top >= tabs.bottom && results.top <= tabs.bottom + 30;
+  })).toBe(true);
 }
 
 test("관심 검색·필터가 0건이어도 입력과 포커스를 유지하고 바로 수정한다", async ({ page }) => {

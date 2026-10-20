@@ -72,3 +72,13 @@
 - 후속 사용자 요청 `커밋 푸시 배포까지 해줘`에 따라 원격 반영 범위를 승인받았다. 앞선 로컬 전용 범위는 당시 작업 기록이다.
 - 기존 main `c728183`과 현재 기준이 일치함을 GitHub에서 확인했다. 10월19일/20일 변경을 한 브랜치·PR에 묶고, 최종 head의 CI8개 통과 후 squash 병합한다. main 연동 Vercel/Render 자동 배포 후 웹·API·프록시 revision과 읽기 전용 smoke를 확인한다.
 - 기존 로컬 시간초과/표준 브라우저 미설치 기록은 삭제하거나 성공으로 바꾸지 않는다. CI 및 배포 증거는 PR 본문과 `.harness/oct20-release/`에 기록하며 로그용 추가 커밋은 만들지 않는다.
+
+### CI에서 발견한 테스트 동기화 보완
+
+- PR #143 첫 head `bccc8eaaadfceba9de67fcff330e8f5e45a7abfd`, CI #348/run39375735386. 전체 Chromium312 최초 통과(8.1분), 단위182·실제 인증 Chromium/WebKit2·백엔드161실행·PostgreSQL10·하네스·인프라·실데이터 job 성공. iPhone은114통과/1실패/1재시도통과/PC전용3제외로 실패했으므로 병합하지 않았다.
+- 키보드 검사에서 최소5회 스크롤 기대에 실제2회: App의 의도된 rAF 취소/최종 선택 이동과 달리, 테스트는 이미 결과 위치에 있어 위치 assertion이 즉시 통과하고 다음 키가 이전 프레임을 취소했다. 첫 click/각 key 뒤 실제 새 scroll 호출을 expect.poll로 기다리도록 보강했다. 기존 >=5/instant/focus/geometry 유지, aria-selected도 추가했다.
+- 빈 캘린더 안내 검사 재시도 통과: CI trace에서 관심 진입 click 완료348250.643ms 직후 calendar click 시작348251.206ms, 고정 status tabs가 두 차례 포인터를 가로챘다. 토스트 자동 소멸 때문이라는 증거는 없다. 관심뷰 준비 helper에 ids=1,2 응답·공고2개·결과위치 정렬 확인을 추가해 이동 도중 후속 조작 경합을 분리했다. 실제 클릭/빈일정 안내/다운로드0 검사는 유지한다.
+- 읽기 전용 reviewer가 원인·두 diff를 독립 확인했다. 앱/서버/빌드/CI 설정은 변경하지 않았다. expectation/timeout/retries 완화 없음. trace `.harness/oct20-release/ci348-calendar-trace.zip`, CI 원본 로그/보고서는 위 run에 보관된다.
+- 보완 후 관련 로컬 PC/모바일 Chromium 검사 및 문서 하네스를 확인하고 새 head로 기존 CI8개 전체를 실행한다. WebKit 최종 통과는 새 CI에서 확인하며 이전 실패는 기록에 보존한다.
+- 관련 로컬 검사10개 최초 통과(57.1초, PC5+모바일 터치Chromium5): 두 파일의 키보드·CSV/캘린더 생성 실패·수식 메모·빈일정 검사를 실행했다. 임시 `/tmp/oct20-ci-fix.config.mts`, grep `연속 키보드|유효한 일정|생성 실패|수식형`, workers1/retries0. WebKit을 대체한 결과로 보고하지 않는다.
+- 문서 하네스14개 통과(3.1초), `.harness/reports/2026-10-20T05-47-42-692Z-30227/report.json`. `git diff --check` 통과. 앱 소스는 첫 head와 동일하며 새 테스트 소스의 전체 검증은 새 head CI에서 수행한다.
