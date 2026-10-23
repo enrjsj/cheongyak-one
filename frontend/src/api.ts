@@ -33,6 +33,27 @@ export interface NotificationChannelAvailability {
 export function fetchNotificationChannelAvailability(signal?: AbortSignal): Promise<{ channels: NotificationChannelAvailability[] }> {
   return requestJson("/api/v1/members/me/notifications/channels", { signal });
 }
+export interface KakaoSelfStatus {
+  eligible: boolean;
+  configured: boolean;
+  connected: boolean;
+  reconnectRequired: boolean;
+  message: string;
+  lastSentAt: string | null;
+  lastDeliveryStatus: string | null;
+}
+export function fetchKakaoSelfStatus(signal?: AbortSignal): Promise<KakaoSelfStatus> {
+  return requestJson("/api/v1/members/me/kakao-self", { signal });
+}
+export function authorizeKakaoSelf(): Promise<{ authorizationUrl: string }> {
+  return requestJson("/api/v1/members/me/kakao-self/authorize", { method: "POST" });
+}
+export function disconnectKakaoSelf(): Promise<void> {
+  return requestJson("/api/v1/members/me/kakao-self", { method: "DELETE" });
+}
+export function testKakaoSelf(): Promise<KakaoSelfStatus> {
+  return requestJson("/api/v1/members/me/kakao-self/test", { method: "POST" });
+}
 export interface AiConsultation {
   noticeId: number;
   topic: AiTopic;

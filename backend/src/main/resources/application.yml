@@ -122,5 +122,13 @@ app:
   member-notification-channel:
     kakao-alimtalk-delivery: ${MEMBER_KAKAO_ALIMTALK_DELIVERY:disabled}
     sms-delivery: ${MEMBER_SMS_DELIVERY:disabled}
+  kakao-self:
+    enabled: ${KAKAO_SELF_ENABLED:false}
+    owner-member-id: ${KAKAO_SELF_OWNER_MEMBER_ID:0}
+    rest-api-key: ${KAKAO_SELF_REST_API_KEY:}
+    client-secret: ${KAKAO_SELF_CLIENT_SECRET:}
+    redirect-uri: ${KAKAO_SELF_REDIRECT_URI:}
+    frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+    token-encryption-key: ${KAKAO_SELF_TOKEN_ENCRYPTION_KEY:}
 
 spring.lifecycle.timeout-per-shutdown-phase: 30s

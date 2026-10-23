@@ -89,6 +89,7 @@ public class MemberService {
     private final AuthProperties authProperties;
     private final Clock clock;
     private final MemberAccountRecoveryService accountRecoveryService;
+    private final KakaoSelfStore kakaoSelfStore;
     private final String dummyPasswordHash;
 
     public MemberService(
@@ -110,7 +111,8 @@ public class MemberService {
             LoginClientParser loginClientParser,
             AuthProperties authProperties,
             Clock clock,
-            MemberAccountRecoveryService accountRecoveryService
+            MemberAccountRecoveryService accountRecoveryService,
+            KakaoSelfStore kakaoSelfStore
     ) {
         this.memberRepository = memberRepository;
         this.actionTokenRepository = actionTokenRepository;
@@ -131,6 +133,7 @@ public class MemberService {
         this.authProperties = authProperties;
         this.clock = clock;
         this.accountRecoveryService = accountRecoveryService;
+        this.kakaoSelfStore = kakaoSelfStore;
         this.dummyPasswordHash = passwordEncoder.encode("timing-only-password");
     }
 
@@ -375,6 +378,7 @@ public class MemberService {
         if (!passwordMatches(request.password(), member.getPasswordHash())) {
             throw invalidCurrentPassword();
         }
+        kakaoSelfStore.disconnectOwner(member.getId());
         sessionRepository.deleteByMemberId(member.getId());
         favoriteRepository.deleteByMemberId(member.getId());
         comparisonRepository.deleteByMemberId(member.getId());
