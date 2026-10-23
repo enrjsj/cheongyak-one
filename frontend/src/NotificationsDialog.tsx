@@ -24,12 +24,14 @@ import { fetchNotificationChannelAvailability } from "./notificationChannelsApi"
 import type { NotificationChannelAvailability } from "./notificationChannelsApi";
 import "./notificationInbox.css";
 import "./notificationChannelStatus.css";
+import KakaoSelfSettings from "./KakaoSelfSettings";
 
 interface NotificationsDialogProps {
   open: boolean;
   onClose: () => void;
   onOpenNotice: (noticeId: number) => void;
   onUnreadCountChange: (count: number) => void;
+  kakaoReturnResult?: string;
 }
 
 const DEFAULT_PREFERENCE: NotificationPreference = {
@@ -73,8 +75,9 @@ export default function NotificationsDialog({
   onClose,
   onOpenNotice,
   onUnreadCountChange,
+  kakaoReturnResult,
 }: NotificationsDialogProps) {
-  const [tab, setTab] = useState<"inbox" | "settings">("inbox");
+  const [tab, setTab] = useState<"inbox" | "settings">(kakaoReturnResult ? "settings" : "inbox");
   const [filter, setFilter] = useState<NotificationFilter>("ALL");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<NotificationSort>("NEWEST");
@@ -90,6 +93,7 @@ export default function NotificationsDialog({
   const [preference, setPreference] = useState<NotificationPreference>(DEFAULT_PREFERENCE);
   const [savedPreference, setSavedPreference] = useState<NotificationPreference>(DEFAULT_PREFERENCE);
   const preferenceSaving = useRef(false);
+  const firstScheduleInput = useRef<HTMLInputElement>(null);
   const [channels, setChannels] = useState<NotificationChannelAvailability[]>(DEFAULT_OUTBOUND_CHANNELS);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<number>();
@@ -448,7 +452,7 @@ export default function NotificationsDialog({
             {PREFERENCE_OPTIONS.map((option) => (
               <label key={option.key}>
                 <span>{option.label}</span>
-                <input type="checkbox" disabled={!preferenceLoaded || saving || busyId !== undefined || sessionExpired} checked={preference[option.key]} onChange={(event) => setPreference((current) => ({ ...current, [option.key]: event.target.checked }))} />
+                <input ref={option.key === "applyStartEnabled" ? firstScheduleInput : undefined} type="checkbox" disabled={!preferenceLoaded || saving || busyId !== undefined || sessionExpired} checked={preference[option.key]} onChange={(event) => setPreference((current) => ({ ...current, [option.key]: event.target.checked }))} />
               </label>
             ))}
             <label className="email-notification-option">
@@ -470,6 +474,9 @@ export default function NotificationsDialog({
               ))}
             </div>
             <button className="primary-button" type="submit" disabled={saving || busyId !== undefined || !preferenceLoaded || sessionExpired}>{saving ? "저장 중…" : "알림 설정 저장"}</button>
+            <KakaoSelfSettings locked={saving || busyId !== undefined || !preferenceLoaded || sessionExpired} dirty={preferenceDirty} returnResult={kakaoReturnResult}
+              savedPreference={preferenceLoaded ? savedPreference : undefined}
+              onEditSchedule={() => firstScheduleInput.current?.focus()} />
           </form>
         )}
         {preferenceDirty && <p role="status">저장하지 않은 알림 설정이 있어요. 알림 설정 탭에서 저장해주세요.</p>}

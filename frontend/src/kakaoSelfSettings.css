@@ -1,0 +1,16 @@
+.kakao-self-settings { display: grid; gap: 10px; margin-block: 12px; padding: 16px; border: 1px solid #e1e5ec; border-radius: 12px; background: #fff; color: #273247; font-size: 14px; }
+.kakao-self-settings p { margin: 0; font-size: 13px; line-height: 1.6; color: #465268; }
+.kakao-self-settings small { font-size: 12px; line-height: 1.6; color: #526078; }
+.kakao-self-state { justify-self: start; border-radius: 6px; padding: 4px 8px; background: #eef2ff; color: #354ba0; font-size: 12px; font-weight: 700; }
+.kakao-self-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.kakao-self-settings button { min-height: 44px; padding: 10px 12px; border: 1px solid #cbd3df; border-radius: 8px; background: #f8faff; color: #273247; font: inherit; cursor: pointer; }
+.kakao-self-settings button:disabled { opacity: .55; cursor: default; }
+.kakao-self-settings button:focus-visible { outline: 2px solid #3658d4; outline-offset: 3px; }
+.kakao-self-settings [role="alert"] { color: #a02a36; }
+.kakao-self-schedules { display: grid; gap: 8px; padding: 12px; border-radius: 8px; background: #f5f7fb; }
+.kakao-self-schedules ul { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0; padding-left: 20px; font-size: 13px; }
+.kakao-self-help summary { min-height: 44px; display: list-item; align-content: center; cursor: pointer; font-weight: 600; }
+.kakao-self-help summary:focus-visible { outline: 2px solid #3658d4; outline-offset: 3px; }
+.kakao-self-help ol { padding-left: 20px; margin: 8px 0; font-size: 13px; line-height: 1.6; }
+.kakao-self-help li + li, .kakao-self-help p + p { margin-top: 8px; }
+@media (max-width: 480px) { .kakao-self-actions { display: grid; } .kakao-self-settings { padding: 12px; } }

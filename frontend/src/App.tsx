@@ -338,6 +338,19 @@ export default function Home() {
   const [eligibilityBusy, setEligibilityBusy] = useState(false);
   const [preferenceBusy, setPreferenceBusy] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [kakaoReturnResult] = useState(() => {
+    const result = new URLSearchParams(window.location.search).get("kakaoSelf");
+    return result && ["connected", "cancelled", "error"].includes(result) ? result : undefined;
+  });
+  const kakaoReturnHandled = useRef(false);
+  useEffect(() => {
+    if (!kakaoReturnResult || !member || kakaoReturnHandled.current) return;
+    kakaoReturnHandled.current = true;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("kakaoSelf");
+    window.history.replaceState(window.history.state, "", url);
+    setNotificationsOpen(true);
+  }, [kakaoReturnResult, member]);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const recommendationState = useMemberRecommendations(member, searchPreference);
   const statusTabProps = useHorizontalTabs(activeStatus);
@@ -2332,7 +2345,9 @@ export default function Home() {
       />
 
       <NotificationsDialog
+        key={member?.id ?? "anonymous"}
         open={notificationsOpen && Boolean(member)}
+        kakaoReturnResult={kakaoReturnResult}
         onClose={() => setNotificationsOpen(false)}
         onOpenNotice={(noticeId) => { void openNotificationNotice(noticeId); }}
         onUnreadCountChange={setUnreadNotificationCount}

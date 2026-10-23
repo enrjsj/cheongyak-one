@@ -121,6 +121,9 @@ class MemberApiIntegrationTest {
     @Autowired
     private com.cheongyakone.domain.member.MemberNotificationRepository historyRepository;
 
+    @Autowired
+    private javax.sql.DataSource dataSource;
+
     @Test
     void searchesAllNotificationHistoryWithOwnerDateReadAndStablePageBoundaries() throws Exception {
         signup("history@example.com", "이력회원");
@@ -470,10 +473,24 @@ class MemberApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.noticeIds[0]").value(notice.getId()));
 
-        mockMvc.perform(authenticated(delete("/api/v1/members/me"), session)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"password\":\"Strong-password-1!\"}"))
-                .andExpect(status().isNoContent());
+        // This default profile uses Hibernate, so explicitly install the JDBC-only migration.
+        // Cleanup must work even when Kakao sending is disabled and the configured owner changes.
+        var jdbc = new org.springframework.jdbc.core.JdbcTemplate(dataSource);
+        new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(
+                new org.springframework.core.io.ClassPathResource("db/migration/V39__kakao_self_notifications.sql"))
+                .execute(dataSource);
+        try {
+            Long memberId = memberRepository.findByEmail("favorite@example.com").orElseThrow().getId();
+            jdbc.update("UPDATE KAKAO_SELF_CONNECTION SET MEMBER_ID=?, ACCESS_TOKEN='fake-encrypted-access', REFRESH_TOKEN='fake-encrypted-refresh', STATE_HASH='fake-state' WHERE ID=1", memberId);
+            mockMvc.perform(authenticated(delete("/api/v1/members/me"), session)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"password\":\"Strong-password-1!\"}"))
+                    .andExpect(status().isNoContent());
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM KAKAO_SELF_CONNECTION WHERE MEMBER_ID IS NULL AND ACCESS_TOKEN IS NULL AND REFRESH_TOKEN IS NULL AND STATE_HASH IS NULL", Integer.class)).isEqualTo(1);
+        } finally {
+            jdbc.execute("DROP TABLE KAKAO_SELF_RECEIPT");
+            jdbc.execute("DROP TABLE KAKAO_SELF_CONNECTION");
+        }
 
         mockMvc.perform(get("/api/v1/members/me").cookie(session.cookie()))
                 .andExpect(status().isUnauthorized());

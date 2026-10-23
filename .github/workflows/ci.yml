@@ -53,6 +53,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm test
+      - name: Use official Ubuntu archive for browser dependencies
+        run: sudo bash "$GITHUB_WORKSPACE/scripts/ci-use-ubuntu-mirror.sh"
       - name: Install Chromium for E2E tests
         run: npx playwright install --with-deps chromium
       - name: Run core browser flows
@@ -82,6 +84,8 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      - name: Use official Ubuntu archive for browser dependencies
+        run: sudo bash "$GITHUB_WORKSPACE/scripts/ci-use-ubuntu-mirror.sh"
       - run: npx playwright install --with-deps webkit
       - name: Run iPhone search, detail and recovery flows
         run: npx playwright test --project=iphone-webkit --workers=2
@@ -112,6 +116,8 @@ jobs:
       - run: mvn -B -pl backend -DskipTests package
       - run: npm ci
         working-directory: frontend
+      - name: Use official Ubuntu archive for browser dependencies
+        run: sudo bash "$GITHUB_WORKSPACE/scripts/ci-use-ubuntu-mirror.sh"
       - run: npx playwright install --with-deps chromium webkit
         working-directory: frontend
       - name: Verify real sessions through same-origin API in Chromium and iPhone WebKit
