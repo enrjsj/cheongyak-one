@@ -29,6 +29,14 @@
 .cash-comparison th button { display: block; min-height: 44px; margin-top: 8px; padding: 8px 12px; background: white; border: 1px solid #b3b3b3; border-radius: 8px; color: #444444; cursor: pointer; }
 .cash-comparison-scroll:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 
+.cash-plan-modes { display: flex; gap: 8px; margin-bottom: 22px; flex-wrap: wrap; }
+.cash-plan-modes button { min-height: 46px; padding: 10px 16px; border: 1px solid #b9c4d5; border-radius: 10px; background: #fff; color: #35465f; font: inherit; font-size: 14px; cursor: pointer; }
+.cash-plan-modes button[aria-pressed="true"] { background: #eaf0ff; border-color: #3659a6; color: #264a9a; font-weight: 700; }
+.cash-ratio-toggle { min-height: 44px; padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; }
+.cash-simple-focus { scroll-margin-top: 14px; }
+.cash-plan-group .cash-simple-empty { margin: 18px 0 0; }
+.cash-plan .cash-balance-preview { margin: 16px 0; font-size: 14px; font-weight: 600; }
+
 .cash-plan { padding: 24px; background: #f7f9fd; border-color: #dfe6f1; scroll-margin-top: 14px; }
 .cash-plan-eyebrow { display: inline-block; margin-bottom: 8px; font-size: 12px; font-weight: 700; color: #3659a6; }
 .cash-plan h3 { font-size: 23px; color: #202a3e; letter-spacing: -.03em; }

@@ -1,7 +1,51 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateCashPlan, sourcePrice, emptyCashPlan, CashPlanValidationError, captureCashPlan, addCashScenario, cashPlanReport } from '../src/cashPlan.ts';
+import { calculateCashPlan, calculatePaymentSchedule, calculateSimpleCashPlan, EXAMPLE_PAYMENT_RATIOS, sourcePrice, emptyCashPlan, CashPlanValidationError, captureCashPlan, addCashScenario, cashPlanReport } from '../src/cashPlan.ts';
 const input = { price: '600000000', depositPercent: '10', interimPercent: '60', interimLoan: '360000000', finalLoan: '420000000', extras: '30000000', availableCash: '80000000' };
+
+test('간편 계획은 현금을 계약금부터 순차 배분하고 단계마다 중복 사용하지 않는다', () => {
+  const draft = { price: '600,000,000', availableCash: '100,000,000', ...EXAMPLE_PAYMENT_RATIOS };
+  const r = calculateSimpleCashPlan(draft);
+  assert.deepEqual(r.stages.map(s => s.payment), [60000000, 360000000, 180000000]);
+  assert.deepEqual(r.stages.map(s => s.allocatedCash), [60000000, 40000000, 0]);
+  assert.deepEqual(r.stages.map(s => s.shortage), [0, 320000000, 180000000]);
+  assert.deepEqual(r.stages.map(s => s.cumulativeShortage), [0, 320000000, 500000000]);
+  assert.equal(r.totalShortage, 500000000); assert.equal(r.remainingCash, 0);
+  assert.equal(draft.price, '600,000,000');
+});
+test('간편 계획은 0원·공급가 초과 현금과 원 단위 비율 잔여분을 보존한다', () => {
+  for (const availableCash of ['0', '1', '600000000', '700000000', '1000000000000']) {
+    const r = calculateSimpleCashPlan({ price: '600000000', availableCash, ...EXAMPLE_PAYMENT_RATIOS });
+    assert.equal(r.totalShortage, Math.max(0, 600000000 - Number(availableCash)));
+    assert.equal(r.remainingCash, Math.max(0, Number(availableCash) - 600000000));
+    assert.equal(r.stages.reduce((sum, s) => sum + s.allocatedCash, 0) + r.remainingCash, Number(availableCash));
+  }
+  for (const price of ['1', '600000001', '999999999999', '1000000000000']) {
+    const r = calculateSimpleCashPlan({ price, availableCash: '123', depositPercent: '33.33', interimPercent: '33.33' });
+    assert.equal(r.stages.reduce((sum, s) => sum + s.payment, 0), Number(price));
+    assert.equal(r.totalShortage, Math.max(0, Number(price) - 123));
+    assert.equal(r.balancePercent, 33.34);
+  }
+});
+test('간편 계획은 빈 현금·누락 가격·잘못된 비율을 0으로 대체하지 않는다', () => {
+  const simple = { price: '600000000', availableCash: '100000000', ...EXAMPLE_PAYMENT_RATIOS };
+  for (const [field, values] of Object.entries({ price: ['', '0', '-1', '6,00'], availableCash: ['', '1e8', '-1', '1000,000', '1000000000001'], depositPercent: ['', '41'], interimPercent: ['', '101'] })) {
+    for (const value of values) assert.throws(() => calculateSimpleCashPlan({ ...simple, [field]: value }), CashPlanValidationError);
+  }
+  const schedule = calculatePaymentSchedule({ ...simple, depositPercent: '20', interimPercent: '50' });
+  assert.deepEqual([schedule.deposit, schedule.interim, schedule.balance], [120000000, 300000000, 180000000]);
+});
+test('간편 계획에는 상세 대출·비용을 자동으로 섞지 않고 예시 출처는 상세 비교와 파일에 남긴다', () => {
+  assert.equal(calculateSimpleCashPlan(input).totalShortage, 520000000);
+  const source = { noticeId: 1, title: '검증 공고', unitId: '01', unitName: '84A', publishedPrice: 600000000, syncedAt: '2026-10-29T00:00:00Z' };
+  const snapshot = captureCashPlan(source, input, source.syncedAt, 'example');
+  const plans = addCashScenario([], snapshot, 1);
+  snapshot.ratioBasis = 'user';
+  assert.equal(plans[0].snapshot.ratioBasis, 'example');
+  assert.match(cashPlanReport(plans), /예시 비율 · 공고 확정값 아님/);
+  assert.match(cashPlanReport([{ id: 2, snapshot }]), /직접 입력 비율 · 공고 확인 필요/);
+  assert.throws(() => addCashScenario(plans, snapshot, 2), /이미 비교/);
+});
 
 test('중도금 대출 상환을 포함한 단계별 자기자금과 누적 부족액', () => {
   const r = calculateCashPlan(input);

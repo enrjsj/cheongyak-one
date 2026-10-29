@@ -1,5 +1,5 @@
 import type { CashPlanScenario, CashPlanSnapshot } from "./cashPlan";
-import { cashMoney, cashPlanTime, sourcePrice } from "./cashPlan";
+import { cashMoney, cashPlanTime, cashRatioBasisLabel, sourcePrice } from "./cashPlan";
 
 type Props = { scenarios: CashPlanScenario[]; onRemove: (id: number) => void; onClear: () => void; onDownload: () => void };
 export default function CashPlanComparison({ scenarios, onRemove, onClear, onDownload }: Props) {
@@ -10,6 +10,7 @@ export default function CashPlanComparison({ scenarios, onRemove, onClear, onDow
     ["공고 최고 공급금액", s => sourcePrice(s.source.publishedPrice) ? cashMoney(s.source.publishedPrice!) : "미확인"],
     ["계산 기준 공급금액", s => `${cashMoney(s.result.price)}${s.source.publishedPrice !== s.result.price ? " · 사용자 입력" : " · 공고 금액"}`],
     ["계약금 / 중도금 / 잔금 비율", s => `${Number(s.input.depositPercent)}% / ${Number(s.input.interimPercent)}% / ${s.result.balancePercent}%`],
+    ["납부 비율 출처", s => cashRatioBasisLabel(s.ratioBasis)],
     ["중도금 대출 예상액", s => cashMoney(s.result.interimLoan)],
     ["잔금 시 총 대출 예상액", s => cashMoney(s.result.finalLoan)],
     ["추가 비용 예상액", s => cashMoney(s.result.extras)],

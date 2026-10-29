@@ -2484,8 +2484,10 @@ for (const width of [320, 1280]) {
     ] } }));
     await page.goto('/?notice=1');
     const panel = page.getByRole('region', { name: '주택형별 필요 현금 계산기', exact: true });
+    await panel.getByRole('button', { name: '대출·비용 상세 계산', exact: true }).click();
     await panel.getByLabel('계산할 주택형', { exact: true }).selectOption('0');
     await expect(panel.getByLabel('계산 기준 공급금액 (원)', { exact: true })).toHaveValue('600000000');
+    await panel.getByLabel('계약금 비율 (%)', { exact: true }).fill('');
     await panel.getByRole('button', { name: '현금 계획 계산', exact: true }).click();
     await expect(panel.getByRole('alert')).toContainText('계약금 비율');
     for (const [label, value] of [['계약금 비율 (%)', '10'], ['중도금 비율 (%)', '60'], ['중도금 대출 예상액 (원)', '360000000'], ['잔금 시 총 대출 예상액 (원)', '420000000'], ['추가 비용 예상액 (원)', '30000000'], ['현재 준비한 현금 (원)', '80000000']]) await panel.getByLabel(label, { exact: true }).fill(value);
@@ -2510,7 +2512,7 @@ for (const width of [320, 1280]) {
     await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
     await page.locator('article').filter({ hasText: notices[0].title }).getByRole('button', { name: /공고 핵심만 보기/ }).click();
     await expect(panel.getByLabel('계산할 주택형', { exact: true })).toHaveValue('0');
-    await expect(panel.getByLabel('계약금 비율 (%)', { exact: true })).toHaveValue('');
+    await expect(panel.getByLabel('계약금 비율 (%)', { exact: true })).toHaveValue('10');
   });
 }
 
@@ -2519,6 +2521,7 @@ test('현금 계획: 미확인 공급금액은 직접 입력하고 임대·주�
   await page.route('**/api/v1/notices/1', route => route.fulfill({ json: { ...notices[0], unitTypes: [{ modelId: '01', housingTypeName: '084A' }] } }));
   await page.goto('/?notice=1');
   const panel = page.getByRole('region', { name: '주택형별 필요 현금 계산기', exact: true });
+    await panel.getByRole('button', { name: '대출·비용 상세 계산', exact: true }).click();
   await panel.getByLabel('계산할 주택형', { exact: true }).selectOption('0');
   await expect(panel.getByLabel('계산 기준 공급금액 (원)', { exact: true })).toHaveValue('');
   await expect(panel.getByText(/공고 공급금액 미확인/)).toBeVisible();
@@ -2536,6 +2539,7 @@ async function prepareCashScenarios(page: Page) {
   ] } }));
   await page.goto('/?notice=1');
   const panel = page.getByRole('region', { name: '주택형별 필요 현금 계산기', exact: true });
+    await panel.getByRole('button', { name: '대출·비용 상세 계산', exact: true }).click();
   await panel.getByLabel('계산할 주택형', { exact: true }).selectOption('0');
   for (const [label, value] of [['계약금 비율 (%)', '10'], ['중도금 비율 (%)', '60'], ['중도금 대출 예상액 (원)', '360000000'], ['잔금 시 총 대출 예상액 (원)', '420000000'], ['추가 비용 예상액 (원)', '30000000'], ['현재 준비한 현금 (원)', '80000000']]) await panel.getByLabel(label, { exact: true }).fill(value);
   await panel.getByRole('button', { name: '현금 계획 계산', exact: true }).click();
@@ -2586,7 +2590,7 @@ for (const width of [320, 1280]) {
     await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
     await page.locator('article').filter({ hasText: notices[0].title }).getByRole('button', { name: /공고 핵심만 보기/ }).click();
     await expect(panel.getByLabel('계산할 주택형', { exact: true })).toHaveValue('0');
-    await expect(panel.getByLabel('계약금 비율 (%)', { exact: true })).toHaveValue('');
+    await expect(panel.getByLabel('계약금 비율 (%)', { exact: true })).toHaveValue('10');
     await expect(panel.locator('.cash-comparison')).toHaveCount(0);
   });
 }
