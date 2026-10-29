@@ -1,0 +1,31 @@
+name: Keep API awake during daytime
+
+on:
+  schedule:
+    # UTC -> KST: 08:53/08:58 prewarm, then 09:03..17:58 every five minutes, daily.
+    # Avoid the busy top of the hour. Scheduled runs can still be delayed or dropped.
+    - cron: "53,58 23 * * *"
+    - cron: "3-58/5 0-8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keep-api-awake
+  cancel-in-progress: false
+
+jobs:
+  health:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Check public health within the Korean daytime window
+        run: node scripts/keep-api-awake.mjs
