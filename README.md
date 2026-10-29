@@ -294,6 +294,10 @@ GitHub Actions의 `CI / real-data` 작업은 Repository Secret인 `REB_API_KEY`�
 
 ### 공개 API 지연 진단
 
+주간 기동 유지는 `.github/workflows/keep-api-awake.yml`에서 실행합니다. 매일 한국 시간 **08:53·08:58 예열,09:03~17:58에는5분 간격**으로 공개 health를 확인합니다. 지연된 예약이나 수동 실행도 실제 시각이08:50~18:00 범위 밖이면 요청하지 않습니다.18시 이후 서버를 강제 종료하지는 않습니다.
+
+main에 반영되면 추가 Secret 없이 활성화됩니다. Actions → **Keep API awake during daytime**에서 결과를 확인하거나 워크플로를 비활성화할 수 있습니다. 정상 응답은HTTP200+`UP`, 실패는 최대4분 재시도 후 작업 실패, 운영시간 밖은skip으로 기록합니다. GitHub 예약 지연·누락·장기 비활성 시 중단 및 Render 무료 사용량 제한 때문에 항상 켜짐을 보장하지는 않습니다. 자세한 범위와 검증은 [주간 기동 유지 기록](docs/tasks/2026-10-29-daytime-warmup.md)을 참고하세요.
+
 `node scripts/measure-public-api.mjs https://cheongyak-one-api.onrender.com`은 최초 health 응답과, 정상 응답 이후 목록·건수 조회 각 2회의 소요 시간을 순서대로 출력합니다. 최초 health 실패 시 후속 조회는 보내지 않습니다. 최대 5회 공개 GET이며 쿠키·인증정보·회원 데이터·동기화 호출을 사용하지 않습니다. 각 요청은 최대 15초이며 자동 재시도하지 않습니다.
 
 이는 클라이언트에서 관측한 응답 시간입니다. 최초 요청이 실제 cold start인지, 네트워크·서버·DB 중 어디가 병목인지는 이 결과만으로 확정할 수 없고, 2회 표본으로 평균 성능이나 p95를 주장하지 않습니다. 로컬/CI 자동 검증은 모의 응답만 사용하며 운영 측정은 명시적으로 명령을 실행할 때만 진행됩니다.
