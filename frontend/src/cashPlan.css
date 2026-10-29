@@ -28,3 +28,41 @@
 .cash-comparison thead th { background: #f0f0f0; }
 .cash-comparison th button { display: block; min-height: 44px; margin-top: 8px; padding: 8px 12px; background: white; border: 1px solid #b3b3b3; border-radius: 8px; color: #444444; cursor: pointer; }
 .cash-comparison-scroll:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+
+.cash-plan { padding: 24px; background: #f7f9fd; border-color: #dfe6f1; scroll-margin-top: 14px; }
+.cash-plan-eyebrow { display: inline-block; margin-bottom: 8px; font-size: 12px; font-weight: 700; color: #3659a6; }
+.cash-plan h3 { font-size: 23px; color: #202a3e; letter-spacing: -.03em; }
+.cash-plan-intro { margin: 0 0 24px; color: #526077; font-size: 14px; }
+.cash-plan-group { min-width: 0; margin: 0 0 20px; padding: 20px; border: 1px solid #e0e6ef; border-radius: 14px; background: #fff; }
+.cash-plan-group legend { padding: 0 8px; font-size: 16px; font-weight: 700; color: #27344b; }
+.cash-plan-group legend > span { display: inline-grid; place-items: center; width: 25px; height: 25px; margin-right: 5px; border-radius: 50%; background: #eaf0ff; color: #3659a6; font-size: 13px; }
+.cash-plan-group > p { margin: 0 0 18px; font-size: 13px; color: #526077; }
+.cash-plan-group .cash-plan-source { margin: 16px 0; padding: 12px; border-radius: 8px; background: #f2f5fb; font-weight: 500; }
+.cash-plan-fields { gap: 22px 24px; align-items: start; }
+.cash-plan input, .cash-plan select { min-height: 48px; border-color: #b9c4d5; border-radius: 9px; color: #233148; }
+.cash-plan input:focus, .cash-plan select:focus { outline: 2px solid #3a62d5; outline-offset: 2px; }
+.cash-plan input[aria-invalid="true"] { border-color: #b3261e; }
+.cash-plan input::placeholder { color: #6b7484; font-size: 14px; }
+.cash-plan small { font-weight: 400; color: #526077; }
+.cash-amount-preview { font-size: 13px; color: #3659a6; font-variant-numeric: tabular-nums; }
+.cash-zero-button { justify-self: start; min-height: 44px; padding: 8px 12px; border: 1px solid #d9e1ee; border-radius: 8px; background: #f7f9fd; color: #35465f; font-size: 12px; }
+.cash-plan .cash-field-error { margin: 0; color: #a5251c; font-size: 13px; font-weight: 500; }
+.cash-plan form > .cash-plan-actions { align-items: center; margin-block: 24px; }
+.cash-plan form > .cash-plan-actions > .primary-button { min-height: 50px; padding-inline: 28px; font-weight: 700; }
+.cash-plan-result { padding: 24px 0 0; scroll-margin-top: 14px; }
+.cash-plan-result > h4 { margin-top: 0; padding: 20px; border-radius: 12px; background: #eaf0ff; color: #264a9a; font-size: 22px; }
+.cash-plan-result > p { font-size: 13px; color: #526077; }
+.cash-plan-stages { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cash-plan-stages article { border-color: #dfe6f1; }
+.cash-plan-stages dl div { display: grid; gap: 5px; font-size: 12px; color: #526077; }
+.cash-plan-stages dd { color: #24344f; font-size: 15px; font-variant-numeric: tabular-nums; }
+@media (max-width: 700px) {
+  .cash-plan { padding: 16px 12px; border-radius: 12px; }
+  .cash-plan h3 { font-size: 20px; }
+  .cash-plan-group { padding: 16px 12px; }
+  .cash-plan-group legend { font-size: 15px; }
+  .cash-plan-fields, .cash-plan-stages { grid-template-columns: minmax(0, 1fr); }
+  .cash-plan form > .cash-plan-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .cash-plan-result > h4 { font-size: 19px; padding: 16px; }
+  .cash-plan-stages dl div { display: flex; }
+}

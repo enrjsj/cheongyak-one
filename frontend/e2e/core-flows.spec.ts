@@ -2509,7 +2509,8 @@ for (const width of [320, 1280]) {
     await expect(panel.getByLabel('계산 기준 공급금액 (원)', { exact: true })).toHaveValue('400000000');
     await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
     await page.locator('article').filter({ hasText: notices[0].title }).getByRole('button', { name: /공고 핵심만 보기/ }).click();
-    await expect(panel.getByLabel('계산할 주택형', { exact: true })).toHaveValue('');
+    await expect(panel.getByLabel('계산할 주택형', { exact: true })).toHaveValue('0');
+    await expect(panel.getByLabel('계약금 비율 (%)', { exact: true })).toHaveValue('');
   });
 }
 
@@ -2584,7 +2585,8 @@ for (const width of [320, 1280]) {
     }
     await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
     await page.locator('article').filter({ hasText: notices[0].title }).getByRole('button', { name: /공고 핵심만 보기/ }).click();
-    await expect(panel.getByLabel('계산할 주택형', { exact: true })).toHaveValue('');
+    await expect(panel.getByLabel('계산할 주택형', { exact: true })).toHaveValue('0');
+    await expect(panel.getByLabel('계약금 비율 (%)', { exact: true })).toHaveValue('');
     await expect(panel.locator('.cash-comparison')).toHaveCount(0);
   });
 }
