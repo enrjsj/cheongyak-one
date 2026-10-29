@@ -1,9 +1,12 @@
-// All amounts are integer won. No LTV, approval, tax rate or payment ratio is inferred.
+// All amounts are integer won. Example ratios are explicit assumptions, not notice data.
 export type CashPlanInput = {
   price: string; depositPercent: string; interimPercent: string;
   interimLoan: string; finalLoan: string; extras: string; availableCash: string;
 };
 export const emptyCashPlan = (): CashPlanInput => ({ price: "", depositPercent: "", interimPercent: "", interimLoan: "", finalLoan: "", extras: "", availableCash: "" });
+export const EXAMPLE_PAYMENT_RATIOS = { depositPercent: "10", interimPercent: "60" } as const;
+export type CashRatioBasis = "example" | "user";
+export const cashRatioBasisLabel = (basis: CashRatioBasis) => basis === "example" ? "예시 비율 · 공고 확정값 아님" : "직접 입력 비율 · 공고 확인 필요";
 export const MAX_PLAN_WON = 1_000_000_000_000;
 export class CashPlanValidationError extends Error {
   field: keyof CashPlanInput;
@@ -32,15 +35,37 @@ function basisPoints(text: string, label: string, field: keyof CashPlanInput): n
   const [whole, decimals = ""] = text.split(".");
   return Number(whole) * 100 + Number(decimals.padEnd(2, "0"));
 }
-export function calculateCashPlan(input: CashPlanInput) {
-  input = normalizedInput(input);
-  const price = won(input.price, "계산 기준 공급금액", "price", true);
+export function calculatePaymentSchedule(input: Pick<CashPlanInput, "price" | "depositPercent" | "interimPercent">) {
+  const price = won(normalizeCashAmount(input.price), "계산 기준 공급금액", "price", true);
   const depositRate = basisPoints(input.depositPercent, "계약금 비율", "depositPercent");
   const interimRate = basisPoints(input.interimPercent, "중도금 비율", "interimPercent");
   if (depositRate + interimRate > 10000) throw new CashPlanValidationError("interimPercent", "계약금과 중도금 비율의 합은 100% 이하여야 합니다.");
   // Integer arithmetic avoids binary floating-point and overflowing price * basis points.
   const portion = (rate: number) => Number(BigInt(price) * BigInt(rate) / 10000n);
   const deposit = portion(depositRate), interim = portion(interimRate), balance = price - deposit - interim;
+  return { price, deposit, interim, balance, balancePercent: (10000 - depositRate - interimRate) / 100 };
+}
+export function calculateSimpleCashPlan(input: Pick<CashPlanInput, "price" | "depositPercent" | "interimPercent" | "availableCash">) {
+  const payment = calculatePaymentSchedule(input);
+  const availableCash = won(normalizeCashAmount(input.availableCash), "현재 준비한 현금", "availableCash");
+  let remainingCash = availableCash, cumulativeShortage = 0;
+  const stages = [
+    { label: "계약금", payment: payment.deposit },
+    { label: "중도금 전체", payment: payment.interim },
+    { label: "잔금", payment: payment.balance },
+  ].map(stage => {
+    const allocatedCash = Math.min(remainingCash, stage.payment);
+    remainingCash -= allocatedCash;
+    const shortage = stage.payment - allocatedCash;
+    cumulativeShortage += shortage;
+    return { ...stage, allocatedCash, shortage, cumulativeShortage };
+  });
+  return { ...payment, availableCash, remainingCash, totalShortage: cumulativeShortage, stages };
+}
+export type SimpleCashPlan = ReturnType<typeof calculateSimpleCashPlan>;
+export function calculateCashPlan(input: CashPlanInput) {
+  input = normalizedInput(input);
+  const { price, deposit, interim, balance, balancePercent } = calculatePaymentSchedule(input);
   const interimLoan = won(input.interimLoan, "중도금 대출 예상액", "interimLoan");
   const finalLoan = won(input.finalLoan, "잔금 시 총 대출 예상액", "finalLoan");
   const extras = won(input.extras, "추가 비용 예상액", "extras");
@@ -52,7 +77,7 @@ export function calculateCashPlan(input: CashPlanInput) {
   const totalCash = deposit + interimCash + finalCash;
   return {
     price, deposit, interim, balance, interimLoan, finalLoan, extras, availableCash,
-    balancePercent: (10000 - depositRate - interimRate) / 100,
+    balancePercent,
     totalCash,
     stages: [
       { label: "계약", payment: deposit, ownCash: deposit, cumulative: deposit },
@@ -71,11 +96,12 @@ export type CashPlanSource = {
 };
 export type CashPlanSnapshot = {
   source: CashPlanSource; input: CashPlanInput; result: CashPlanResult; calculatedAt: string;
+  ratioBasis: CashRatioBasis;
 };
 export type CashPlanScenario = { id: number; snapshot: CashPlanSnapshot };
-export function captureCashPlan(source: CashPlanSource, input: CashPlanInput, calculatedAt: string): CashPlanSnapshot {
+export function captureCashPlan(source: CashPlanSource, input: CashPlanInput, calculatedAt: string, ratioBasis: CashRatioBasis = "user"): CashPlanSnapshot {
   input = normalizedInput(input);
-  return { source: { ...source }, input: { ...input }, result: calculateCashPlan(input), calculatedAt };
+  return { source: { ...source }, input: { ...input }, result: calculateCashPlan(input), calculatedAt, ratioBasis };
 }
 export function addCashScenario(scenarios: CashPlanScenario[], snapshot: CashPlanSnapshot, id: number): CashPlanScenario[] {
   const normalized = (s: CashPlanSnapshot) => JSON.stringify([s.source.noticeId, s.source.unitId, s.source.unitName,
@@ -83,7 +109,7 @@ export function addCashScenario(scenarios: CashPlanScenario[], snapshot: CashPla
   if (scenarios.some(s => normalized(s.snapshot) === normalized(snapshot))) throw new Error("같은 주택형과 입력 조건의 계획이 이미 비교에 있습니다.");
   if (scenarios.length >= 3) throw new Error("최대 3개까지 비교할 수 있습니다. 기존 계획을 삭제한 뒤 담아주세요.");
   if (scenarios.some(s => s.snapshot.source.noticeId !== snapshot.source.noticeId)) throw new Error("같은 공고의 계획만 비교할 수 있습니다.");
-  return [...scenarios, { id, snapshot: captureCashPlan(snapshot.source, snapshot.input, snapshot.calculatedAt) }];
+  return [...scenarios, { id, snapshot: captureCashPlan(snapshot.source, snapshot.input, snapshot.calculatedAt, snapshot.ratioBasis) }];
 }
 export const cashMoney = (value: number) => `${value.toLocaleString("ko-KR")}원`;
 export function cashPlanTime(value: string): string {
@@ -95,7 +121,7 @@ export function cashPlanTime(value: string): string {
 const reportLine = (value?: string) => value?.replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, " ").slice(0, 600) || "미확인";
 export function cashPlanReport(plans: CashPlanScenario[]): string {
   if (!plans.length || plans.length > 3) throw new Error("내보낼 계산 결과가 없습니다.");
-  const lines = ["청약한눈 · 개인 현금 계획", "직접 입력한 가정에 따른 계산이며 대출 승인·실제 필요 현금의 확정 결과가 아닙니다.",
+  const lines = ["청약한눈 · 개인 현금 계획", "선택한 비율과 입력한 가정에 따른 계산이며 대출 승인·실제 필요 현금의 확정 결과가 아닙니다.",
     "금액 단위: 원 / 날짜·시간: 한국 시간", ""];
   for (const { id, snapshot: s } of plans) {
     const r = s.result, source = s.source;
@@ -107,6 +133,7 @@ export function cashPlanReport(plans: CashPlanScenario[]): string {
       `공고 최고 공급금액: ${sourcePrice(source.publishedPrice) ? cashMoney(source.publishedPrice!) : "미확인"}`,
       `계산 기준 공급금액: ${cashMoney(r.price)} (${sourcePrice(source.publishedPrice) && source.publishedPrice === r.price ? "공고 최고 금액 사용" : "사용자 입력 금액"})`,
       `계약금 비율: ${Number(s.input.depositPercent)}% / 중도금 비율: ${Number(s.input.interimPercent)}% / 잔금 비율: ${r.balancePercent}%`,
+      `납부 비율 출처: ${cashRatioBasisLabel(s.ratioBasis)}`,
       `중도금 대출 예상액: ${cashMoney(r.interimLoan)}`, `잔금 시 총 대출 예상액: ${cashMoney(r.finalLoan)}`,
       `추가 비용 예상액: ${cashMoney(r.extras)}`, `현재 준비한 현금: ${cashMoney(r.availableCash)}`, `총 자기자금: ${cashMoney(r.totalCash)}`);
     for (const stage of r.stages) lines.push(`  ${stage.label}: 공급 대금 ${cashMoney(stage.payment)} / 이번 단계 자기자금 ${cashMoney(stage.ownCash)} / 누적 자기자금 ${cashMoney(stage.cumulative)} / 현재 현금 대비 부족액 ${cashMoney(stage.shortage)}`);
