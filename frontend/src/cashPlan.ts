@@ -5,34 +5,48 @@ export type CashPlanInput = {
 };
 export const emptyCashPlan = (): CashPlanInput => ({ price: "", depositPercent: "", interimPercent: "", interimLoan: "", finalLoan: "", extras: "", availableCash: "" });
 export const MAX_PLAN_WON = 1_000_000_000_000;
+export class CashPlanValidationError extends Error {
+  field: keyof CashPlanInput;
+  constructor(field: keyof CashPlanInput, message: string) {
+    super(message); this.name = "CashPlanValidationError"; this.field = field;
+  }
+}
+export function normalizeCashAmount(text: string): string {
+  return /^\d{1,3}(,\d{3})+$/.test(text) ? text.replaceAll(",", "") : text;
+}
+function normalizedInput(input: CashPlanInput): CashPlanInput {
+  return { ...input, price: normalizeCashAmount(input.price), interimLoan: normalizeCashAmount(input.interimLoan),
+    finalLoan: normalizeCashAmount(input.finalLoan), extras: normalizeCashAmount(input.extras), availableCash: normalizeCashAmount(input.availableCash) };
+}
 export function sourcePrice(value?: number): string {
   return Number.isSafeInteger(value) && value! > 0 && value! <= MAX_PLAN_WON ? String(value) : "";
 }
-function won(text: string, label: string, positive = false): number {
+function won(text: string, label: string, field: keyof CashPlanInput, positive = false): number {
   if (!/^\d{1,13}$/.test(text) || Number(text) > MAX_PLAN_WON || (positive && Number(text) === 0))
-    throw new Error(`${label}: ${positive ? "1" : "0"}~1조 원의 정수를 입력해주세요. 미확인 값은 0으로 대신하지 마세요.`);
+    throw new CashPlanValidationError(field, `${label}: ${positive ? "1" : "0"}~1조 원의 정수를 입력해주세요. 미확인 값은 0으로 대신하지 마세요.`);
   return Number(text);
 }
-function basisPoints(text: string, label: string): number {
+function basisPoints(text: string, label: string, field: keyof CashPlanInput): number {
   if (!/^\d{1,3}(\.\d{1,2})?$/.test(text) || Number(text) > 100)
-    throw new Error(`${label}: 0~100%를 소수 둘째 자리까지 입력해주세요.`);
+    throw new CashPlanValidationError(field, `${label}: 0~100%를 소수 둘째 자리까지 입력해주세요.`);
   const [whole, decimals = ""] = text.split(".");
   return Number(whole) * 100 + Number(decimals.padEnd(2, "0"));
 }
 export function calculateCashPlan(input: CashPlanInput) {
-  const price = won(input.price, "계산 기준 공급금액", true);
-  const depositRate = basisPoints(input.depositPercent, "계약금 비율");
-  const interimRate = basisPoints(input.interimPercent, "중도금 비율");
-  if (depositRate + interimRate > 10000) throw new Error("계약금과 중도금 비율의 합은 100% 이하여야 합니다.");
+  input = normalizedInput(input);
+  const price = won(input.price, "계산 기준 공급금액", "price", true);
+  const depositRate = basisPoints(input.depositPercent, "계약금 비율", "depositPercent");
+  const interimRate = basisPoints(input.interimPercent, "중도금 비율", "interimPercent");
+  if (depositRate + interimRate > 10000) throw new CashPlanValidationError("interimPercent", "계약금과 중도금 비율의 합은 100% 이하여야 합니다.");
   // Integer arithmetic avoids binary floating-point and overflowing price * basis points.
   const portion = (rate: number) => Number(BigInt(price) * BigInt(rate) / 10000n);
   const deposit = portion(depositRate), interim = portion(interimRate), balance = price - deposit - interim;
-  const interimLoan = won(input.interimLoan, "중도금 대출 예상액");
-  const finalLoan = won(input.finalLoan, "잔금 시 총 대출 예상액");
-  const extras = won(input.extras, "추가 비용 예상액");
-  const availableCash = won(input.availableCash, "현재 준비한 현금");
-  if (interimLoan > interim) throw new Error("중도금 대출 예상액은 중도금보다 클 수 없습니다.");
-  if (finalLoan > balance + interimLoan) throw new Error("잔금 시 총 대출은 잔금과 중도금 대출 상환액의 합을 넘을 수 없습니다. 이미 납부한 현금의 환급은 계산하지 않습니다.");
+  const interimLoan = won(input.interimLoan, "중도금 대출 예상액", "interimLoan");
+  const finalLoan = won(input.finalLoan, "잔금 시 총 대출 예상액", "finalLoan");
+  const extras = won(input.extras, "추가 비용 예상액", "extras");
+  const availableCash = won(input.availableCash, "현재 준비한 현금", "availableCash");
+  if (interimLoan > interim) throw new CashPlanValidationError("interimLoan", "중도금 대출 예상액은 중도금보다 클 수 없습니다.");
+  if (finalLoan > balance + interimLoan) throw new CashPlanValidationError("finalLoan", "잔금 시 총 대출은 잔금과 중도금 대출 상환액의 합을 넘을 수 없습니다. 이미 납부한 현금의 환급은 계산하지 않습니다.");
   const interimCash = interim - interimLoan;
   const finalCash = balance + interimLoan - finalLoan + extras;
   const totalCash = deposit + interimCash + finalCash;
@@ -60,6 +74,7 @@ export type CashPlanSnapshot = {
 };
 export type CashPlanScenario = { id: number; snapshot: CashPlanSnapshot };
 export function captureCashPlan(source: CashPlanSource, input: CashPlanInput, calculatedAt: string): CashPlanSnapshot {
+  input = normalizedInput(input);
   return { source: { ...source }, input: { ...input }, result: calculateCashPlan(input), calculatedAt };
 }
 export function addCashScenario(scenarios: CashPlanScenario[], snapshot: CashPlanSnapshot, id: number): CashPlanScenario[] {

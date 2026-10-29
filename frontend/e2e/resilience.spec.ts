@@ -682,6 +682,64 @@ test("목록 탐색: 모바일 관심 메뉴는 검색 결과로 키보드 초�
 });
 
 
+for (const width of process.env.IPHONE_TEST ? [390] : [320, 1440]) test(`현금 계산기 개선: 초기 선택·오류 이동·쉼표 금액·팝업 크기 (${width}px)`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width, height: 900 });
+  await mockPublicApi(page);
+  await page.route('**/api/v1/notices/1', route => route.fulfill({ json: { ...notice, unitTypes: [{ modelId: 'A', housingTypeName: '084A', maxPrice: 600000000 }] } }));
+  await page.goto('/?notice=1');
+  const dialog = page.getByRole('dialog');
+  const panel = page.getByRole('region', { name: '주택형별 필요 현금 계산기', exact: true });
+  await expect(panel.getByLabel('계산할 주택형', { exact: true })).toHaveValue('0');
+  // The existing dialog entrance animation scales its bounding box briefly.
+  await expect.poll(async () => (await dialog.boundingBox())!.width).toBeGreaterThanOrEqual(width > 700 ? 1000 : width - 2);
+  if (width <= 700) await expect.poll(async () => (await dialog.boundingBox())!.height).toBeGreaterThanOrEqual(898);
+  const bounds = await dialog.boundingBox();
+  expect(bounds!.height).toBeLessThanOrEqual(900);
+  await dialog.getByRole('button', { name: '현금 계산기로 이동', exact: true }).click();
+  await expect(panel).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath('calculator-inputs.png') });
+  const calculate = panel.getByRole('button', { name: '현금 계획 계산', exact: true });
+  const deposit = panel.getByLabel('계약금 비율 (%)', { exact: true });
+  await expect(deposit).toHaveValue('');
+  await calculate.click();
+  await expect(deposit).toBeFocused();
+  await expect(deposit).toHaveAttribute('aria-invalid', 'true');
+  await expect(deposit).toHaveAttribute('aria-describedby', /cash-plan-depositPercent-error/);
+  await expect(panel.getByRole('alert')).toBeVisible();
+  await calculate.click();
+  await expect(deposit).toBeFocused();
+  await deposit.fill('10');
+  await panel.getByLabel('중도금 비율 (%)', { exact: true }).fill('60');
+  for (const label of ['중도금 대출 예상액 (원)', '잔금 시 총 대출 예상액 (원)', '추가 비용 예상액 (원)', '현재 준비한 현금 (원)']) {
+    await expect(panel.getByLabel(label, { exact: true })).toHaveValue('');
+    await panel.getByRole('button', { name: `${label} 없음으로 입력`, exact: true }).click();
+    await expect(panel.getByLabel(label, { exact: true })).toHaveValue('0');
+  }
+  const price = panel.getByLabel('계산 기준 공급금액 (원)', { exact: true });
+  await price.fill('600,000,000');
+  await expect(panel.locator('.cash-plan-source')).toContainText('이 금액을 계산에 사용');
+  await calculate.click();
+  const result = panel.getByRole('region', { name: '현금 계획 결과', exact: true });
+  await expect(result).toBeFocused();
+  await expect(result.getByRole('heading', { level: 4 })).toContainText('600,000,000원');
+  const close = dialog.getByRole('button', { name: '닫기', exact: true });
+  await expect(close).toBeInViewport();
+  expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('calculator-result.png') });
+  await price.fill('60,00');
+  await expect(result).toHaveCount(0);
+  await calculate.click();
+  await expect(price).toBeFocused();
+  await expect(price).toHaveAttribute('aria-invalid', 'true');
+  await price.fill('1,000,000,000,000');
+  await expect(price).toHaveValue('1,000,000,000,000');
+  await calculate.click();
+  await expect(result.getByRole('heading', { level: 4 })).toContainText('1,000,000,000,000원');
+  await close.click();
+  await expect(dialog).toHaveCount(0);
+});
+
 test('현금 계획 모바일: 계산·입력 수정·닫기 후 포커스 복원', async ({ page }) => {
   await mockPublicApi(page);
   await page.route('**/api/v1/notices/1', route => route.fulfill({ json: { ...notice, unitTypes: [{ modelId: 'A', housingTypeName: '084A', maxPrice: 600000000 }] } }));

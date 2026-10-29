@@ -44,9 +44,15 @@ export default function NoticeDetailDialog({ detailApplication, selectedDetail, 
   const detailDialogRef = useDialogAccessibility<HTMLElement>(Boolean(detailApplication), closeDetail);
   if (!detailApplication) return null;
   return (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDetail(); }}>
+        <div className="modal-backdrop detail-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDetail(); }}>
           <section ref={detailDialogRef} tabIndex={-1} className="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title" aria-busy={detailLoading}>
-            <div className="modal-head"><div><span>OFFICIAL NOTICE</span><h2 id="detail-title">{detailApplication.title}</h2></div><button type="button" onClick={closeDetail} aria-label="닫기"><Icon name="close" /></button></div>
+            <div className="modal-head"><div><span>공고 상세</span><h2 id="detail-title" title={detailApplication.title}>{detailApplication.title}</h2></div><button type="button" onClick={closeDetail} aria-label="닫기"><Icon name="close" /></button></div>
+            {selectedDetail && !detailLoading && !detailError && !isRentalNotice(selectedDetail) && Boolean(selectedDetail.unitTypes?.length) &&
+              <div className="detail-shortcuts"><span>주택형부터 자금 계획까지 한 번에 확인하세요.</span>
+                <button type="button" className="secondary-button" aria-controls="cash-plan" onClick={() => {
+                  const calculator = detailDialogRef.current?.querySelector<HTMLElement>(".cash-plan");
+                  calculator?.focus({ preventScroll: true }); calculator?.scrollIntoView({ block: "start", behavior: "instant" });
+                }}>현금 계산기로 이동 <Icon name="arrow" /></button></div>}
             {detailLoading && <div className="detail-loading" role="status">최신 상세 정보를 확인하고 있어요.</div>}
             {detailError && <div className="notice-load-status" role="alert"><p>최신 상세 정보를 확인하지 못했습니다. 목록의 요약 정보를 표시합니다.</p><p>{detailError}</p><button type="button" disabled={!online || detailLoading} onClick={() => { if (!detailLoading) onRetry(); }}>상세 다시 불러오기</button></div>}
             {selectedDetail?.contentChangedAt && selectedDetail.lastChangeSummary && (

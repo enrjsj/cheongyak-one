@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateCashPlan, sourcePrice, emptyCashPlan } from '../src/cashPlan.ts';
+import { calculateCashPlan, sourcePrice, emptyCashPlan, CashPlanValidationError, captureCashPlan, addCashScenario, cashPlanReport } from '../src/cashPlan.ts';
 const input = { price: '600000000', depositPercent: '10', interimPercent: '60', interimLoan: '360000000', finalLoan: '420000000', extras: '30000000', availableCash: '80000000' };
 
 test('중도금 대출 상환을 포함한 단계별 자기자금과 누적 부족액', () => {
@@ -25,9 +25,31 @@ test('비율 반올림 잔여분은 잔금으로 보존하고 최대 금액에�
 test('빈 값, 음수, 소수 원, 지수표기, 무한대와 허용 범위를 넘어선 입력은 계산하지 않는다', () => {
   assert.throws(() => calculateCashPlan(emptyCashPlan()));
   for (const key of Object.keys(input)) assert.throws(() => calculateCashPlan({ ...input, [key]: '' }), key);
-  for (const value of ['-1', '1.5', '1e8', 'Infinity', 'NaN', '1,000', '1000000000001', ' 100']) assert.throws(() => calculateCashPlan({ ...input, extras: value }), value);
+  for (const value of ['-1', '1.5', '1e8', 'Infinity', 'NaN', '10,00', ',100', '1,,000', '1000,000', '1000000000001', ' 100']) assert.throws(() => calculateCashPlan({ ...input, extras: value }), value);
   for (const value of ['-1', '100.01', '1.001', '1e1', 'NaN']) assert.throws(() => calculateCashPlan({ ...input, depositPercent: value }), value);
   assert.throws(() => calculateCashPlan({ ...input, price: '0' }));
+});
+
+test('쉼표 금액은 같은 원 단위 결과·비교 중복·내보내기 출처를 유지한다', () => {
+  const grouped = { ...input, price: '600,000,000', interimLoan: '360,000,000', finalLoan: '420,000,000', extras: '30,000,000', availableCash: '80,000,000' };
+  assert.deepEqual(calculateCashPlan(grouped), calculateCashPlan(input));
+  const source = { noticeId: 1, title: '검증 공고', unitId: '01', unitName: '84A', publishedPrice: 600000000, syncedAt: '2026-10-29T00:00:00Z' };
+  const snapshot = captureCashPlan(source, grouped, source.syncedAt);
+  assert.equal(snapshot.input.price, input.price);
+  assert.equal(grouped.price, '600,000,000');
+  const plans = addCashScenario([], snapshot, 1);
+  assert.throws(() => addCashScenario(plans, captureCashPlan(source, input, source.syncedAt), 2), /이미 비교/);
+  assert.match(cashPlanReport(plans), /공고 최고 금액 사용/);
+  assert.equal(calculateCashPlan({ ...input, price: '1,000,000,000,000', interimLoan: '0', finalLoan: '0', extras: '0' }).totalCash, 1000000000000);
+});
+
+test('빈 필수값과 비율·대출 오류를 해당 입력 필드에 연결한다', () => {
+  for (const field of Object.keys(input)) {
+    assert.throws(() => calculateCashPlan({ ...input, [field]: '' }), error => error instanceof CashPlanValidationError && error.field === field);
+  }
+  for (const [field, value] of [['interimPercent', '91'], ['interimLoan', '360000001'], ['finalLoan', '540000001']]) {
+    assert.throws(() => calculateCashPlan({ ...input, [field]: value }), error => error instanceof CashPlanValidationError && error.field === field);
+  }
 });
 test('비율 합과 단계별 대출 상한을 검증하고 이미 납부한 현금 환급은 허용하지 않는다', () => {
   assert.throws(() => calculateCashPlan({ ...input, depositPercent: '41' }), /100%/);
