@@ -23,9 +23,10 @@ public class KakaoSelfService {
     private final KakaoSelfClient client;
     private final KakaoSelfTokenCipher cipher;
     private final Clock clock;
+    private final MemberNotificationGenerator notifications;
     public KakaoSelfService(KakaoSelfProperties properties, MemberService members, KakaoSelfStore store,
-            KakaoSelfClient client, KakaoSelfTokenCipher cipher, Clock clock) {
-        this.properties=properties; this.members=members; this.store=store; this.client=client; this.cipher=cipher; this.clock=clock;
+            KakaoSelfClient client, KakaoSelfTokenCipher cipher, Clock clock, MemberNotificationGenerator notifications) {
+        this.properties=properties; this.members=members; this.store=store; this.client=client; this.cipher=cipher; this.clock=clock; this.notifications=notifications;
     }
     public Status status(String rawSession) {
         Long memberId = members.requireMember(rawSession).getId();
@@ -78,26 +79,35 @@ public class KakaoSelfService {
         String lease = store.acquire(memberId, clock.instant(), true);
         if (lease == null) throw failure(HttpStatus.TOO_MANY_REQUESTS, "KAKAO_SEND_BUSY", "발송 중이거나 최근 테스트를 보냈어요. 잠시 후 다시 시도해주세요.");
         boolean accepted;
-        try { accepted = deliver(store.read(), lease, null, "청약한눈 연결 확인\n앞으로 관심 공고의 접수 시작과 마감 임박 알림을 이 채팅방으로 보내드려요.", properties.frontendBaseUrl()); }
+        try { accepted = deliver(store.read(), lease, null, "청약한눈 연결 확인\n앞으로 관심 공고의 접수 시작과 마감 임박 알림을 이 채팅방으로 보내드려요.", properties.frontendBaseUrl(), today()); }
         finally { store.release(lease); }
         if (!accepted) throw failure(HttpStatus.CONFLICT, "KAKAO_TEST_NOT_ACCEPTED", "이번 시험 메시지 발송을 확인하지 못했어요. 연결 상태를 새로고침해주세요.");
         return status(rawSession);
     }
-    @Scheduled(cron="${app.kakao-self.cron:0 */5 * * * *}", zone="Asia/Seoul")
+    @Scheduled(cron="0 0 9 * * *", zone="Asia/Seoul")
     public void scheduled() {
         if (!properties.enabled()) return;
+        LocalDate batchDate = today();
         String lease = store.acquire(properties.ownerMemberId(), clock.instant(), false);
         if (lease == null) return;
         try {
             var row = store.read();
-            for (var notice : store.candidates(row, today())) {
-                if (!store.current(row, lease, clock.instant())) break;
-                String text = KakaoSelfMessage.format(notice);
-                if (!deliver(row, lease, notice.id(), text, properties.frontendBaseUrl() + "/?notice=" + notice.noticeId())) break;
+            if (!store.current(row, lease, clock.instant())) return;
+            // Create due events first; the inbox's hourly scheduler must not race delivery.
+            notifications.generateKakaoForMember(batchDate, properties.ownerMemberId());
+            while (store.current(row, lease, clock.instant()) && today().equals(batchDate)) {
+                var candidates = store.candidates(row, batchDate);
+                if (candidates.isEmpty()) break;
+                for (var notice : candidates) {
+                    if (!store.current(row, lease, clock.instant()) || !today().equals(batchDate)) return;
+                    String text = KakaoSelfMessage.format(notice);
+                    if (!deliver(row, lease, notice.id(), text, properties.frontendBaseUrl() + "/?notice=" + notice.noticeId(), batchDate)) return;
+                }
             }
         } finally { store.release(lease); }
     }
-    private boolean deliver(KakaoSelfStore.Connection row, String lease, Long notificationId, String text, String url) {
+
+    private boolean deliver(KakaoSelfStore.Connection row, String lease, Long notificationId, String text, String url, LocalDate deliveryDate) {
         if (!store.current(row, lease, clock.instant())) return false;
         String access;
         try {
@@ -107,7 +117,7 @@ public class KakaoSelfService {
             else store.complete(row, lease, null, exception.outcome(), clock.instant());
             return false;
         } catch (IllegalStateException exception) { store.reconnect(row, lease); return false; }
-        if (!store.claim(row, lease, notificationId, clock.instant(), today())) return false;
+        if (!store.claim(row, lease, notificationId, clock.instant(), deliveryDate)) return false;
         String outcome = "ACCEPTED";
         try { client.send(access, text, url); }
         catch (KakaoSelfClient.Failure exception) { outcome = exception.outcome(); }

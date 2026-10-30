@@ -38,6 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -779,6 +780,29 @@ class MemberApiIntegrationTest {
                 .andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/members/me").cookie(thirdSession.cookie()))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void morningKakaoGenerationIsOwnerOnlyAndKeepsDateMilestonesAndDeduplication() throws Exception {
+        LocalDate today=LocalDate.now(ZoneId.of("Asia/Seoul"));
+        var ids=new java.util.ArrayList<Long>();
+        ids.add(noticeRepository.save(noticeWithDates("morning-start","시작",today,null,null)).getId());
+        for(int days : List.of(1,3,7,2)) ids.add(noticeRepository.save(noticeWithDates("morning-end-"+days,"마감",null,today.plusDays(days),null)).getId());
+        ids.add(noticeRepository.save(noticeWithDates("morning-winner","발표",null,null,today)).getId());
+        signup("morning-owner@example.com","오전본인"); signup("morning-other@example.com","다른회원");
+        var owner=authenticatedSession(login("morning-owner@example.com",PASSWORD).andReturn());
+        var other=authenticatedSession(login("morning-other@example.com",PASSWORD).andReturn());
+        for(var session : List.of(owner,other)) mockMvc.perform(authenticated(post("/api/v1/members/me/favorites/merge"),session)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"noticeIds\":"+ids+"}"))
+                .andExpect(status().isOk());
+        Long ownerId=memberRepository.findByEmail("morning-owner@example.com").orElseThrow().getId();
+        assertThat(notificationGenerator.generateKakaoForMember(today,ownerId)).isEqualTo(4);
+        assertThat(notificationGenerator.generateKakaoForMember(today,ownerId)).isZero();
+        mockMvc.perform(get("/api/v1/members/me/notifications").cookie(owner.cookie()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.notifications.length()").value(4));
+        mockMvc.perform(get("/api/v1/members/me/notifications").cookie(other.cookie()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.notifications.length()").value(0));
+        assertThatThrownBy(() -> notificationGenerator.generateKakaoForMember(today,null)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

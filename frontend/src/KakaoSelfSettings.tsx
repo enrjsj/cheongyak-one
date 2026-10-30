@@ -106,6 +106,7 @@ export default function KakaoSelfSettings({ locked, dirty, returnResult, savedPr
   return <section className="kakao-self-settings" aria-label="카카오톡 나에게 보내기" aria-busy={loading || busy}>
     <strong>카카오톡 나에게 보내기</strong>
     <p>연결한 본인의 ‘나와의 채팅방’으로 관심 공고의 접수 시작·마감 7일·3일·1일 전 알림을 보내요.</p>
+    <p className="kakao-self-schedule">자동 알림은 해당 날짜 오전 9시(한국 시간)에 발송을 시작해요. 공고·선택한 일정별로 한 건씩 보내요.</p>
     {loading ? <p role="status">연결 상태 확인 중…</p> : status && <>
       <span className="kakao-self-state">{status.reconnectRequired ? "다시 연결 필요" : status.connected ? "연결됨" : status.configured ? "연결 전" : "서버 설정 필요"}</span>
       <p>{status.message}</p>
@@ -127,13 +128,13 @@ export default function KakaoSelfSettings({ locked, dirty, returnResult, savedPr
         {status.connected && !status.reconnectRequired && <button type="button" disabled={disabled || !status.configured || cooldown} onClick={() => void act("test")}>{cooldown ? "시험 발송 후 1분 대기" : "나에게 시험 메시지 보내기"}</button>}
         {(status.connected || status.reconnectRequired) && <button type="button" disabled={disabled} onClick={() => void act("disconnect")}>카카오 발송 연결 해제</button>}
       </div>
-      <small>연결 이후 생성된 알림부터 보내며 지난 알림은 다시 보내지 않아요. 서버가 쉬는 동안 발송이 늦어질 수 있어요.</small>
+      <small>연결 이후 생성된 알림부터 보내며 지난 알림은 다시 보내지 않아요. 오전 발송 이후 등록·연결한 공고는 다음 해당 알림일부터 대상이 돼요. 서버가 오전 9시에 쉬고 있으면 당일 자동 알림이 누락될 수 있어요.</small>
       <details className="kakao-self-help">
         <summary>연결 방법 · 알림이 오지 않을 때</summary>
         <ol>
           <li>청약한눈에 로그인한 상태에서 ‘카카오 계정 연결’을 눌러 카카오 로그인과 메시지 전송 동의를 진행해주세요. 청약홈 로그인은 필요하지 않아요.</li>
           <li>공고의 북마크 버튼으로 관심 공고를 저장하고, 받을 일정을 선택해 ‘알림 설정 저장’을 눌러주세요.</li>
-          <li>연결 후 ‘나에게 시험 메시지 보내기’로 카카오톡의 ‘나와의 채팅방’을 확인해주세요. 시험 메시지는 관심 공고·수신 일정 설정과 관계없이 보낼 수 있어요.</li>
+          <li>연결 후 ‘나에게 시험 메시지 보내기’로 카카오톡의 ‘나와의 채팅방’을 확인해주세요. 시험 메시지는 오전 9시 발송과 별개로 버튼을 누를 때 보내며 관심 공고·수신 일정 설정과 관계없이 보낼 수 있어요.</li>
         </ol>
         <p>관심 공고의 해당 일정에 새 알림이 생성되어야 자동 발송돼요. 연결 전에 만들어진 알림과 지난 날짜의 알림은 보내지 않아요. 연결 상태가 만료되었다면 다시 연결해주세요.</p>
         <p>공고별로 선택한 일정마다 한 건씩 보내요. 메시지에는 공고명·분양가 또는 보증금 등 공고 금액·공급면적과 환산 평수를 담고, 정보가 없으면 공고문 확인으로 표시해요.</p>
