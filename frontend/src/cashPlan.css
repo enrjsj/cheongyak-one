@@ -36,6 +36,28 @@
 .cash-simple-focus { scroll-margin-top: 14px; }
 .cash-plan-group .cash-simple-empty { margin: 18px 0 0; }
 .cash-plan .cash-balance-preview { margin: 16px 0; font-size: 14px; font-weight: 600; }
+.loan-estimate { margin-top: 24px; padding-top: 24px; border-top: 1px solid #dfe6f1; min-width: 0; }
+.loan-estimate-heading { display: flex; align-items: start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.loan-estimate h4 { margin: 0; font-size: 20px; color: #24344f; letter-spacing: -.025em; }
+.loan-estimate p { font-size: 13px; color: #526077; line-height: 1.7; overflow-wrap: anywhere; }
+.loan-inputs { margin-block: 20px; }
+.loan-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 22px 0 12px; }
+.loan-metrics > div { padding: 18px 16px; background: #f4f6fa; border: 1px solid #dfe6f1; border-radius: 12px; min-width: 0; }
+.loan-metrics .loan-metric-primary { background: #eaf0ff; border-color: #b4c5ed; }
+.loan-metrics dt { color: #35465f; font-size: 13px; line-height: 1.5; }
+.loan-metrics dd { margin: 10px 0 8px; color: #24344f; font-size: 22px; font-weight: 750; letter-spacing: -.03em; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.loan-metric-primary dd { color: #264a9a; }
+.loan-metrics small { font-size: 12px; }
+.loan-payment-breakdown { border-bottom: 1px solid #dfe6f1; padding-bottom: 8px; }
+.loan-estimate .loan-rate-stress { padding: 14px 16px; background: #f4f6fa; border-radius: 10px; color: #35465f; }
+.loan-contract-note { border-left: 3px solid #b4c5ed; padding-left: 12px; }
+.loan-estimate .loan-disclaimer { font-size: 12px; }
+.cash-simple-result > h4 { background: #f4f6fa; color: #35465f; font-size: 18px; }
+@media (max-width: 700px) {
+  .loan-metrics { grid-template-columns: minmax(0, 1fr); }
+  .loan-estimate h4 { font-size: 18px; }
+  .loan-metrics dd { font-size: 23px; }
+}
 
 .cash-plan { padding: 24px; background: #f7f9fd; border-color: #dfe6f1; scroll-margin-top: 14px; }
 .cash-plan-eyebrow { display: inline-block; margin-bottom: 8px; font-size: 12px; font-weight: 700; color: #3659a6; }
@@ -74,3 +96,8 @@
   .cash-plan-result > h4 { font-size: 19px; padding: 16px; }
   .cash-plan-stages dl div { display: flex; }
 }
+.loan-costs { margin: 18px 0; padding: 12px 14px; border: 1px solid #dfe6f1; border-radius: 10px; }
+.loan-costs summary { min-height: 32px; padding-block: 8px; cursor: pointer; color: #35465f; font-size: 14px; font-weight: 600; }
+.loan-costs a { display: inline-block; padding-block: 8px; font-size: 13px; color: #264a9a; }
+.loan-repayment-title { margin: 28px 0 8px; font-size: 18px; color: #24344f; }
+.loan-estimate button:disabled { opacity: .6; cursor: not-allowed; }

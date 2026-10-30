@@ -5,7 +5,7 @@ import { addCashScenario, calculatePaymentSchedule, calculateSimpleCashPlan, cap
 import type { CashPlanInput, CashPlanSnapshot, CashPlanScenario, CashRatioBasis, SimpleCashPlan } from "./cashPlan";
 import { formatHousingType } from "./noticePresentation";
 import CashPlanComparison from "./CashPlanComparison";
-import SimpleCashPlanResult from "./SimpleCashPlanResult";
+import LoanEstimatePanel, { emptyLoanDraft } from "./LoanEstimatePanel";
 import { isRentalNotice } from "./noticeSupply";
 import "./cashPlan.css";
 
@@ -27,6 +27,7 @@ export default function CashPlanCalculator({ notice }: { notice: NoticeDetail })
   const [mode, setMode] = useState<"simple" | "detailed">("simple");
   const [ratioBasis, setRatioBasis] = useState<CashRatioBasis>("example");
   const [ratiosExpanded, setRatiosExpanded] = useState(false);
+  const [loanDraft, setLoanDraft] = useState(emptyLoanDraft);
   const [calculation, setCalculation] = useState<CashPlanSnapshot>();
   const result = calculation?.result;
   const [scenarios, setScenarios] = useState<CashPlanScenario[]>([]);
@@ -54,6 +55,7 @@ export default function CashPlanCalculator({ notice }: { notice: NoticeDetail })
   const usesPublishedPrice = /^\d+$/.test(normalizedPrice) && Number(normalizedPrice) === Number(published);
   const clearResult = () => { setCalculation(undefined); setValidationError(undefined); setActionMessage(""); setActionError(""); };
   const resetInput = (price: string, availableCash = "") => {
+    setLoanDraft(emptyLoanDraft());
     setInput({ ...emptyCashPlan(), ...EXAMPLE_PAYMENT_RATIOS, price, availableCash }); setRatioBasis("example"); clearResult();
   };
   useEffect(() => {
@@ -137,7 +139,7 @@ export default function CashPlanCalculator({ notice }: { notice: NoticeDetail })
   return <section id="cash-plan" className="cash-plan" aria-labelledby="cash-plan-title" tabIndex={-1}>
     <span className="cash-plan-eyebrow">나의 자금 계획</span>
     <h3 id="cash-plan-title">주택형별 필요 현금 계산기</h3>
-    <p className="cash-plan-intro">준비한 현금만 입력하면 단계별 납부액과 추가로 마련할 자금을 바로 확인할 수 있어요.</p>
+    <p className="cash-plan-intro">공고의 납부 비율과 중도금·잔금 대출 조건으로 단계별 현금과 입주 후 월 상환액을 계산합니다.</p>
     {units.length === 0 ? <p>주택형 자료가 없어 계산할 수 없습니다. 공식 공고의 주택형과 공급금액을 먼저 확인해주세요.</p> : <>
       <div className="cash-plan-modes" role="group" aria-label="자금 계산 방식">
         {(["simple", "detailed"] as const).map(value => <button type="button" key={value} aria-pressed={mode === value} onClick={() => { if (mode !== value) { setMode(value); clearResult(); } }}>
@@ -157,11 +159,10 @@ export default function CashPlanCalculator({ notice }: { notice: NoticeDetail })
         {!selected && <p>위에서 주택형을 선택하면 금액과 납부 조건을 입력할 수 있어요.</p>}
         </fieldset>
         {selected && <>
-          {mode === "simple" && <fieldset className="cash-plan-group"><legend><span>2</span> 준비한 현금으로 자동 계산</legend>
+          {mode === "simple" && <fieldset className="cash-plan-group"><legend><span>2</span> 준비 현금과 대출 조건</legend>
             <p className="cash-ratio-notice">{cashRatioBasisLabel(ratioBasis)} · 계약금 {input.depositPercent || "–"}% / 중도금 {input.interimPercent || "–"}% / 잔금 {paymentSchedule?.balancePercent ?? "–"}%</p>
             {renderField("availableCash")}
-            {simplePlan ? <div ref={simpleResultRef} tabIndex={-1} className="cash-simple-focus"><SimpleCashPlanResult plan={simplePlan} ratioBasis={ratioBasis} /></div>
-              : <p className="cash-simple-empty">{input.availableCash === "" ? "준비한 현금을 입력하면 바로 계산됩니다. 현금이 없으면 0원을 입력하세요." : "입력값을 확인하면 단계별 자금 계획이 표시됩니다."}</p>}
+            <div ref={simpleResultRef} tabIndex={-1} className="cash-simple-focus"><LoanEstimatePanel plan={simplePlan} ratioBasis={ratioBasis} draft={loanDraft} onChange={setLoanDraft} /></div>
           </fieldset>}
           <fieldset className="cash-plan-group"><legend>{mode === "detailed" && <span>2</span>} 납부 비율</legend>
             <p>{cashRatioBasisLabel(ratioBasis)}. 공고에서 제공되지 않는 비율은 예시 10%·60%·30%로 시작합니다. 실제 조건에 맞게 수정하세요.</p>
