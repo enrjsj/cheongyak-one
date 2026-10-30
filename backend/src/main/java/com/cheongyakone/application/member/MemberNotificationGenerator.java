@@ -81,14 +81,20 @@ public class MemberNotificationGenerator {
     }
 
     public int generateFor(LocalDate today) {
-        return generateFavoriteNotifications(today);
+        return generateFavoriteNotifications(today, null);
     }
 
-    private int generateFavoriteNotifications(LocalDate today) {
+    /** Prepare only this member's due favorite events before the morning Kakao batch. */
+    public int generateKakaoForMember(LocalDate today, Long memberId) {
+        if (memberId == null || memberId <= 0) throw new IllegalArgumentException("Member ID is required");
+        return generateFavoriteNotifications(today, memberId);
+    }
+
+    private int generateFavoriteNotifications(LocalDate today, Long memberId) {
         var favorites = favoriteRepository.findNotificationCandidates(
                 today,
                 List.of(today.plusDays(1), today.plusDays(3), today.plusDays(7))
-        );
+        ).stream().filter(favorite -> memberId == null || memberId.equals(favorite.getMember().getId())).toList();
         if (favorites.isEmpty()) {
             return 0;
         }
@@ -111,6 +117,7 @@ public class MemberNotificationGenerator {
                     NotificationSettings.defaults()
             );
             for (NotificationEvent event : eventsFor(favorite.getNotice(), settings, today)) {
+                if (memberId != null && event.type() == NotificationType.WINNER_ANNOUNCEMENT) continue;
                 try {
                     if (notificationWriter.createIfMissing(
                             favorite.getMember().getId(),

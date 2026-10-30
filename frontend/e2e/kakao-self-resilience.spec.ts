@@ -42,6 +42,8 @@ test("본인 전용 연결은 일반 회원에게 표시하지 않고 미설정 
   await dialog.getByRole("tab", { name: /^알림함/ }).click();
   await dialog.getByRole("tab", { name: "알림 설정", exact: true }).click();
   await expect(dialog.getByText("서버 설정 필요", { exact: true })).toBeVisible();
+  await expect(dialog.getByText(/자동 알림은 해당 날짜 오전 9시/)).toBeVisible();
+  await expect(dialog.getByText(/오전 9시에 쉬고 있으면 당일 자동 알림이 누락/)).toBeVisible();
   await expect(dialog.getByRole("button", { name: "카카오 계정 연결", exact: true })).toBeDisabled();
 });
 

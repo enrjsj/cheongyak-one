@@ -26,6 +26,7 @@ class KakaoSelfServiceTest {
             "https://example.com/api/v1/members/me/kakao-self/callback","https://example.com",Base64.getEncoder().encodeToString(new byte[32]));
     final MemberService members=mock(MemberService.class);
     final KakaoSelfClient client=mock(KakaoSelfClient.class);
+    final MemberNotificationGenerator notifications=mock(MemberNotificationGenerator.class);
     final KakaoSelfTokenCipher cipher=new KakaoSelfTokenCipher(properties);
     JdbcTemplate jdbc; KakaoSelfStore store; KakaoSelfService service;
     com.zaxxer.hikari.HikariDataSource ds;
@@ -51,7 +52,7 @@ class KakaoSelfServiceTest {
         when(members.requireMember("other-session")).thenReturn(other);
         when(members.requireMember(null)).thenThrow(new MemberApiException(org.springframework.http.HttpStatus.UNAUTHORIZED,"AUTH_REQUIRED","로그인 필요"));
         store=new KakaoSelfStore(jdbc,new DataSourceTransactionManager(ds));
-        service=new KakaoSelfService(properties,members,store,client,cipher,clock);
+        service=new KakaoSelfService(properties,members,store,client,cipher,clock,notifications);
         when(client.exchange(anyString())).thenReturn(new KakaoSelfClient.Tokens("access",3600,"refresh",100000));
     }
     String state() { return UriComponentsBuilder.fromUriString(service.authorize("owner-session")).build().getQueryParams().getFirst("state"); }
@@ -84,7 +85,7 @@ class KakaoSelfServiceTest {
     @Test void testSendUsesSelfOnlyAndPersistedCooldownSurvivesServiceRecreation() {
         connect();
         assertThat(service.test("owner-session").lastDeliveryStatus()).isEqualTo("SENT");
-        var restarted=new KakaoSelfService(properties,members,store,client,cipher,clock);
+        var restarted=new KakaoSelfService(properties,members,store,client,cipher,clock,notifications);
         assertThatThrownBy(() -> restarted.test("owner-session")).isInstanceOf(MemberApiException.class);
         verify(client,times(1)).send(eq("access"),contains("연결 확인"),eq("https://example.com"));
     }
@@ -167,7 +168,8 @@ class KakaoSelfServiceTest {
     @Test void disabledScheduleNeverClaimsOrCallsProvider() {
         connect(); notice(1,1,"APPLY_START",NOW);
         var disabled=new KakaoSelfProperties(false,1L,"","","","","");
-        new KakaoSelfService(disabled,members,store,client,cipher,clock).scheduled();
+        new KakaoSelfService(disabled,members,store,client,cipher,clock,notifications).scheduled();
+        verifyNoInteractions(notifications);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM KAKAO_SELF_RECEIPT",Integer.class)).isZero();
         verify(client,never()).send(anyString(),anyString(),anyString());
     }
@@ -190,9 +192,9 @@ class KakaoSelfServiceTest {
     }
     @Test void configuredOwnerChangeNeverReusesPreviousOwnersCredentials() {
         connect(); var changed=new KakaoSelfProperties(true,2L,"test-key","",properties.redirectUri(),properties.frontendBaseUrl(),properties.tokenEncryptionKey());
-        var nextService=new KakaoSelfService(changed,members,store,client,cipher,clock);
+        var nextService=new KakaoSelfService(changed,members,store,client,cipher,clock,notifications);
         assertThat(nextService.status("other-session").connected()).isFalse();
-        nextService.scheduled(); verify(client,never()).send(anyString(),anyString(),anyString());
+        nextService.scheduled(); verifyNoInteractions(notifications); verify(client,never()).send(anyString(),anyString(),anyString());
     }
     @Test void withdrawalCleanupUsesStoredOwnerAndWorksInsideExistingTransaction() {
         connect();
@@ -207,7 +209,7 @@ class KakaoSelfServiceTest {
         connect(); service.test("owner-session");
         jdbc.update("UPDATE KAKAO_SELF_CONNECTION SET LAST_TEST_AT=NULL");
         var racingStore=spy(store);
-        var racingService=new KakaoSelfService(properties,members,racingStore,client,cipher,clock);
+        var racingService=new KakaoSelfService(properties,members,racingStore,client,cipher,clock,notifications);
         var generationChanged=new java.util.concurrent.atomic.AtomicBoolean();
         doAnswer(invocation -> {
             var snapshot=(KakaoSelfStore.Connection)invocation.callRealMethod();
@@ -219,4 +221,61 @@ class KakaoSelfServiceTest {
                 .hasMessageContaining("이번 시험 메시지 발송을 확인하지 못했어요");
         verify(client,times(1)).send(anyString(),anyString(),anyString());
     }
+    @Test void morningCronRunsAtNineKoreaTimeOncePerDay() throws Exception {
+        var schedule=KakaoSelfService.class.getMethod("scheduled").getAnnotation(org.springframework.scheduling.annotation.Scheduled.class);
+        assertThat(schedule.zone()).isEqualTo("Asia/Seoul");
+        var cron=org.springframework.scheduling.support.CronExpression.parse(schedule.cron());
+        var korea=ZoneId.of(schedule.zone());
+        var before=Instant.parse("2026-10-30T23:59:59Z").atZone(korea);
+        var next=cron.next(before);
+        assertThat(next.toInstant()).isEqualTo(Instant.parse("2026-10-31T00:00:00Z"));
+        assertThat(cron.next(next).toInstant()).isEqualTo(Instant.parse("2026-11-01T00:00:00Z"));
+        assertThat(cron.next(next.plusMinutes(5)).toInstant()).isEqualTo(Instant.parse("2026-11-01T00:00:00Z"));
+    }
+    @Test void dueEventsAreCreatedBeforeSendingAndMoreThanOnePageIsDrainedOnce() {
+        connect();
+        doAnswer(invocation -> {
+            if (jdbc.queryForObject("SELECT COUNT(*) FROM MEMBER_NOTIFICATION",Integer.class)==0)
+                for(long id=1;id<=41;id++) notice(id,1,"APPLY_START",NOW);
+            return 41;
+        }).when(notifications).generateKakaoForMember(LocalDate.of(2026,10,21),1L);
+        service.scheduled(); service.scheduled();
+        var order=inOrder(notifications,client);
+        order.verify(notifications).generateKakaoForMember(LocalDate.of(2026,10,21),1L);
+        order.verify(client,times(41)).send(anyString(),anyString(),anyString());
+        verify(client,times(41)).send(anyString(),anyString(),anyString());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM KAKAO_SELF_RECEIPT",Integer.class)).isEqualTo(41);
+    }
+    @Test void disconnectedMorningBatchDoesNotGenerateNotificationsOrSend() {
+        service.scheduled();
+        verifyNoInteractions(notifications,client);
+    }
+    @Test void generationFailureReleasesLeaseAndDoesNotSend() {
+        connect(); notice(1,1,"APPLY_START",NOW);
+        when(notifications.generateKakaoForMember(any(),eq(1L))).thenThrow(new IllegalStateException("test database failure"));
+        assertThatThrownBy(service::scheduled).isInstanceOf(IllegalStateException.class);
+        assertThat(store.read().leaseId()).isNull();
+        verify(client,never()).send(anyString(),anyString(),anyString());
+    }
+    @Test void uncertainDeliveryStopsTheMorningBatchWithoutSendingFollowingMessages() {
+        connect(); notice(1,1,"APPLY_START",NOW); notice(2,1,"APPLY_DEADLINE_3D",NOW);
+        doThrow(new KakaoSelfClient.Failure("UNKNOWN")).when(client).send(anyString(),anyString(),anyString());
+        service.scheduled();
+        verify(client,times(1)).send(anyString(),anyString(),anyString());
+        assertThat(jdbc.queryForList("SELECT NOTIFICATION_ID FROM KAKAO_SELF_RECEIPT",Long.class)).containsExactly(1L);
+        assertThat(store.read().leaseId()).isNull();
+    }
+    @Test void expiredLeaseStopsAdditionalMessagesInTheMorningBatch() {
+        connect(); notice(1,1,"APPLY_START",NOW); notice(2,1,"APPLY_DEADLINE_3D",NOW);
+        var now=new java.util.concurrent.atomic.AtomicReference<>(NOW);
+        var moving=mock(Clock.class);
+        when(moving.instant()).thenAnswer(invocation -> now.get());
+        when(moving.withZone(any())).thenAnswer(invocation -> Clock.fixed(now.get(),invocation.getArgument(0)));
+        var batch=new KakaoSelfService(properties,members,store,client,cipher,moving,notifications);
+        doAnswer(invocation -> {now.set(NOW.plusSeconds(121)); return null;}).when(client).send(anyString(),anyString(),anyString());
+        batch.scheduled();
+        verify(client,times(1)).send(anyString(),anyString(),anyString());
+        assertThat(jdbc.queryForList("SELECT NOTIFICATION_ID FROM KAKAO_SELF_RECEIPT",Long.class)).containsExactly(1L);
+    }
+
 }
