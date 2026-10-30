@@ -92,4 +92,3 @@ test("invalid, non-finite and unsupported loan assumptions are rejected", () => 
   }
   assert.throws(() => calculateLoanEstimate({ ...base, method: "interestOnly" }));
 });
-

@@ -33,3 +33,7 @@
 - API/DB/운영설정/금융정보전송 변경 없음. 실제 대출승인·특정 공고의 비율/비용확정·실제기기·운영배포는 미검증.
 
 - 결과 기록 후 docs 범위 하네스 통과: `.harness/reports/2026-10-30T05-42-08-276Z-17598/report.json`; `git diff --check` 통과. 검증 생성 이미지는 `.harness/oct30-settlement/legacy-screenshots/`로 이동해 앱 변경에서 제외했다.
+
+## 원격 반영
+
+- PR #148 최초 head `7b48100` CI #360에서 신규 대출 계산/테스트 파일2개의 EOF 빈 줄로 guardrail 실패. 계산 내용 변경 없이 EOF 공백을 제거하고 관련37개 및 baseline 지정 형식 검사를 재검증한다. 최초 미추적 파일은 이전 일반 diff 검사에 포함되지 않았으므로 커밋 후 기준 SHA 비교로 확인했다. 최종 head의 전체 CI 성공 후 병합한다.

@@ -63,4 +63,3 @@ export function calculateLoanEstimate({ principal, annualRate, years, method }: 
     firstInterest: Math.round(firstInterest), firstPrincipal: Math.round(firstPrincipal), months,
   };
 }
-
