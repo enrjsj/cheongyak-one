@@ -89,10 +89,10 @@ import { useSavedSearchProfiles } from "./useSavedSearchProfiles";
 import SavedSearchProfilesPanel from "./SavedSearchProfilesPanel";
 import { savedProfileInputError } from "./savedSearchTools";
 import {
-  buildEligibilityCheckResult,
   EligibilityAnswer,
   eligibilityQuestions,
 } from "./eligibilityTools";
+import EligibilityResults from "./EligibilityResults";
 import { useDialogAccessibility } from "./useDialogAccessibility";
 import {
   buildNoticeCalendar,
@@ -315,6 +315,7 @@ export default function Home() {
   const moreRequest = useRef<AbortController | null>(null);
   const [qualOpen, setQualOpen] = useState(false);
   const [qualStep, setQualStep] = useState(0);
+  const [qualEditing, setQualEditing] = useState(false);
   const [answers, setAnswers] = useState<EligibilityAnswer[]>([]);
   const [toast, setToast] = useState("");
   const [member, setMember] = useState<MemberProfile>();
@@ -336,6 +337,7 @@ export default function Home() {
   const [profileAreaDraft, setProfileAreaDraft] = useState<[string, string]>(["", ""]);
   const [eligibilityProfile, setEligibilityProfile] = useState<EligibilityProfile>();
   const [eligibilityBusy, setEligibilityBusy] = useState(false);
+  const [eligibilityError, setEligibilityError] = useState("");
   const [preferenceBusy, setPreferenceBusy] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [kakaoReturnResult] = useState(() => {
@@ -1371,6 +1373,8 @@ export default function Home() {
     setComparisonResetPending(false);
     setPreferenceBusy(false);
     setEligibilityBusy(false);
+    setEligibilityError("");
+    setQualEditing(false);
     setNotificationsOpen(false);
     setAdminSyncOpen(false);
     setSearchPreference(undefined);
@@ -1671,8 +1675,9 @@ export default function Home() {
   };
 
   const answerQuestion = (answer: EligibilityAnswer) => {
-    setAnswers((items) => [...items, answer]);
-    setQualStep((step) => step + 1);
+    setAnswers((items) => { const next = [...items]; next[qualStep] = answer; return next; });
+    setQualStep((step) => qualEditing ? eligibilityQuestions.length : step + 1);
+    setQualEditing(false);
   };
 
   const openQualification = (saved = false) => {
@@ -1681,6 +1686,8 @@ export default function Home() {
       setToast("청약 조건 사전점검은 로그인 후 저장하고 관리할 수 있어요.");
       return;
     }
+    setQualEditing(false);
+    setEligibilityError("");
     if (saved && eligibilityProfile) {
       setAnswers([
         eligibilityProfile.homeless,
@@ -1697,7 +1704,8 @@ export default function Home() {
   };
 
   const handleSaveEligibilityProfile = async () => {
-    if (answers.length !== eligibilityQuestions.length) return;
+    if (eligibilityBusy || answers.length !== eligibilityQuestions.length) return;
+    setEligibilityError("");
     setEligibilityBusy(true);
     const epoch = memberScope.current;
     try {
@@ -1712,32 +1720,37 @@ export default function Home() {
       setToast(eligibilityProfile ? "사전점검 답변을 수정했습니다." : "사전점검 답변을 저장했습니다.");
     } catch (error) {
       if (epoch !== memberScope.current) return;
-      setToast(error instanceof Error ? error.message : "사전점검을 저장하지 못했습니다.");
+      setEligibilityError(error instanceof Error ? error.message : "사전점검을 저장하지 못했습니다. 답변은 유지되어 있으니 다시 저장해 주세요.");
     } finally {
       if (epoch === memberScope.current) setEligibilityBusy(false);
     }
   };
 
   const handleDeleteEligibilityProfile = async () => {
+    if (eligibilityBusy) return;
+    setEligibilityError("");
     setEligibilityBusy(true);
     const epoch = memberScope.current;
     try {
       await deleteEligibilityProfile();
       if (epoch !== memberScope.current) return;
       setEligibilityProfile(undefined);
-      closeQualification();
+      setQualOpen(false);
       setToast("저장된 사전점검을 삭제했습니다.");
     } catch (error) {
       if (epoch !== memberScope.current) return;
-      setToast(error instanceof Error ? error.message : "사전점검을 삭제하지 못했습니다.");
+      setEligibilityError(error instanceof Error ? error.message : "사전점검을 삭제하지 못했습니다.");
     } finally {
       if (epoch === memberScope.current) setEligibilityBusy(false);
     }
   };
 
   const closeQualification = () => {
+    if (eligibilityBusy) return;
     setQualOpen(false);
-    window.setTimeout(() => { setQualStep(0); setAnswers([]); }, 200);
+    setQualStep(0);
+    setQualEditing(false);
+    setAnswers([]);
   };
 
   const detailApplication = selected ? (selectedDetail ? toApplication(selectedDetail) : selected) : null;
@@ -1750,7 +1763,10 @@ export default function Home() {
   const savedSearchProfileEditorRef = useDialogAccessibility<HTMLElement>(Boolean(editingSavedSearchProfile), closeProfileEditor);
   const comparisonDialogRef = useDialogAccessibility<HTMLElement>(comparisonOpen, () => setComparisonOpen(false));
   const qualificationDialogRef = useDialogAccessibility<HTMLElement>(qualOpen, closeQualification);
-  const eligibilityResult = buildEligibilityCheckResult(answers);
+  useEffect(() => {
+    if (!qualOpen) return;
+    qualificationDialogRef.current?.querySelector<HTMLElement>(".question-area h3, .result-area h3")?.focus();
+  }, [qualOpen, qualStep, qualificationDialogRef]);
 
   return (
     <main className="explore-app">
@@ -2115,6 +2131,7 @@ export default function Home() {
             <RecommendationPanel
               key={member?.id ?? "visitor"}
               signedIn={Boolean(member)}
+              preference={searchPreference}
               {...recommendationState}
               loading={authLoading || recommendationState.loading}
               onLogin={() => setMemberDialog("login")}
@@ -2297,27 +2314,24 @@ export default function Home() {
       {qualOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeQualification(); }}>
           <section ref={qualificationDialogRef} tabIndex={-1} className="modal qualify-modal" role="dialog" aria-modal="true" aria-labelledby="qual-title">
-            <div className="modal-head"><div><span>PRE-CHECK</span><h2 id="qual-title">청약 조건 사전점검</h2></div><button type="button" onClick={closeQualification} aria-label="닫기"><Icon name="close" /></button></div>
+            <div className="modal-head"><div><span>PRE-CHECK</span><h2 id="qual-title">청약 조건 사전점검</h2></div><button type="button" disabled={eligibilityBusy} onClick={closeQualification} aria-label="닫기"><Icon name="close" /></button></div>
             {qualStep < eligibilityQuestions.length ? (
               <div className="question-area">
                 <div className="progress"><i style={{ width: `${((qualStep + 1) / eligibilityQuestions.length) * 100}%` }}></i></div>
                 <small>{qualStep + 1} / {eligibilityQuestions.length}</small>
-                <h3>{eligibilityQuestions[qualStep].title}</h3>
+                <h3 tabIndex={-1}>{eligibilityQuestions[qualStep].title}</h3>
                 <p>{eligibilityQuestions[qualStep].detail}</p>
-                <div className="answer-buttons">{eligibilityQuestions[qualStep].options.map((option) => <button type="button" key={option.value} onClick={() => answerQuestion(option.value)}>{option.label}<Icon name="arrow" /></button>)}</div>
-                <p className="answer-privacy">답변은 결과 확인 후 내 계정에 저장되며 언제든 수정·삭제할 수 있습니다.</p>
-                {qualStep > 0 && <button className="back-button" type="button" onClick={() => { setQualStep((step) => step - 1); setAnswers((items) => items.slice(0, -1)); }}>이전 질문</button>}
+                <div className="answer-buttons">{eligibilityQuestions[qualStep].options.map((option) => <button type="button" key={option.value} aria-pressed={answers[qualStep] === option.value} onClick={() => answerQuestion(option.value)}>{option.label}<Icon name="arrow" /></button>)}</div>
+                <p className="answer-privacy">결과 화면에서 저장 버튼을 눌러야 계정에 반영됩니다. 답변은 언제든 수정·삭제할 수 있어요.</p>
+                {qualEditing ? <button className="back-button" type="button" onClick={() => { setQualEditing(false); setQualStep(eligibilityQuestions.length); }}>결과로 돌아가기</button> : qualStep > 0 && <button className="back-button" type="button" onClick={() => setQualStep((step) => step - 1)}>이전 질문</button>}
               </div>
             ) : (
               <div className="result-area">
-                <span className="result-icon"><Icon name="check" /></span>
-                <small>나의 확인 체크리스트</small>
-                <h3>{eligibilityResult.headline}</h3>
-                <ul className="eligibility-check-list">{eligibilityResult.checks.map((check) => <li key={check}><Icon name="check" /> <span>{check}</span></li>)}</ul>
-                <p className="eligibility-disclaimer"><strong>자격 판정 결과가 아닙니다.</strong> 실제 신청 가능 여부는 모집공고일의 관계 법령과 공식 공고문, 사업주체 심사 결과에 따라 달라질 수 있습니다.</p>
+                <EligibilityResults answers={answers} disabled={eligibilityBusy} onEdit={(index) => { setQualEditing(true); setQualStep(index); }} />
+                {eligibilityError && <p className="eligibility-save-error" role="alert">{eligibilityError}</p>}
                 <div className="eligibility-result-actions">
-                  <button type="button" onClick={() => { closeQualification(); scrollToResults(); }}>실제 공고 보기 <Icon name="arrow" /></button>
-                  <button type="button" onClick={() => { setAnswers([]); setQualStep(0); }}>답변 수정</button>
+                  <button type="button" disabled={eligibilityBusy} onClick={() => { closeQualification(); scrollToResults(); }}>실제 공고 보기 <Icon name="arrow" /></button>
+                  <button type="button" disabled={eligibilityBusy} onClick={() => { setQualEditing(false); setQualStep(0); }}>답변 수정</button>
                   <button className="primary-button" type="button" disabled={eligibilityBusy} onClick={() => void handleSaveEligibilityProfile()}>{eligibilityBusy ? "저장 중…" : eligibilityProfile ? "변경사항 저장" : "내 계정에 저장"}</button>
                   {eligibilityProfile && <button className="danger-text-button" type="button" disabled={eligibilityBusy} onClick={() => void handleDeleteEligibilityProfile()}>저장 내용 삭제</button>}
                 </div>

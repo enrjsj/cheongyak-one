@@ -157,6 +157,21 @@ public class MemberRecommendationService {
             score += 15;
             reasons.add(categoryLabel(preference));
         }
+        if (preference.getSupplyType() != null) {
+            reasons.add(switch (preference.getSupplyType()) {
+                case SALE -> "분양 공급 조건 일치";
+                case PUBLIC_RENTAL -> "임대 공급 조건 일치";
+            });
+        }
+        boolean hasPrice = preference.getMinPriceManwon() != null || preference.getMaxPriceManwon() != null;
+        boolean hasArea = preference.getMinArea() != null || preference.getMaxArea() != null;
+        // The shared matcher requires one unit to satisfy both ranges. Price-only
+        // searches also allow legacy notice ranges, so do not promise a unit there.
+        if (hasArea) {
+            reasons.add(hasPrice ? "금액·공급면적 조건을 함께 충족하는 주택형 있음" : "공급면적 조건을 충족하는 주택형 있음");
+        } else if (hasPrice) {
+            reasons.add("저장한 금액 범위에 맞는 공고 · 주택형별 금액은 상세 확인");
+        }
         score += 10;
         reasons.add(statusReason(notice, preference));
 

@@ -1,0 +1,46 @@
+.modal.qualify-modal { width: min(100%, 720px); }
+.qualify-modal .question-area > p { color: #475569; font-size: 14px; line-height: 1.7; }
+.qualify-modal .question-area > small { font-size: 13px; }
+.qualify-modal .question-area .answer-privacy { color: #475569; font-size: 12px; }
+.qualify-modal .answer-buttons button { min-height: 48px; height: auto; padding: 14px 16px; font-size: 14px; line-height: 1.6; text-align: left; }
+.qualify-modal .back-button { min-height: 44px; color: #475569; font-size: 13px; }
+.qualify-modal .result-area { padding: 24px 0 5px; }
+.qualify-modal .result-area p { max-width: none; }
+.qualify-modal .eligibility-result-actions button { min-height: 44px; padding: 10px 14px; font-size: 13px; }
+.qualify-modal .eligibility-results { text-align: left; color: #334155; overflow-wrap: anywhere; }
+.qualify-modal .eligibility-results p { max-width: none; margin: 6px 0 0; color: #475569; font-size: 13px; line-height: 1.7; }
+.qualify-modal .eligibility-results-heading { margin-bottom: 22px; }
+.qualify-modal .eligibility-results-heading > small { color: #334fa3; font-size: 13px; font-weight: 700; }
+.qualify-modal .eligibility-results-heading h3 { margin: 8px 0; font-size: 22px; line-height: 1.45; }
+.qualify-modal .eligibility-results h4 { margin: 0; color: #1e293b; font-size: 16px; line-height: 1.5; }
+.qualify-modal .eligibility-answer-summary { padding: 16px; border: 1px solid #d8e1ef; border-radius: 12px; background: #f8faff; }
+.eligibility-answer-summary ul { margin: 10px 0 0; padding: 0; list-style: none; }
+.eligibility-answer-summary li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #d8e1ef; }
+.eligibility-answer-summary li:last-child { border-bottom: 0; }
+.eligibility-answer-summary li > div { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.eligibility-answer-summary li span { color: #475569; font-size: 12px; }
+.eligibility-answer-summary li strong { color: #1e293b; font-size: 14px; line-height: 1.5; }
+.eligibility-answer-summary button { flex: 0 0 auto; min-width: 48px; min-height: 44px; padding: 8px; border: 1px solid #b8c7e5; border-radius: 8px; background: white; color: #284caa; font-size: 13px; cursor: pointer; }
+.eligibility-answer-summary button:disabled { opacity: .55; cursor: wait; }
+.qualify-modal .eligibility-check-group { margin-top: 24px; }
+.eligibility-check-group h4 > span { margin-left: 4px; color: #475569; font-size: 13px; font-weight: 500; }
+.eligibility-check-group ol { display: grid; gap: 12px; margin: 12px 0 0; padding: 0; list-style: none; }
+.eligibility-check-group li { padding: 16px; border: 1px solid #d8e1ef; border-radius: 12px; background: white; }
+.qualify-modal .eligibility-check-group h5 { margin: 0; color: #1e293b; font-size: 15px; line-height: 1.6; }
+.eligibility-check-group details { margin-top: 10px; }
+.eligibility-check-group summary { min-height: 44px; padding: 12px 0; color: #284caa; font-size: 13px; line-height: 1.5; cursor: pointer; }
+.eligibility-check-group dl { margin: 0; padding: 12px; border-radius: 8px; background: #f6f8fc; font-size: 13px; line-height: 1.7; }
+.eligibility-check-group dt { color: #334155; font-weight: 700; }
+.eligibility-check-group dd { margin: 4px 0 12px; color: #475569; }
+.eligibility-check-group dd:last-child { margin-bottom: 0; }
+.qualify-modal .eligibility-official-guide { margin-top: 24px; padding-top: 18px; border-top: 1px solid #d8e1ef; font-size: 14px; line-height: 1.6; }
+.qualify-modal .eligibility-official-guide .eligibility-disclaimer { margin: 0 0 16px; color: #475569; font-size: 13px; }
+.eligibility-official-guide a { display: inline-block; margin-top: 10px; padding: 10px 0; color: #284caa; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.eligibility-results :is(button, summary, a):focus-visible { outline: 2px solid #284caa; outline-offset: 3px; }
+@media (max-width: 400px) {
+  .qualify-modal .eligibility-answer-summary, .eligibility-check-group li { padding: 12px; }
+  .qualify-modal .eligibility-results-heading h3 { font-size: 20px; }
+}
+
+.qualify-modal .answer-buttons button[aria-pressed="true"] { border-color: #3153b8; background: #eef2ff; color: #243f8f; }
+.qualify-modal .result-area .eligibility-save-error { margin-top: 16px; padding: 12px; border: 1px solid #f2b4b4; border-radius: 8px; background: #fff4f4; color: #991b1b; font-size: 14px; text-align: left; }
