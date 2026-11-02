@@ -62,6 +62,8 @@ public class RebApartmentUnitTypeSyncService {
         SubscriptionNotice notice = noticeRepository.findBySourceSystemAndSourceNoticeId(SourceSystem.REB_APT, sourceNoticeId).orElse(null);
         if (notice == null) return 0;
         List<RebApartmentUnitTypeSnapshot> models = client.fetch(sourceNoticeId);
+        // 빈 응답은 기존 자료의 삭제 지시가 아니다. 주택형과 목록 가격을 함께 보존한다.
+        if (models.isEmpty()) return 0;
         for (RebApartmentUnitTypeSnapshot model : models) {
             SubscriptionNoticeUnitType unitType = unitTypeRepository.findByNoticeIdAndSourceModelId(notice.getId(), model.modelId())
                     .orElseGet(() -> new SubscriptionNoticeUnitType(notice, model.modelId(), model.housingTypeName(), model.supplyArea(), model.generalSupplyCount(), model.specialSupplyCount(), model.totalSupplyCount(), model.maxPrice(), syncTime));

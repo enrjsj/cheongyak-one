@@ -5,6 +5,9 @@ import com.cheongyakone.domain.notice.HousingCategory;
 import com.cheongyakone.domain.notice.NoticeSnapshot;
 import com.cheongyakone.domain.notice.NoticeStatus;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -15,6 +18,9 @@ import java.time.ZoneId;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.anything;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class RebApiGatewayTest {
 
@@ -155,5 +161,64 @@ class RebApiGatewayTest {
 
         assertThat(path).endsWith("/getUrbtyOfctlLttotPblancMdl");
         assertThat(query).contains("HOUSE_MANAGE_NO::EQ]=2026000001", "PBLANC_NO::EQ]=2026000010");
+    }
+
+    @Test
+    void mapsOfficialOfficetelFieldsWithoutCallingExclusiveAreaSupplyArea() {
+        // Official schema: https://infuser.odcloud.kr/api/stages/37000/api-docs
+        // getUrbtyOfctlLttotPblancMdl_model; synthetic values, SUPLY_AMOUNT is in 만원.
+        var item = objectMapper.readTree("""
+                {"MODEL_NO":"01","GP":"1군","TP":"84A","EXCLUSE_AR":"84.12",
+                 "SUPLY_HSHLDCO":12,"SUPLY_AMOUNT":"78,500","SUBSCRPT_REQST_AMOUNT":"100"}
+                """);
+        var model = gateway.mapOfficetelUnitType(item).orElseThrow();
+        assertThat(model.modelId()).isEqualTo("01");
+        assertThat(model.housingTypeName()).isEqualTo("84A");
+        assertThat(model.maxPrice()).isEqualByComparingTo("785000000");
+        assertThat(model.totalSupplyCount()).isEqualTo(12);
+        assertThat(model.generalSupplyCount()).isNull();
+        assertThat(model.specialSupplyCount()).isNull();
+        assertThat(model.supplyArea()).isNull();
+    }
+
+    @Test
+    void missingOfficetelPriceRemainsUnknownAndIdentifiersAreRequired() {
+        var missingPrice = objectMapper.readTree("""
+                {"MODEL_NO":"02","TP":"59B","SUPLY_AMOUNT":null,"SUBSCRPT_REQST_AMOUNT":"100"}
+                """);
+        assertThat(gateway.mapOfficetelUnitType(missingPrice).orElseThrow().maxPrice()).isNull();
+        assertThat(gateway.mapOfficetelUnitType(objectMapper.readTree("{\"TP\":\"84A\"}"))).isEmpty();
+        assertThat(gateway.mapOfficetelUnitType(objectMapper.readTree("{\"MODEL_NO\":\"01\"}"))).isEmpty();
+    }
+
+    @Test
+    void fetchesOfficetelModelsThroughTheirOwnMapperAndAcceptsTrueEmptyResponse() {
+        var builder = RestClient.builder();
+        var server = MockRestServiceServer.bindTo(builder).build();
+        var client = new RebApiGateway(new RebApiProperties(null, "test-key", 100, 20), objectMapper, clock, builder);
+        server.expect(anything()).andRespond(withSuccess("""
+                {"data":[{"MODEL_NO":"01","TP":"84A","SUPLY_HSHLDCO":8,"SUPLY_AMOUNT":"50000"}]}
+                """, MediaType.APPLICATION_JSON));
+        server.expect(anything()).andRespond(withSuccess("{\"data\":[]}", MediaType.APPLICATION_JSON));
+        var models = client.fetchUnitTypes(RebNoticeType.OFFICETEL, "manage:notice");
+        assertThat(models).hasSize(1);
+        assertThat(models.getFirst().maxPrice()).isEqualByComparingTo("500000000");
+        assertThat(client.fetchUnitTypes(RebNoticeType.OFFICETEL, "empty")).isEmpty();
+        server.verify();
+    }
+
+    @Test
+    void doesNotMistakeUnmappableRowsForAnEmptyOrCompleteResponse() {
+        for (var type : RebNoticeType.values()) {
+            var builder = RestClient.builder();
+            var server = MockRestServiceServer.bindTo(builder).build();
+            var client = new RebApiGateway(new RebApiProperties(null, "test-key", 100, 20), objectMapper, clock, builder);
+            server.expect(anything()).andRespond(withSuccess("""
+                    {"data":[{"MODEL_NO":"01","HOUSE_TY":"84A","TP":"84A"},{"MODEL_NO":"02"}]}
+                    """, MediaType.APPLICATION_JSON));
+            assertThatThrownBy(() -> client.fetchUnitTypes(type, "manage:notice"))
+                    .isInstanceOf(IllegalStateException.class).hasMessageContaining("without a model identifier or type");
+            server.verify();
+        }
     }
 }

@@ -4,7 +4,7 @@ import NoticeCardOverview from "./NoticeCardOverview";
 import ExploreFilters from "./ExploreFilters";
 import { StatusKey, Application, CATEGORY_LABELS, koreaToday, dateValue, daysBetween, formatShortDate, formatChangedAt, weekday, toApplication, noticeAttention } from "./noticePresentation";
 import { FavoriteProgressFilter, FavoriteChecklistKey, FavoriteSortKey, FAVORITE_PROGRESS_LABELS, FAVORITE_PROGRESS_PRIORITY, FAVORITE_APPLICATION_RESULT_LABELS, FAVORITE_APPLICATION_RESULT_PRIORITY, FAVORITE_CHECKLIST_ITEMS, completedChecklistCount, incompleteChecklistLabels, applicationResultFromFilter, resultDueLabel } from "./favoritePresentation";
-import { SourceFreshnessPanel } from "./SourceFreshnessPanel";
+import { SourceFreshnessPanel, hasIncompleteUnitTypes } from "./SourceFreshnessPanel";
 // 서비스의 주요 사용자 흐름(검색·관심청약·비교·회원·사전점검)을 조합하는 화면 컨테이너다.
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -1113,7 +1113,10 @@ export default function Home() {
     ? `일부 유형 갱신 지연 · 유형별 수집 현황을 확인하세요`
     : noticeFreshness?.status === "UNAVAILABLE"
       ? "동기화 기록을 확인 중입니다"
-      : `최근 동기화 ${syncedLabel}`;
+      : [`최근 동기화 ${syncedLabel}`,
+        noticeFreshness?.sources?.some(source => !source.configured) ? "수집 미설정 유형 있음" : "",
+        noticeFreshness?.sources?.some(hasIncompleteUnitTypes) ? "주택형 자료 확인 필요" : "",
+      ].filter(Boolean).join(" · ");
   const today = koreaToday();
   const [, thisMonth, thisDay] = today.split("-").map(Number);
 
