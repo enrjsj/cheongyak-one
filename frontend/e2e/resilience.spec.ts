@@ -357,6 +357,47 @@ test("유형별 최신성: 일부 수집 실패를 최신으로 표시하지 않
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test("수집 현황: 공고가 최신이어도 주택형 공백과 미설정 유형을 안내한다", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockPublicApi(page);
+  await page.route("**/api/v1/notices/freshness", route => route.fulfill({ json: {
+    generatedAt: "2026-11-02T00:00:00Z", lastCompletedAt: "2026-11-02T00:00:00Z", status: "FRESH",
+    sources: [
+      { sourceSystem: "REB_APT", configured: true, status: "FRESH", lastSuccessfulAt: "2026-11-02T00:00:00Z" },
+      { sourceSystem: "REB_OFFICETEL", configured: true, status: "FRESH", lastSuccessfulAt: "2026-11-02T00:00:00Z", emptyUnitTypeCount: 23 },
+      { sourceSystem: "MYHOME_PUBLIC_RENTAL", configured: false, status: "UNAVAILABLE", lastSuccessfulAt: null },
+    ],
+  } }));
+  await page.goto("/");
+  await expect(page.locator(".data-note")).toContainText("수집 미설정 유형 있음");
+  await expect(page.locator(".data-note")).toContainText("주택형 자료 확인 필요");
+  const panel = page.locator(".source-freshness");
+  await panel.getByText("유형별 수집 현황", { exact: true }).click();
+  await expect(panel.getByText("최신", { exact: true })).toHaveCount(1);
+  await expect(panel.getByText("공고 최신 · 주택형 확인 필요", { exact: true })).toBeVisible();
+  await expect(panel.getByText(/주택형 자료 미확인 23건/)).toBeVisible();
+  await expect(panel.getByText("이 유형은 현재 수집하지 않습니다.", { exact: true })).toBeVisible();
+  await expect(panel.getByRole("button")).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("수집 현황: 주택형 수집 실패와 비활성화는 자료 없음과 구분한다", async ({ page }) => {
+  await mockPublicApi(page);
+  await page.route("**/api/v1/notices/freshness", route => route.fulfill({ json: {
+    generatedAt: "2026-11-02T00:00:00Z", lastCompletedAt: "2026-11-01T00:00:00Z", status: "DELAYED",
+    sources: [
+      { sourceSystem: "REB_APT", configured: true, status: "DELAYED", failedUnitTypeCount: 2 },
+      { sourceSystem: "REB_OFFICETEL", configured: true, status: "FRESH", unitTypesDisabled: true },
+    ],
+  } }));
+  await page.goto("/");
+  const panel = page.locator(".source-freshness");
+  await panel.getByText("유형별 수집 현황", { exact: true }).click();
+  await expect(panel.getByText(/주택형 수집 실패 2건/)).toBeVisible();
+  await expect(panel.getByText(/주택형 수집 미설정 · 가격·면적 자료를 갱신하지 않습니다/)).toBeVisible();
+  await expect(panel.getByText(/주택형 자료 미확인/)).toHaveCount(0);
+});
+
 test("필터 결과 이동: 확인은 검색 결과로, 닫기는 원래 버튼으로 초점을 돌린다", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockPublicApi(page); await page.goto("/");

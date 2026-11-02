@@ -5,6 +5,7 @@ import com.cheongyakone.domain.notice.NoticeSnapshot;
 import com.cheongyakone.domain.notice.NoticeStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
@@ -36,13 +37,18 @@ class RebApiGateway {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
+    @Autowired
     RebApiGateway(
             RebApiProperties properties,
             ObjectMapper objectMapper,
             Clock clock
     ) {
+        this(properties, objectMapper, clock, RestClient.builder());
+    }
+
+    RebApiGateway(RebApiProperties properties, ObjectMapper objectMapper, Clock clock, RestClient.Builder builder) {
         this.properties = properties;
-        this.restClient = RestClient.create();
+        this.restClient = builder.build();
         this.objectMapper = objectMapper;
         this.clock = clock;
     }
@@ -165,7 +171,12 @@ class RebApiGateway {
                 throw new IllegalStateException("REB " + noticeType + " model API returned an invalid response (code=" + code + ")");
             }
             JsonNode data = response.path("data");
-            for (JsonNode item : data) mapApartmentUnitType(item).ifPresent(result::add);
+            for (JsonNode item : data) {
+                var mapped = noticeType == RebNoticeType.OFFICETEL ? mapOfficetelUnitType(item) : mapApartmentUnitType(item);
+                // 실제 행이 있는데 식별하지 못한 응답을 '자료 없음'으로 기록하지 않는다.
+                result.add(mapped.orElseThrow(() -> new IllegalStateException(
+                        "REB " + noticeType + " model API returned a row without a model identifier or type")));
+            }
             log.info("REB {} model page {} fetched: response={}, accepted={}", noticeType, page, data.size(), result.size());
             if (data.size() < properties.pageSize()) break;
         }
@@ -184,6 +195,17 @@ class RebApiGateway {
                 firstDecimal(item, "SUPLY_AR", "SUPLY_AREA"), general, special, total,
                 // 청약홈 주택형 API의 분양가는 만원 단위다. 서비스 내부·API 계약은 원 단위로 유지한다.
                 amountInWon(firstDecimal(item, "LTTOT_TOP_AMOUNT", "LTTOT_TOP_AMT", "MAX_LTTOT_AMOUNT"))));
+    }
+
+    Optional<RebApartmentUnitTypeSnapshot> mapOfficetelUnitType(JsonNode item) {
+        // getUrbtyOfctlLttotPblancMdl은 APT와 필드 이름 및 공급세대수 의미가 다르다.
+        String typeName = firstText(item, "TP");
+        String modelId = firstText(item, "MODEL_NO");
+        if (!StringUtils.hasText(typeName) || !StringUtils.hasText(modelId)) return Optional.empty();
+        return Optional.of(new RebApartmentUnitTypeSnapshot(modelId, typeName,
+                // EXCLUSE_AR는 전용면적이다. 기존 공급면적 계약에 섞지 않는다.
+                null, null, null, firstInteger(item, "SUPLY_HSHLDCO"),
+                amountInWon(firstDecimal(item, "SUPLY_AMOUNT"))));
     }
 
     URI buildUri(RebNoticeType noticeType, LocalDate from, LocalDate to, int page) {
