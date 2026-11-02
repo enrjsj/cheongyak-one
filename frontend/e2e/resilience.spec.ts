@@ -691,6 +691,128 @@ async function mockPublicApi(page: Page) {
   return searches;
 }
 
+const qualityPreference = { region: '서울', housingCategory: 'APARTMENT', supplyType: 'SALE', status: 'OPEN', sort: 'DEADLINE', maxPriceManwon: 60000, maxArea: 84, updatedAt: '2026-11-02T00:00:00Z' };
+test('사전점검 품질: 삭제 실패를 보존하고 처리 중 중복 입력과 닫기를 막는다', async ({ page }) => {
+  await mockPersonalization(page);
+  let deletes = 0;
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/members/me/eligibility-profile', async route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { homeless: 'YES', subscriptionAccount: 'YES', newlywed: 'NO', firstHome: 'NO', updatedAt: qualityPreference.updatedAt } });
+    expect(route.request().method()).toBe('DELETE');
+    deletes++;
+    if (deletes === 1) return route.fulfill({ status: 503, json: { detail: '삭제 일시 오류' } });
+    await pending;
+    return route.fulfill({ status: 204 });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: '저장된 점검 조회·수정' }).click();
+  const dialog = page.getByRole('dialog', { name: '청약 조건 사전점검', exact: true });
+  await dialog.getByRole('button', { name: '저장 내용 삭제' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('삭제 일시 오류');
+  await expect(dialog.getByText('네, 무주택이에요', { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: '저장 내용 삭제' }).click();
+  await expect.poll(() => deletes).toBe(2);
+  await expect(dialog.getByRole('button', { name: '저장 내용 삭제' })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: '닫기', exact: true })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: '청약통장 답변 수정', exact: true })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeVisible();
+  release();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByText('저장된 사전점검을 삭제했습니다.', { exact: true })).toBeVisible();
+  expect(deletes).toBe(2);
+});
+
+async function mockPersonalization(page: Page) {
+  await mockPublicApi(page);
+  await page.route('**/api/v1/members/me**', route => {
+    const path = new URL(route.request().url()).pathname;
+    let json: unknown = null;
+    if (path === '/api/v1/members/me') json = { id: 11, nickname: '사전점검 회원', role: 'MEMBER', emailVerified: true };
+    else if (path.endsWith('/favorites') || path.endsWith('/comparisons')) json = { noticeIds: [] };
+    else if (path.endsWith('/tracker') || path.endsWith('/saved-search-profiles')) json = [];
+    else if (path.endsWith('/search-preference')) json = qualityPreference;
+    else if (path.endsWith('/recommendations')) json = { configured: true, preferenceUpdatedAt: qualityPreference.updatedAt, dismissedCount: 0, recommendations: [{ score: 95, reasons: ['금액·공급면적 조건을 함께 충족하는 주택형 있음'], notice: { ...notice, minPrice: 500000000, maxPrice: 600000000, minArea: 59, maxArea: 84 } }] };
+    else if (path.endsWith('/notifications')) json = { notifications: [], unreadCount: 0 };
+    return route.fulfill({ json });
+  });
+}
+
+for (const width of [320, 1280]) {
+  test(`사전점검 품질 ${width}: 개별 수정·저장 실패 복구·다른 답변 보존`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 850 });
+    await mockPersonalization(page);
+    let profile = { homeless: 'YES', subscriptionAccount: 'YES', newlywed: 'NO', firstHome: 'NO', updatedAt: '2026-11-02T00:00:00Z' };
+    const writes: unknown[] = [];
+    let failSave = true;
+    await page.route('**/members/me/eligibility-profile', route => {
+      if (route.request().method() === 'GET') return route.fulfill({ json: profile });
+      writes.push(route.request().postDataJSON());
+      if (failSave) return route.fulfill({ status: 503, json: { detail: '저장 일시 오류' } });
+      profile = { ...profile, ...route.request().postDataJSON() };
+      return route.fulfill({ json: profile });
+    });
+    await page.goto('/');
+    await page.getByRole('button', { name: '저장된 점검 조회·수정' }).click();
+    const dialog = page.getByRole('dialog', { name: '청약 조건 사전점검', exact: true });
+    await expect(dialog.getByRole('heading', { name: '공고별 세부 조건을 확인해 주세요', exact: true })).toBeVisible();
+    await expect(dialog).toContainText('청약통장');
+    await expect(dialog).toContainText('참고할 자료');
+    await dialog.getByRole('button', { name: /청약통장.*답변 수정/ }).click();
+    await expect(dialog.getByRole('heading', { name: '청약통장을 보유하고 있나요?' })).toBeFocused();
+    await expect(dialog.getByRole('button', { name: '네, 보유하고 있어요' })).toHaveAttribute('aria-pressed', 'true');
+    await dialog.getByRole('button', { name: '잘 모르겠어요', exact: true }).click();
+    await expect(dialog.getByRole('heading', { name: '신청 전에 확인할 조건이 있어요', exact: true })).toBeFocused();
+    await dialog.getByRole('button', { name: '변경사항 저장', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toContainText('저장 일시 오류');
+    expect(writes).toEqual([{ homeless: 'YES', subscriptionAccount: 'UNKNOWN', newlywed: 'NO', firstHome: 'NO' }]);
+    failSave = false;
+    await dialog.getByRole('button', { name: '변경사항 저장', exact: true }).click();
+    await expect(page.getByText('사전점검 답변을 수정했습니다.', { exact: true })).toBeVisible();
+    expect(writes).toHaveLength(2);
+    expect(writes[1]).toEqual(writes[0]);
+    expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await dialog.screenshot({ path: testInfo.outputPath('eligibility-quality.png') });
+    await dialog.getByRole('button', { name: '닫기', exact: true }).click();
+    await page.getByRole('button', { name: '저장된 점검 조회·수정' }).click();
+    await expect(dialog.getByRole('heading', { name: '신청 전에 확인할 조건이 있어요', exact: true })).toBeVisible();
+  });
+}
+
+test('맞춤청약 품질: 적용한 저장 조건·공고 정보·누락값·기준 불일치를 구분한다', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 850 });
+  await mockPersonalization(page);
+  let mismatch = false;
+  await page.route('**/members/me/recommendations', route => route.fulfill({ json: {
+    configured: true, preferenceUpdatedAt: mismatch ? '2026-11-01T00:00:00Z' : qualityPreference.updatedAt, dismissedCount: 0,
+    recommendations: [{ score: 95, reasons: ['금액·공급면적 조건을 함께 충족하는 주택형 있음'], notice: { ...notice, minPrice: 500000000, maxPrice: 600000000, minArea: 59, maxArea: 84 } },
+      { score: 80, reasons: ['접수 예정 공고'], notice: { ...notice, id: 2, title: '금액 미확인 임대 공고', housingCategory: 'PUBLIC_RENTAL', applyStartDate: undefined, applyEndDate: undefined } }],
+  } }));
+  await page.goto('/?region=경기');
+  const panel = page.getByRole('region', { name: '맞춤 청약 추천', exact: true });
+  const criteria = panel.getByLabel('추천에 적용한 저장 조건', { exact: true });
+  await expect(criteria).toContainText('서울');
+  await expect(criteria).toContainText('60,000만원 이하');
+  await expect(criteria).toContainText('84㎡ 이하');
+  const first = panel.getByRole('button', { name: notice.title + ' 상세 보기', exact: true });
+  await expect(first).toContainText('분양가 5억 — 6억');
+  await expect(first).toContainText('공급면적 59㎡ ~ 84㎡');
+  await expect(first).toContainText('2026-09-10 ~ 2026-10-20');
+  const missing = panel.getByRole('button', { name: '금액 미확인 임대 공고 상세 보기', exact: true });
+  await expect(missing).toContainText('미확인');
+  await expect(missing).not.toContainText('0원');
+  await expect(panel.getByText(/추천 정렬 참고 95점/)).not.toBeVisible();
+  await panel.getByText(notice.title + ' 추천 이유', { exact: true }).click();
+  await expect(panel.getByText(/당첨 확률이나 청약 가점이 아닙니다/).first()).toBeVisible();
+  expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await panel.screenshot({ path: testInfo.outputPath('recommendation-quality.png') });
+  mismatch = true;
+  await panel.getByRole('button', { name: '추천 새로고침', exact: true }).click();
+  await expect(criteria).toContainText('적용된 저장 조건을 확인하지 못했습니다');
+  await expect(criteria.getByText('서울', { exact: true })).toHaveCount(0);
+});
+
 test("복구 브라우저: 오프라인에서 검색을 유지하고 재연결 시 최신 조건으로 조회한다", async ({ page, context }) => {
   const searches = await mockPublicApi(page);
   await page.goto("/?region=서울");

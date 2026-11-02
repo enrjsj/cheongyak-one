@@ -38,6 +38,16 @@ test("same-origin login survives reload and another tab; CSRF and logout protect
   })).status()).toBe(200);
   await page.reload();
   await expect(page.getByRole("button", { name: "저장된 점검 조회·수정" })).toBeVisible();
+  await page.getByRole("button", { name: "저장된 점검 조회·수정" }).click();
+  const eligibility = page.getByRole("dialog", { name: "청약 조건 사전점검", exact: true });
+  await eligibility.getByRole("button", { name: "청약통장 답변 수정", exact: true }).click();
+  await eligibility.getByRole("button", { name: "잘 모르겠어요", exact: true }).click();
+  await eligibility.getByRole("button", { name: "변경사항 저장", exact: true }).click();
+  await expect(page.getByText("사전점검 답변을 수정했습니다.", { exact: true })).toBeVisible();
+  const savedEligibility = await page.request.get("/api/v1/members/me/eligibility-profile");
+  expect(savedEligibility.status()).toBe(200);
+  expect(await savedEligibility.json()).toMatchObject({ homeless: "YES", subscriptionAccount: "UNKNOWN", newlywed: "UNKNOWN", firstHome: "NO" });
+  await eligibility.getByRole("button", { name: "닫기", exact: true }).click();
   await expect.poll(() => new URL(page.url()).searchParams.get("region")).toBe("서울");
   const card = page.locator("article").filter({ hasText: "로그인 유지 검증 주택" });
   await card.getByLabel(/관심청약 저장/).click();

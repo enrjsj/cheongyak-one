@@ -10,6 +10,7 @@ import com.cheongyakone.domain.notice.HousingCategory;
 import com.cheongyakone.domain.notice.NoticeSnapshot;
 import com.cheongyakone.domain.notice.NoticeStatus;
 import com.cheongyakone.domain.notice.SourceSystem;
+import com.cheongyakone.domain.notice.SupplyType;
 import com.cheongyakone.domain.notice.SubscriptionNotice;
 import com.cheongyakone.domain.notice.SubscriptionNoticeRepository;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.Clock;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -95,6 +97,41 @@ class MemberRecommendationServiceTest {
 
         assertThat(result.configured()).isFalse();
         assertThat(result.recommendations()).isEmpty();
+    }
+
+    @Test
+    void explainsCombinedPriceAndSupplyAreaWithoutChangingRanking() {
+        var result = recommendWithRanges(SupplyType.SALE, 50000, new BigDecimal("84"));
+        assertThat(result.reasons()).contains("분양 공급 조건 일치", "금액·공급면적 조건을 함께 충족하는 주택형 있음");
+        assertThat(result.score()).isEqualTo(95);
+    }
+
+    @Test
+    void priceOnlyExplanationDoesNotPromiseAMatchingUnitOrAffordableTotalBudget() {
+        var result = recommendWithRanges(SupplyType.PUBLIC_RENTAL, 10000, null);
+        assertThat(result.reasons()).contains("임대 공급 조건 일치", "저장한 금액 범위에 맞는 공고 · 주택형별 금액은 상세 확인");
+        assertThat(result.reasons()).noneMatch(reason -> reason.contains("주택형 있음") || reason.contains("대출"));
+    }
+
+    @Test
+    void areaOnlyExplanationDoesNotClaimPriceMatch() {
+        var result = recommendWithRanges(null, null, new BigDecimal("59"));
+        assertThat(result.reasons()).contains("공급면적 조건을 충족하는 주택형 있음");
+        assertThat(result.reasons()).noneMatch(reason -> reason.contains("금액"));
+    }
+
+    private com.cheongyakone.api.member.MemberRecommendationResponse recommendWithRanges(
+            SupplyType supplyType, Integer maxPrice, BigDecimal maxArea) {
+        var preference = new MemberSearchPreference(member, NOW);
+        preference.change("서울", null, supplyType, SearchPreferenceStatus.OPEN,
+                SearchPreferenceSort.DEADLINE, null, maxPrice, null, maxArea, NOW);
+        when(member.getId()).thenReturn(1L);
+        when(memberService.requireMember("token")).thenReturn(member);
+        when(preferenceRepository.findByMember_Id(1L)).thenReturn(Optional.of(preference));
+        when(dismissalRepository.findNoticeIdsByMemberId(1L)).thenReturn(List.of());
+        when(noticeRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(notice("범위 조건 공고", LocalDate.of(2026, 9, 6)))));
+        return service().recommendations("token").recommendations().getFirst();
     }
 
     private MemberRecommendationService service() {
